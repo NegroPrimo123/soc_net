@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"social-network/internal/events"
 	"social-network/internal/models"
 	"social-network/internal/repository"
 )
@@ -16,10 +17,12 @@ import (
 type Handler struct {
 	userRepo *repository.UserRepository
 	postRepo *repository.PostRepository
+	giftRepo *repository.GiftRepository
+	hub      *events.Hub
 	tmpl     *template.Template
 }
 
-func NewHandler(userRepo *repository.UserRepository, postRepo *repository.PostRepository) (*Handler, error) {
+func NewHandler(userRepo *repository.UserRepository, postRepo *repository.PostRepository, giftRepo *repository.GiftRepository, hub *events.Hub) (*Handler, error) {
 	tmplPath := filepath.Join("web", "templates", "index.html")
 	tmpl, err := template.ParseFiles(tmplPath)
 	if err != nil {
@@ -29,8 +32,18 @@ func NewHandler(userRepo *repository.UserRepository, postRepo *repository.PostRe
 	return &Handler{
 		userRepo: userRepo,
 		postRepo: postRepo,
+		giftRepo: giftRepo,
+		hub:      hub,
 		tmpl:     tmpl,
 	}, nil
+}
+
+func (h *Handler) SSEHandler(w http.ResponseWriter, r *http.Request) {
+	if h.hub != nil {
+		h.hub.SSEHandler(w, r)
+	} else {
+		http.Error(w, "SSE hub not initialized", http.StatusInternalServerError)
+	}
 }
 
 func (h *Handler) getUserFromRequest(r *http.Request) *models.User {
@@ -304,6 +317,11 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Рассылка real-time события всем подключенным клиентам через SSE
+	if h.hub != nil {
+		h.hub.Broadcast(events.EventNewPost, post)
+	}
+
 	respondJSON(w, http.StatusCreated, post)
 }
 
@@ -382,6 +400,16 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Рассылка обновления лайков в реальном времени
+	if h.hub != nil {
+		h.hub.Broadcast(events.EventLikeUpdate, map[string]interface{}{
+			"post_id":     postID,
+			"likes_count": count,
+			"user_id":     userID,
+			"is_liked":    isLiked,
+		})
+	}
+
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"is_liked":    isLiked,
 		"likes_count": count,
@@ -425,6 +453,14 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+
+	// Рассылка нового комментария всем подписчикам ленты
+	if h.hub != nil {
+		h.hub.Broadcast(events.EventNewComment, map[string]interface{}{
+			"post_id": postID,
+			"comment": comment,
+		})
 	}
 
 	respondJSON(w, http.StatusCreated, comment)
@@ -503,6 +539,192 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// ==========================================
+// GIFTS & PROFILE HANDLERS
+// ==========================================
+
+func (h *Handler) SendGift(w http.ResponseWriter, r *http.Request) {
+	currentUser := h.getUserFromRequest(r)
+	if currentUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Войдите в аккаунт, чтобы отправлять подарки"})
+		return
+	}
+
+	var req models.SendGiftRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Неверный формат запроса"})
+		return
+	}
+
+	if req.ReceiverID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Не указан получатель подарка"})
+		return
+	}
+
+	if req.GiftType == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Выберите тип подарка"})
+		return
+	}
+
+	req.SenderID = currentUser.ID
+
+	gift, err := h.giftRepo.SendGift(&req)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Рассылка real-time события через SSE
+	if h.hub != nil {
+		h.hub.Broadcast("new_gift", map[string]interface{}{
+			"gift":        gift,
+			"receiver_id": gift.ReceiverID,
+		})
+	}
+
+	respondJSON(w, http.StatusCreated, gift)
+}
+
+func (h *Handler) GetUserGifts(w http.ResponseWriter, r *http.Request) {
+	// Поддержка стандартного mux PathValue или разбора URL
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 3 {
+			idStr = parts[2]
+		}
+	}
+
+	userID, err := strconv.Atoi(idStr)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Неверный ID пользователя"})
+		return
+	}
+
+	gifts, err := h.giftRepo.GetByReceiverID(userID)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	if gifts == nil {
+		gifts = []models.Gift{}
+	}
+
+	respondJSON(w, http.StatusOK, gifts)
+}
+
+func (h *Handler) GetShowcaseGifts(w http.ResponseWriter, r *http.Request) {
+	gifts, err := h.giftRepo.GetAllShowcase(40)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if gifts == nil {
+		gifts = []models.Gift{}
+	}
+	respondJSON(w, http.StatusOK, gifts)
+}
+
+type ProfileDataResponse struct {
+	User        models.User   `json:"user"`
+	Posts       []models.Post `json:"posts"`
+	Gifts       []models.Gift `json:"gifts"`
+	Followers   []models.User `json:"followers"`
+	Following   []models.User `json:"following"`
+	IsOwner     bool          `json:"is_owner"`
+	IsFollowing bool          `json:"is_following"`
+}
+
+func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 3 {
+			idStr = parts[2]
+		}
+	}
+
+	profileUserID, err := strconv.Atoi(idStr)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Неверный ID пользователя"})
+		return
+	}
+
+	var currentUserID int
+	currentUser := h.getUserFromRequest(r)
+	if currentUser != nil {
+		currentUserID = currentUser.ID
+	}
+
+	targetUser, err := h.userRepo.GetByID(profileUserID, currentUserID)
+	if err != nil || targetUser == nil {
+		respondJSON(w, http.StatusNotFound, map[string]string{"error": "Пользователь не найден"})
+		return
+	}
+
+	posts, _ := h.postRepo.GetPostsByUserID(profileUserID, currentUserID)
+	if posts == nil {
+		posts = []models.Post{}
+	}
+
+	gifts, _ := h.giftRepo.GetByReceiverID(profileUserID)
+	if gifts == nil {
+		gifts = []models.Gift{}
+	}
+
+	followers, _ := h.userRepo.GetFollowers(profileUserID, currentUserID)
+	if followers == nil {
+		followers = []models.User{}
+	}
+
+	following, _ := h.userRepo.GetFollowing(profileUserID, currentUserID)
+	if following == nil {
+		following = []models.User{}
+	}
+
+	resp := ProfileDataResponse{
+		User:        *targetUser,
+		Posts:       posts,
+		Gifts:       gifts,
+		Followers:   followers,
+		Following:   following,
+		IsOwner:     currentUserID == profileUserID,
+		IsFollowing: targetUser.IsFollowing,
+	}
+
+	respondJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	currentUser := h.getUserFromRequest(r)
+	if currentUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Войдите в аккаунт"})
+		return
+	}
+
+	var req models.UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Неверный формат запроса"})
+		return
+	}
+
+	if strings.TrimSpace(req.DisplayName) == "" {
+		req.DisplayName = currentUser.DisplayName
+	}
+	if strings.TrimSpace(req.AvatarURL) == "" {
+		req.AvatarURL = currentUser.AvatarURL
+	}
+
+	updated, err := h.userRepo.UpdateProfile(currentUser.ID, req.DisplayName, req.Bio, req.AvatarURL, req.BannerURL)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, updated)
 }
 
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {

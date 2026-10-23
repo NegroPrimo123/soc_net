@@ -7,6 +7,7 @@ import (
 
 	"social-network/internal/config"
 	"social-network/internal/database"
+	"social-network/internal/events"
 	"social-network/internal/handlers"
 	"social-network/internal/repository"
 )
@@ -23,8 +24,13 @@ func main() {
 
 	userRepo := repository.NewUserRepository(db)
 	postRepo := repository.NewPostRepository(db)
+	giftRepo := repository.NewGiftRepository(db)
 
-	h, err := handlers.NewHandler(userRepo, postRepo)
+	// Инициализация и запуск Real-time SSE Hub (паттерн Hub/Subscriber)
+	hub := events.NewHub()
+	go hub.Run()
+
+	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, hub)
 	if err != nil {
 		log.Fatalf("Fatal: Handler initialization error: %v", err)
 	}

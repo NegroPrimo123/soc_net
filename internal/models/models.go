@@ -7,12 +7,40 @@ type User struct {
 	Username    string    `json:"username"`
 	DisplayName string    `json:"display_name"`
 	AvatarURL   string    `json:"avatar_url"`
+	BannerURL   string    `json:"banner_url,omitempty"`
 	Bio         string    `json:"bio"`
 	CreatedAt   time.Time `json:"created_at"`
-	PostsCount  int       `json:"posts_count,omitempty"`
-	Followers   int       `json:"followers_count,omitempty"`
-	Following   int       `json:"following_count,omitempty"`
+	PostsCount  int       `json:"posts_count"`
+	Followers   int       `json:"followers_count"`
+	Following   int       `json:"following_count"`
+	GiftsCount  int       `json:"gifts_count"`
 	IsFollowing bool      `json:"is_following,omitempty"`
+}
+
+type Gift struct {
+	ID          int       `json:"id"`
+	SenderID    *int      `json:"sender_id,omitempty"`
+	ReceiverID  int       `json:"receiver_id"`
+	GiftType    string    `json:"gift_type"`
+	Message     string    `json:"message"`
+	IsAnonymous bool      `json:"is_anonymous"`
+	CreatedAt   time.Time `json:"created_at"`
+	Sender      *User     `json:"sender,omitempty"`
+}
+
+type SendGiftRequest struct {
+	SenderID    int    `json:"sender_id"`
+	ReceiverID  int    `json:"receiver_id"`
+	GiftType    string `json:"gift_type"`
+	Message     string `json:"message"`
+	IsAnonymous bool   `json:"is_anonymous"`
+}
+
+type UpdateProfileRequest struct {
+	DisplayName string `json:"display_name"`
+	Bio         string `json:"bio"`
+	AvatarURL   string `json:"avatar_url"`
+	BannerURL   string `json:"banner_url"`
 }
 
 type Comment struct {

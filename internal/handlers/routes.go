@@ -28,7 +28,17 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/posts/{id}/like", h.ToggleLike)
 	mux.HandleFunc("POST /api/posts/{id}/comments", h.CreateComment)
 
-	// Users API
+	// Users & Profile API
 	mux.HandleFunc("GET /api/users", h.GetUsers)
+	mux.HandleFunc("GET /api/users/{id}/profile", h.GetUserProfile)
+	mux.HandleFunc("GET /api/users/{id}/gifts", h.GetUserGifts)
+	mux.HandleFunc("PUT /api/users/profile", h.UpdateProfile)
 	mux.HandleFunc("POST /api/users/follow", h.ToggleFollow)
+
+	// Gifts API
+	mux.HandleFunc("POST /api/gifts", h.SendGift)
+	mux.HandleFunc("GET /api/gifts/showcase", h.GetShowcaseGifts)
+
+	// Real-time Server-Sent Events (SSE) Hub
+	mux.HandleFunc("GET /api/events", h.SSEHandler)
 }

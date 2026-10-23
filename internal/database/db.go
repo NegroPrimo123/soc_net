@@ -89,6 +89,7 @@ func migrate(db *sql.DB) error {
 	ALTER TABLE posts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT DEFAULT '';
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';
 
 	CREATE TABLE IF NOT EXISTS sessions (
 		token VARCHAR(64) PRIMARY KEY,
@@ -98,7 +99,37 @@ func migrate(db *sql.DB) error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 
+	-- Таблица интерактивных цифровых подарков
+	CREATE TABLE IF NOT EXISTS gifts (
+		id SERIAL PRIMARY KEY,
+		sender_id INT REFERENCES users(id) ON DELETE SET NULL,
+		receiver_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		gift_type VARCHAR(50) NOT NULL,
+		message TEXT DEFAULT '',
+		is_anonymous BOOLEAN DEFAULT FALSE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_gifts_receiver_id ON gifts(receiver_id);
+	CREATE INDEX IF NOT EXISTS idx_gifts_sender_id ON gifts(sender_id);
+
 	UPDATE users SET password_hash = '$2b$10$VjKN/Wou1MxkZTTqqCfI9u1fx13uG6DbuQkSY1L6Emy2ZwpazYsE6' WHERE password_hash = '' OR password_hash IS NULL;
+
+	-- Полнотекстовый поиск с морфологией и триграммами (FTS + pg_trgm)
+	CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+	DO $$ 
+	BEGIN 
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name='posts' AND column_name='search_vector'
+		) THEN
+			ALTER TABLE posts ADD COLUMN search_vector tsvector 
+			GENERATED ALWAYS AS (to_tsvector('russian', content)) STORED;
+		END IF;
+	END $$;
+
+	CREATE INDEX IF NOT EXISTS idx_posts_search_vector ON posts USING gin(search_vector);
+	CREATE INDEX IF NOT EXISTS idx_posts_content_trgm ON posts USING gin(content gin_trgm_ops);
 	`
 
 	_, err := db.Exec(schema)
@@ -114,6 +145,22 @@ func seed(db *sql.DB) error {
 	err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 	if err != nil {
 		return err
+	}
+
+	var giftsCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM gifts").Scan(&giftsCount)
+	if err == nil && giftsCount == 0 {
+		giftsSQL := `
+		INSERT INTO gifts (sender_id, receiver_id, gift_type, message, is_anonymous, created_at) VALUES
+		(2, 1, 'supernova', 'Спасибо за шикарную архитектуру и FTS! Космос 🚀', false, NOW() - INTERVAL '2 hours'),
+		(3, 1, 'quantum_crown', 'Корона архитектора за чистейший код платформы!', false, NOW() - INTERVAL '1 hour'),
+		(2, 1, 'cyber_unicorn', 'Секретный подарок от тайного фаната твоего кода 🦄✨', true, NOW() - INTERVAL '30 minutes'),
+		(1, 2, 'moon_rocket', 'За молниеносный деплой и PostgreSQL 18! 🚀', false, NOW() - INTERVAL '40 minutes'),
+		(1, 3, 'quantum_diamond', 'За непревзойденный дизайн и эстетику интерфейса! 💎', false, NOW() - INTERVAL '25 minutes'),
+		(2, 3, 'infinite_coffee', 'Бесконечный эликсир кофе для новых шедевров ☕', false, NOW() - INTERVAL '15 minutes')
+		ON CONFLICT DO NOTHING;
+		`
+		_, _ = db.Exec(giftsSQL)
 	}
 
 	if count > 0 {

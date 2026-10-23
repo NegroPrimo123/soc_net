@@ -22,10 +22,11 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 	query := `
 	SELECT 
-		u.id, u.username, u.display_name, u.avatar_url, u.bio, u.created_at,
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
+		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
 		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
 	FROM users u
 	ORDER BY u.id ASC
@@ -40,8 +41,8 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 	for rows.Next() {
 		var u models.User
 		if err := rows.Scan(
-			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.CreatedAt,
-			&u.PostsCount, &u.Followers, &u.Following, &u.IsFollowing,
+			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
@@ -53,18 +54,19 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error) {
 	query := `
 	SELECT 
-		u.id, u.username, u.display_name, u.avatar_url, u.bio, u.created_at,
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
+		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
 		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
 	FROM users u
 	WHERE u.id = $2
 	`
 	var u models.User
 	err := r.db.QueryRow(query, currentUserID, id).Scan(
-		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.CreatedAt,
-		&u.PostsCount, &u.Followers, &u.Following, &u.IsFollowing,
+		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -73,6 +75,87 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
 	return &u, nil
+}
+
+func (r *UserRepository) UpdateProfile(userID int, displayName, bio, avatarURL, bannerURL string) (*models.User, error) {
+	query := `
+	UPDATE users
+	SET display_name = $1, bio = $2, avatar_url = $3, banner_url = $4
+	WHERE id = $5
+	`
+	_, err := r.db.Exec(query, displayName, bio, avatarURL, bannerURL, userID)
+	if err != nil {
+		return nil, fmt.Errorf("update profile: %w", err)
+	}
+	return r.GetByID(userID, userID)
+}
+
+func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User, error) {
+	query := `
+	SELECT 
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
+		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
+		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
+		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
+		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
+	FROM follows f
+	JOIN users u ON u.id = f.follower_id
+	WHERE f.following_id = $2
+	ORDER BY f.created_at DESC
+	`
+	rows, err := r.db.Query(query, currentUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(
+			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func (r *UserRepository) GetFollowing(userID, currentUserID int) ([]models.User, error) {
+	query := `
+	SELECT 
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
+		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
+		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
+		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
+		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
+	FROM follows f
+	JOIN users u ON u.id = f.following_id
+	WHERE f.follower_id = $2
+	ORDER BY f.created_at DESC
+	`
+	rows, err := r.db.Query(query, currentUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(
+			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
 }
 
 func (r *UserRepository) ToggleFollow(followerID, followingID int) (bool, error) {
@@ -170,18 +253,19 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 
 	query := `
 	SELECT 
-		u.id, u.username, u.display_name, u.avatar_url, u.bio, u.created_at,
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
-		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count
+		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
+		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count
 	FROM sessions s
 	JOIN users u ON u.id = s.user_id
 	WHERE s.token = $1 AND s.expires_at > NOW()
 	`
 	var u models.User
 	err := r.db.QueryRow(query, token).Scan(
-		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.CreatedAt,
-		&u.PostsCount, &u.Followers, &u.Following,
+		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

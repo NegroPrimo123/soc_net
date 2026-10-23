@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"social-network/internal/models"
 )
@@ -34,19 +35,45 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 		query += fmt.Sprintf(" AND (p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR p.user_id = $1)")
 	}
 
+	var isRankedSearch bool
+	var searchArgIdx int
+
 	if searchQuery != "" {
-		query += fmt.Sprintf(" AND (p.content ILIKE $%d OR u.username ILIKE $%d OR u.display_name ILIKE $%d)", argIdx, argIdx, argIdx)
-		args = append(args, "%"+searchQuery+"%")
-		argIdx++
+		isRankedSearch = true
+		searchArgIdx = argIdx
+
+		// Полнотекстовый поиск с морфологией (FTS) + Триграммы для поиска с опечатками (pg_trgm) + поиск по авторам
+		query += fmt.Sprintf(` AND (
+			p.search_vector @@ plainto_tsquery('russian', $%d)
+			OR word_similarity($%d, p.content) > 0.25
+			OR p.content ILIKE $%d
+			OR u.username ILIKE $%d
+			OR u.display_name ILIKE $%d
+		)`, searchArgIdx, searchArgIdx, searchArgIdx+1, searchArgIdx+1, searchArgIdx+1)
+
+		args = append(args, searchQuery, "%"+searchQuery+"%")
+		argIdx += 2
 	}
 
 	if tagQuery != "" {
-		query += fmt.Sprintf(" AND p.content ILIKE $%d", argIdx)
-		args = append(args, "%"+tagQuery+"%")
-		argIdx++
+		cleanTag := strings.TrimPrefix(tagQuery, "#")
+		query += fmt.Sprintf(` AND (
+			p.content ILIKE $%d
+			OR p.search_vector @@ plainto_tsquery('russian', $%d)
+		)`, argIdx, argIdx+1)
+		args = append(args, "%#"+cleanTag+"%", cleanTag)
+		argIdx += 2
 	}
 
-	query += " ORDER BY p.created_at DESC"
+	if isRankedSearch {
+		// Ранжирование по релевантности: FTS ts_rank_cd + триграммная схожесть word_similarity
+		query += fmt.Sprintf(` ORDER BY (
+			ts_rank_cd(p.search_vector, plainto_tsquery('russian', $%d)) * 2.0 + 
+			word_similarity($%d, p.content)
+		) DESC, p.created_at DESC`, searchArgIdx, searchArgIdx)
+	} else {
+		query += " ORDER BY p.created_at DESC"
+	}
 
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
@@ -63,6 +90,48 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
 		); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
+		}
+
+		comments, err := r.GetComments(p.ID)
+		if err == nil {
+			p.Comments = comments
+		} else {
+			p.Comments = []models.Comment{}
+		}
+
+		posts = append(posts, p)
+	}
+	return posts, nil
+}
+
+func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models.Post, error) {
+	query := `
+	SELECT 
+		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
+		u.id, u.username, u.display_name, u.avatar_url, u.bio,
+		(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
+		(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
+		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked
+	FROM posts p
+	JOIN users u ON u.id = p.user_id
+	WHERE p.user_id = $2
+	ORDER BY p.created_at DESC
+	`
+	rows, err := r.db.Query(query, currentUserID, authorID)
+	if err != nil {
+		return nil, fmt.Errorf("query user posts: %w", err)
+	}
+	defer rows.Close()
+
+	var posts []models.Post
+	for rows.Next() {
+		var p models.Post
+		if err := rows.Scan(
+			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
+			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
+			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
+		); err != nil {
+			return nil, fmt.Errorf("scan user post: %w", err)
 		}
 
 		comments, err := r.GetComments(p.ID)
