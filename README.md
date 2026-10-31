@@ -51,9 +51,9 @@
 ```env
 PORT=8080
 DB_HOST=localhost
-DB_PORT=1357
+DB_PORT=5432
 DB_USER=postgres
-DB_PASSWORD=root111
+DB_PASSWORD=12345
 DB_NAME=gosocial
 DB_SSLMODE=disable
 ```
