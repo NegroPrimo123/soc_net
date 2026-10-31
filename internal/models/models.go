@@ -36,6 +36,28 @@ type SendGiftRequest struct {
 	IsAnonymous bool   `json:"is_anonymous"`
 }
 
+type Message struct {
+	ID         int       `json:"id"`
+	SenderID   int       `json:"sender_id"`
+	ReceiverID int       `json:"receiver_id"`
+	Content    string    `json:"content"`
+	IsRead     bool      `json:"is_read"`
+	CreatedAt  time.Time `json:"created_at"`
+	Sender     *User     `json:"sender,omitempty"`
+	Receiver   *User     `json:"receiver,omitempty"`
+}
+
+type Conversation struct {
+	User        User     `json:"user"`
+	LastMessage *Message `json:"last_message,omitempty"`
+	UnreadCount int      `json:"unread_count"`
+}
+
+type SendMessageRequest struct {
+	ReceiverID int    `json:"receiver_id"`
+	Content    string `json:"content"`
+}
+
 type UpdateProfileRequest struct {
 	DisplayName string `json:"display_name"`
 	Bio         string `json:"bio"`

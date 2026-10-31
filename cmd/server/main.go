@@ -25,18 +25,22 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	postRepo := repository.NewPostRepository(db)
 	giftRepo := repository.NewGiftRepository(db)
+	messageRepo := repository.NewMessageRepository(db)
 
 	// Инициализация и запуск Real-time SSE Hub (паттерн Hub/Subscriber)
 	hub := events.NewHub()
 	go hub.Run()
 
-	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, hub)
+	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, hub)
 	if err != nil {
 		log.Fatalf("Fatal: Handler initialization error: %v", err)
 	}
 
 	mux := http.NewServeMux()
 	handlers.RegisterRoutes(mux, h)
+
+	// Wrap root router with GZIP compression, HTTP Cache-Control and Security Headers
+	handler := handlers.ApplyMiddleware(mux)
 
 	serverAddr := fmt.Sprintf(":%s", cfg.Port)
 	fmt.Println("==================================================")
@@ -45,7 +49,7 @@ func main() {
 	fmt.Println("🗄️  Database: PostgreSQL (gosocial)")
 	fmt.Println("==================================================")
 
-	if err := http.ListenAndServe(serverAddr, mux); err != nil {
+	if err := http.ListenAndServe(serverAddr, handler); err != nil {
 		log.Fatalf("Fatal: Server stopped: %v", err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"social-network/internal/models"
 
@@ -30,6 +31,7 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
 	FROM users u
 	ORDER BY u.id ASC
+	LIMIT 50
 	`
 	rows, err := r.db.Query(query, currentUserID)
 	if err != nil {
@@ -188,7 +190,16 @@ func (r *UserRepository) CreateUser(username, displayName, password, avatarURL, 
 	}
 
 	if avatarURL == "" {
-		avatarURL = fmt.Sprintf("https://api.dicebear.com/7.x/bottts/svg?seed=%s", username)
+		switch strings.ToLower(username) {
+		case "oleg":
+			avatarURL = "/static/avatars/oleg.svg"
+		case "alex":
+			avatarURL = "/static/avatars/alex.svg"
+		case "sophia":
+			avatarURL = "/static/avatars/sophia.svg"
+		default:
+			avatarURL = "/static/avatars/default.svg"
+		}
 	}
 
 	query := `

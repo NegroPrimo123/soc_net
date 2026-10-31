@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"social-network/internal/models"
+
+	"github.com/lib/pq"
 )
 
 type PostRepository struct {
@@ -16,7 +18,17 @@ func NewPostRepository(db *sql.DB) *PostRepository {
 	return &PostRepository{db: db}
 }
 
-func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQuery string) ([]models.Post, error) {
+func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQuery string, limit, offset int) ([]models.Post, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
 	query := `
 	SELECT 
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
@@ -75,6 +87,9 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 		query += " ORDER BY p.created_at DESC"
 	}
 
+	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+	args = append(args, limit, offset)
+
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query feed: %w", err)
@@ -82,6 +97,7 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 	defer rows.Close()
 
 	var posts []models.Post
+	var postIDs []int
 	for rows.Next() {
 		var p models.Post
 		if err := rows.Scan(
@@ -92,15 +108,23 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 			return nil, fmt.Errorf("scan post: %w", err)
 		}
 
-		comments, err := r.GetComments(p.ID)
-		if err == nil {
-			p.Comments = comments
-		} else {
-			p.Comments = []models.Comment{}
-		}
-
+		p.Comments = []models.Comment{}
 		posts = append(posts, p)
+		postIDs = append(postIDs, p.ID)
 	}
+
+	// Пакетная загрузка комментариев в 1 запрос (устранение N+1 запросов)
+	if len(postIDs) > 0 {
+		commentsMap, err := r.GetCommentsByPostIDs(postIDs)
+		if err == nil {
+			for i := range posts {
+				if cmts, ok := commentsMap[posts[i].ID]; ok {
+					posts[i].Comments = cmts
+				}
+			}
+		}
+	}
+
 	return posts, nil
 }
 
@@ -116,6 +140,7 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 	JOIN users u ON u.id = p.user_id
 	WHERE p.user_id = $2
 	ORDER BY p.created_at DESC
+	LIMIT 50
 	`
 	rows, err := r.db.Query(query, currentUserID, authorID)
 	if err != nil {
@@ -124,6 +149,7 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 	defer rows.Close()
 
 	var posts []models.Post
+	var postIDs []int
 	for rows.Next() {
 		var p models.Post
 		if err := rows.Scan(
@@ -134,15 +160,23 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 			return nil, fmt.Errorf("scan user post: %w", err)
 		}
 
-		comments, err := r.GetComments(p.ID)
-		if err == nil {
-			p.Comments = comments
-		} else {
-			p.Comments = []models.Comment{}
-		}
-
+		p.Comments = []models.Comment{}
 		posts = append(posts, p)
+		postIDs = append(postIDs, p.ID)
 	}
+
+	// Пакетная загрузка комментариев в 1 запрос (устранение N+1 запросов)
+	if len(postIDs) > 0 {
+		commentsMap, err := r.GetCommentsByPostIDs(postIDs)
+		if err == nil {
+			for i := range posts {
+				if cmts, ok := commentsMap[posts[i].ID]; ok {
+					posts[i].Comments = cmts
+				}
+			}
+		}
+	}
+
 	return posts, nil
 }
 
@@ -161,13 +195,13 @@ func (r *PostRepository) UpdatePost(postID, userID int, content string) (*models
 	query := `
 	UPDATE posts 
 	SET content = $1, is_edited = TRUE, updated_at = NOW() 
-	WHERE id = $2 AND (user_id = $3 OR $3 = 1) 
+	WHERE id = $2 AND user_id = $3 
 	RETURNING id
 	`
 	var updatedID int
 	err := r.db.QueryRow(query, content, postID, userID).Scan(&updatedID)
 	if err != nil {
-		return nil, fmt.Errorf("update post: %w", err)
+		return nil, fmt.Errorf("post not found or unauthorized: %w", err)
 	}
 
 	return r.GetPostByID(updatedID, userID)
@@ -200,27 +234,29 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 }
 
 func (r *PostRepository) ToggleLike(userID, postID int) (bool, int, error) {
-	var exists bool
-	err := r.db.QueryRow(
-		"SELECT EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = $2)",
-		userID, postID,
-	).Scan(&exists)
+	// 1. Попытка удалить существующий лайк за 1 атомарный запрос
+	res, err := r.db.Exec("DELETE FROM likes WHERE user_id = $1 AND post_id = $2", userID, postID)
+	if err != nil {
+		return false, 0, err
+	}
+	rowsAffected, err := res.RowsAffected()
 	if err != nil {
 		return false, 0, err
 	}
 
 	var isLiked bool
-	if exists {
-		_, err = r.db.Exec("DELETE FROM likes WHERE user_id = $1 AND post_id = $2", userID, postID)
+	if rowsAffected > 0 {
 		isLiked = false
 	} else {
-		_, err = r.db.Exec("INSERT INTO likes (user_id, post_id) VALUES ($1, $2)", userID, postID)
+		// Лайка не было — вставляем с защитой от состояния гонки
+		_, err = r.db.Exec("INSERT INTO likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", userID, postID)
+		if err != nil {
+			return false, 0, err
+		}
 		isLiked = true
 	}
-	if err != nil {
-		return false, 0, err
-	}
 
+	// 2. Получаем обновленный счетчик
 	var count int
 	err = r.db.QueryRow("SELECT COUNT(*) FROM likes WHERE post_id = $1", postID).Scan(&count)
 	if err != nil {
@@ -228,6 +264,42 @@ func (r *PostRepository) ToggleLike(userID, postID int) (bool, int, error) {
 	}
 
 	return isLiked, count, nil
+}
+
+// GetCommentsByPostIDs загружает комментарии для списка постов за один пакетный запрос (WHERE post_id = ANY($1))
+func (r *PostRepository) GetCommentsByPostIDs(postIDs []int) (map[int][]models.Comment, error) {
+	result := make(map[int][]models.Comment, len(postIDs))
+	if len(postIDs) == 0 {
+		return result, nil
+	}
+
+	query := `
+	SELECT 
+		c.id, c.post_id, c.user_id, c.content, c.created_at,
+		u.id, u.username, u.display_name, u.avatar_url, u.bio
+	FROM comments c
+	JOIN users u ON u.id = c.user_id
+	WHERE c.post_id = ANY($1)
+	ORDER BY c.created_at ASC
+	`
+	rows, err := r.db.Query(query, pq.Array(postIDs))
+	if err != nil {
+		return nil, fmt.Errorf("query batch comments: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var c models.Comment
+		if err := rows.Scan(
+			&c.ID, &c.PostID, &c.UserID, &c.Content, &c.CreatedAt,
+			&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.Bio,
+		); err != nil {
+			return nil, fmt.Errorf("scan batch comment: %w", err)
+		}
+		result[c.PostID] = append(result[c.PostID], c)
+	}
+
+	return result, nil
 }
 
 func (r *PostRepository) GetComments(postID int) ([]models.Comment, error) {
@@ -289,7 +361,7 @@ func (r *PostRepository) CreateComment(postID, userID int, content string) (*mod
 }
 
 func (r *PostRepository) DeletePost(postID, userID int) error {
-	query := `DELETE FROM posts WHERE id = $1 AND (user_id = $2 OR $2 = 1)`
+	query := `DELETE FROM posts WHERE id = $1 AND user_id = $2`
 	res, err := r.db.Exec(query, postID, userID)
 	if err != nil {
 		return fmt.Errorf("delete post: %w", err)

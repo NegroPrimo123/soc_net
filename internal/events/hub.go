@@ -12,9 +12,12 @@ import (
 type EventType string
 
 const (
-	EventNewPost    EventType = "new_post"
-	EventLikeUpdate EventType = "like_update"
-	EventNewComment EventType = "new_comment"
+	EventNewPost      EventType = "new_post"
+	EventLikeUpdate   EventType = "like_update"
+	EventNewComment   EventType = "new_comment"
+	EventNewMessage   EventType = "new_message"
+	EventMessagesRead EventType = "messages_read"
+	EventNewGift      EventType = "new_gift"
 )
 
 type EventMessage struct {

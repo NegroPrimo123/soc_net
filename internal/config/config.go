@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bufio"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -14,12 +16,40 @@ type Config struct {
 	DBSSLMode    string
 }
 
+func loadEnvFile(paths ...string) {
+	for _, p := range paths {
+		f, err := os.Open(p)
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				k := strings.TrimSpace(parts[0])
+				v := strings.TrimSpace(parts[1])
+				if os.Getenv(k) == "" {
+					os.Setenv(k, v)
+				}
+			}
+		}
+		f.Close()
+		break
+	}
+}
+
 func Load() *Config {
+	loadEnvFile(".env", "../.env")
+
 	port := getEnv("PORT", "8080")
 	dbHost := getEnv("DB_HOST", "localhost")
-	dbPort := getEnv("DB_PORT", "5432")
+	dbPort := getEnv("DB_PORT", "1357")
 	dbUser := getEnv("DB_USER", "postgres")
-	dbPassword := getEnv("DB_PASSWORD", "12345")
+	dbPassword := getEnv("DB_PASSWORD", "root111")
 	dbName := getEnv("DB_NAME", "gosocial")
 	dbSSLMode := getEnv("DB_SSLMODE", "disable")
 

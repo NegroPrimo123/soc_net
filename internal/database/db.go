@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	"social-network/internal/config"
 
@@ -20,6 +21,12 @@ func InitDB(cfg *config.Config) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
+	// Настройка пула подключений к PostgreSQL для высокой нагрузки и низких задержек
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(2 * time.Minute)
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
@@ -111,6 +118,21 @@ func migrate(db *sql.DB) error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_gifts_receiver_id ON gifts(receiver_id);
 	CREATE INDEX IF NOT EXISTS idx_gifts_sender_id ON gifts(sender_id);
+	CREATE INDEX IF NOT EXISTS idx_follows_following_id ON follows(following_id);
+
+	-- Таблица личных сообщений между пользователями (Direct Messages)
+	CREATE TABLE IF NOT EXISTS messages (
+		id SERIAL PRIMARY KEY,
+		sender_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		receiver_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		content TEXT NOT NULL,
+		is_read BOOLEAN DEFAULT FALSE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_receiver_id ON messages(receiver_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, receiver_id, created_at ASC);
+	CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
 
 	UPDATE users SET password_hash = '$2b$10$VjKN/Wou1MxkZTTqqCfI9u1fx13uG6DbuQkSY1L6Emy2ZwpazYsE6' WHERE password_hash = '' OR password_hash IS NULL;
 
@@ -163,15 +185,31 @@ func seed(db *sql.DB) error {
 		_, _ = db.Exec(giftsSQL)
 	}
 
+	var messagesCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM messages").Scan(&messagesCount)
+	if err == nil && messagesCount == 0 {
+		messagesSQL := `
+		INSERT INTO messages (sender_id, receiver_id, content, is_read, created_at) VALUES
+		(2, 1, 'Привет, Олег! Посмотрел твои последние коммиты по FTS, поиск летает!', true, NOW() - INTERVAL '3 hours'),
+		(1, 2, 'Привет, Алексей! Спасибо, GIN-индексы творят чудеса. Как там деплой?', true, NOW() - INTERVAL '2 hours 50 minutes'),
+		(2, 1, 'Деплой готов, PostgreSQL запущен в контейнере, все миграции накатились без ошибок.', true, NOW() - INTERVAL '2 hours 40 minutes'),
+		(3, 1, 'Олег, привет! Я закончила новый дизайн для диалогов и личных сообщений. Выглядит отлично!', false, NOW() - INTERVAL '45 minutes'),
+		(1, 3, 'Привет, София! Здорово, сейчас протестирую отправку сообщений в реальном времени.', true, NOW() - INTERVAL '30 minutes'),
+		(3, 1, 'Супер, жду обратной связи! Не забудь проверить анимации диалогов 🚀', false, NOW() - INTERVAL '10 minutes')
+		ON CONFLICT DO NOTHING;
+		`
+		_, _ = db.Exec(messagesSQL)
+	}
+
 	if count > 0 {
 		return nil // Already seeded
 	}
 
 	seedSQL := `
 	INSERT INTO users (username, display_name, password_hash, avatar_url, bio) VALUES
-	('oleg', 'Олег Смирнов', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', 'https://api.dicebear.com/7.x/bottts/svg?seed=Oleg', 'Разработчик Go & Архитектор систем. Строю соцсеть с нуля! 🚀'),
-	('alex', 'Алексей Ковалев', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', 'https://api.dicebear.com/7.x/bottts/svg?seed=Alex', 'DevOps & Cloud инженер. Люблю микросервисы и чистый код.'),
-	('sophia', 'София Романова', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', 'https://api.dicebear.com/7.x/bottts/svg?seed=Sophia', 'UI/UX дизайнер и фронтенд-энтузиаст. Делаю интерфейсы удобными.')
+	('oleg', 'Олег Смирнов', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', '/static/avatars/oleg.svg', 'Разработчик Go & Архитектор систем. Строю соцсеть с нуля! 🚀'),
+	('alex', 'Алексей Ковалев', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', '/static/avatars/alex.svg', 'DevOps & Cloud инженер. Люблю микросервисы и чистый код.'),
+	('sophia', 'София Романова', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', '/static/avatars/sophia.svg', 'UI/UX дизайнер и фронтенд-энтузиаст. Делаю интерфейсы удобными.')
 	ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 

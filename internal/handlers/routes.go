@@ -39,6 +39,12 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/gifts", h.SendGift)
 	mux.HandleFunc("GET /api/gifts/showcase", h.GetShowcaseGifts)
 
+	// Direct Messages (Личные сообщения) API
+	mux.HandleFunc("GET /api/messages/conversations", h.GetConversations)
+	mux.HandleFunc("GET /api/messages/unread", h.GetUnreadMessagesCount)
+	mux.HandleFunc("GET /api/messages/{userId}", h.GetMessages)
+	mux.HandleFunc("POST /api/messages", h.SendMessage)
+
 	// Real-time Server-Sent Events (SSE) Hub
 	mux.HandleFunc("GET /api/events", h.SSEHandler)
 }
