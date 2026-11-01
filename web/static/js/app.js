@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     formatAllPostContents();
     initSSE();
     initProfileCardTilt();
+    initFeedInfiniteScroll();
 
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('auth') === 'login') openAuthModal('login');
@@ -19,6 +20,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (viewParam === 'showcase') {
         navigateTo('showcase');
+    } else if (viewParam === 'messages') {
+        navigateTo('messages');
+        const chatWith = urlParams.get('chat_with');
+        if (chatWith) {
+            setTimeout(() => openChatWithUser(parseInt(chatWith, 10)), 300);
+        } else {
+            // Automatically open first dialog if available
+            setTimeout(() => {
+                const firstItem = document.querySelector('.conversation-item');
+                if (firstItem && firstItem.dataset.userId) {
+                    firstItem.click();
+                }
+            }, 300);
+        }
     } else if (userParam || viewParam === 'profile') {
         const uid = parseInt(userParam || window.CURRENT_USER_ID, 10);
         navigateTo('profile', uid);
@@ -437,7 +452,15 @@ async function deletePost(postId) {
         }
 
         const postCard = document.getElementById(`post-${postId}`);
-        if (postCard) postCard.remove();
+        if (postCard) {
+            postCard.remove();
+            if (typeof feedOffset !== 'undefined' && feedOffset > 0) feedOffset--;
+            const pill = document.getElementById('feedCountPill');
+            if (pill) {
+                const totalInDom = document.querySelectorAll('#postsContainer .cyber-post-card').length;
+                pill.textContent = `${totalInDom} постов`;
+            }
+        }
 
         showToast('Публикация удалена 🗑️', 'success');
     } catch (err) {
@@ -455,6 +478,28 @@ async function toggleLike(postId) {
         return;
     }
 
+    const postCard = document.getElementById(`post-${postId}`);
+    const likeBtn = postCard ? postCard.querySelector('.like-btn') : null;
+    const likeCount = document.getElementById(`likes-${postId}`);
+    const heartIcon = likeBtn ? likeBtn.querySelector('.heart-icon') : null;
+
+    // Оптимистичное обновление интерфейса: мгновенный визуальный отклик 0мс
+    const wasLiked = likeBtn ? likeBtn.classList.contains('active') : false;
+    const currentCount = parseInt(likeCount ? likeCount.textContent || '0' : '0', 10);
+    const newLiked = !wasLiked;
+    const newCount = newLiked ? currentCount + 1 : Math.max(0, currentCount - 1);
+
+    if (likeBtn && heartIcon && likeCount) {
+        likeCount.textContent = newCount;
+        if (newLiked) {
+            likeBtn.classList.add('active');
+            heartIcon.setAttribute('fill', 'currentColor');
+        } else {
+            likeBtn.classList.remove('active');
+            heartIcon.setAttribute('fill', 'none');
+        }
+    }
+
     try {
         const response = await fetch(`/api/posts/${postId}/like`, {
             method: 'POST',
@@ -467,22 +512,30 @@ async function toggleLike(postId) {
         if (!response.ok) throw new Error('Ошибка при лайке');
 
         const data = await response.json();
-        const postCard = document.getElementById(`post-${postId}`);
-        const likeBtn = postCard.querySelector('.like-btn');
-        const likeCount = document.getElementById(`likes-${postId}`);
-        const heartIcon = likeBtn.querySelector('.heart-icon');
-
-        likeCount.textContent = data.likes_count;
-
-        if (data.is_liked) {
-            likeBtn.classList.add('active');
-            heartIcon.setAttribute('fill', 'currentColor');
-        } else {
-            likeBtn.classList.remove('active');
-            heartIcon.setAttribute('fill', 'none');
+        // Точная синхронизация с данными сервера
+        if (likeCount) likeCount.textContent = data.likes_count;
+        if (likeBtn && heartIcon) {
+            if (data.is_liked) {
+                likeBtn.classList.add('active');
+                heartIcon.setAttribute('fill', 'currentColor');
+            } else {
+                likeBtn.classList.remove('active');
+                heartIcon.setAttribute('fill', 'none');
+            }
         }
     } catch (err) {
-        console.error('Like error:', err);
+        // Откат в случае ошибки соединения
+        if (likeCount) likeCount.textContent = currentCount;
+        if (likeBtn && heartIcon) {
+            if (wasLiked) {
+                likeBtn.classList.add('active');
+                heartIcon.setAttribute('fill', 'currentColor');
+            } else {
+                likeBtn.classList.remove('active');
+                heartIcon.setAttribute('fill', 'none');
+            }
+        }
+        showToast('Ошибка при обновлении лайка', 'error');
     }
 }
 
@@ -552,6 +605,21 @@ async function toggleFollow(targetUserId) {
         return;
     }
 
+    const userRow = document.getElementById(`user-row-${targetUserId}`);
+    const followBtn = userRow ? userRow.querySelector('button') : null;
+    const wasFollowing = followBtn ? followBtn.classList.contains('btn-following') : false;
+
+    // Оптимистичное обновление интерфейса: мгновенное изменение текста и стиля
+    if (followBtn) {
+        if (!wasFollowing) {
+            followBtn.textContent = 'Читаю';
+            followBtn.classList.add('btn-following');
+        } else {
+            followBtn.textContent = 'Читать';
+            followBtn.classList.remove('btn-following');
+        }
+    }
+
     try {
         const response = await fetch('/api/users/follow', {
             method: 'POST',
@@ -565,9 +633,7 @@ async function toggleFollow(targetUserId) {
         if (!response.ok) throw new Error('Ошибка подписки');
 
         const data = await response.json();
-        const userRow = document.getElementById(`user-row-${targetUserId}`);
-        if (userRow) {
-            const followBtn = userRow.querySelector('button');
+        if (followBtn) {
             if (data.is_following) {
                 followBtn.textContent = 'Читаю';
                 followBtn.classList.add('btn-following');
@@ -579,6 +645,16 @@ async function toggleFollow(targetUserId) {
             }
         }
     } catch (err) {
+        // Откат при ошибке
+        if (followBtn) {
+            if (wasFollowing) {
+                followBtn.textContent = 'Читаю';
+                followBtn.classList.add('btn-following');
+            } else {
+                followBtn.textContent = 'Читать';
+                followBtn.classList.remove('btn-following');
+            }
+        }
         showToast(err.message, 'error');
     }
 }
@@ -591,6 +667,12 @@ function renderPostAtTop(post) {
     if (!container) return;
     const postEl = createPostElement(post);
     container.insertBefore(postEl, container.firstChild);
+    feedOffset++;
+    const pill = document.getElementById('feedCountPill');
+    if (pill) {
+        const total = container.querySelectorAll('.cyber-post-card').length;
+        pill.textContent = `${total} постов`;
+    }
 }
 
 function createPostElement(post) {
@@ -611,6 +693,22 @@ function createPostElement(post) {
     }
 
     let editedHtml = post.is_edited ? `<span class="edited-badge">• (ред.)</span>` : '';
+
+    let commentsHtml = '';
+    if (post.comments && post.comments.length > 0) {
+        commentsHtml = post.comments.map(c => `
+            <div class="comment-item">
+                <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
+                <div class="comment-bubble">
+                    <div class="comment-author-line">
+                        <span class="comment-author cursor-pointer" onclick="openUserProfile(${c.user.id})">${escapeHtml(c.user.display_name)}</span>
+                        <span class="comment-time">${formatTime(c.created_at)}</span>
+                    </div>
+                    <div class="comment-text">${escapeHtml(c.content)}</div>
+                </div>
+            </div>
+        `).join('');
+    }
 
     article.innerHTML = `
         <div class="post-header">
@@ -657,7 +755,7 @@ function createPostElement(post) {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
-                <span id="comment-count-${post.id}">0</span>
+                <span id="comment-count-${post.id}">${post.comments_count || 0}</span>
             </button>
 
             <button class="post-action-btn gift-btn" onclick="openSendGiftModal(${post.user.id}, '${escapeHtml(post.user.display_name)}', '${escapeHtml(post.user.username)}')" title="Отправить артефакт">
@@ -666,7 +764,7 @@ function createPostElement(post) {
             </button>
         </div>
         <div class="comments-section" id="comments-section-${post.id}" style="display: block;">
-            <div class="comments-list" id="comments-list-${post.id}"></div>
+            <div class="comments-list" id="comments-list-${post.id}">${commentsHtml}</div>
             <div class="comment-input-row">
                 <input type="text" id="comment-input-${post.id}" placeholder="Написать комментарий..." onkeydown="if(event.key==='Enter') addComment(${post.id})">
                 <button class="btn btn-secondary btn-sm" onclick="addComment(${post.id})">Отправить</button>
@@ -709,29 +807,260 @@ function formatFullDate(isoString) {
 }
 
 // ==========================================
-// SEARCH & TAGS
+// SEARCH & TAGS & FEED TABS (SPA IN-PLACE REFRESH)
 // ==========================================
+async function reloadFeedAsync(params = {}) {
+    const container = document.getElementById('postsContainer');
+    if (!container) return;
+
+    navigateTo('feed');
+
+    const spinner = document.getElementById('feedSpinner');
+    const endMsg = document.getElementById('feedEndOfList');
+    if (endMsg) endMsg.style.display = 'none';
+    if (spinner) spinner.style.display = 'flex';
+
+    // Update query params
+    const url = new URL(window.location.href);
+    if ('feed_type' in params) {
+        if (params.feed_type === 'all') url.searchParams.delete('feed_type');
+        else url.searchParams.set('feed_type', params.feed_type);
+    }
+    if ('q' in params) {
+        if (!params.q) url.searchParams.delete('q');
+        else url.searchParams.set('q', params.q);
+    }
+    if ('tag' in params) {
+        if (!params.tag) url.searchParams.delete('tag');
+        else url.searchParams.set('tag', params.tag);
+    }
+
+    window.history.pushState({}, '', url.toString());
+
+    // Update active UI tabs
+    const currentFeedType = url.searchParams.get('feed_type') || 'all';
+    document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => {
+        const isFollow = btn.getAttribute('onclick') && btn.getAttribute('onclick').includes('following');
+        btn.classList.toggle('active', isFollow ? currentFeedType === 'following' : currentFeedType === 'all');
+    });
+
+    // Update search bar UI
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && 'q' in params) searchInput.value = params.q || '';
+
+    // Fetch initial 10 posts
+    feedOffset = 0;
+    hasMoreFeedPosts = true;
+
+    try {
+        const fetchParams = new URLSearchParams({
+            feed_type: currentFeedType,
+            limit: FEED_PAGE_SIZE,
+            offset: 0
+        });
+        if (url.searchParams.get('q')) fetchParams.set('q', url.searchParams.get('q'));
+        if (url.searchParams.get('tag')) fetchParams.set('tag', url.searchParams.get('tag'));
+        if (window.CURRENT_USER_ID) fetchParams.set('user_id', window.CURRENT_USER_ID);
+
+        const res = await fetch(`/api/feed?${fetchParams.toString()}`);
+        if (!res.ok) throw new Error('Ошибка загрузки ленты');
+
+        const posts = await res.json();
+        container.innerHTML = '';
+
+        if (!posts || posts.length === 0) {
+            hasMoreFeedPosts = false;
+            container.innerHTML = `
+                <div class="cyber-empty-card">
+                    <span class="empty-glyph">⌁</span>
+                    <h3>Ничего не найдено</h3>
+                    <p>Попробуйте изменить поисковый запрос или сбросить фильтры.</p>
+                </div>
+            `;
+        } else {
+            posts.forEach(post => {
+                const postEl = createPostElement(post);
+                container.appendChild(postEl);
+            });
+
+            feedOffset = posts.length;
+            if (posts.length < FEED_PAGE_SIZE) {
+                hasMoreFeedPosts = false;
+                if (endMsg) endMsg.style.display = 'block';
+            }
+        }
+
+        const pill = document.getElementById('feedCountPill');
+        if (pill) {
+            const total = container.querySelectorAll('.cyber-post-card').length;
+            pill.textContent = `${total} постов`;
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
+    }
+}
+
 function executeSearch() {
     const input = document.getElementById('searchInput');
     if (!input) return;
     const q = input.value.trim();
-    if (q) {
-        window.location.href = `/?q=${encodeURIComponent(q)}`;
-    } else {
-        clearSearch();
-    }
+    reloadFeedAsync({ q: q, tag: '' });
 }
 
 function clearSearch() {
-    window.location.href = '/';
+    const input = document.getElementById('searchInput');
+    if (input) input.value = '';
+    reloadFeedAsync({ q: '', tag: '' });
 }
 
 function filterByTag(tag) {
-    window.location.href = `/?tag=${encodeURIComponent(tag)}`;
+    reloadFeedAsync({ tag: tag, q: '' });
 }
 
 function switchFeedTab(type) {
-    window.location.href = `/?feed_type=${type}`;
+    reloadFeedAsync({ feed_type: type });
+}
+
+// ==========================================
+// INFINITE SCROLL & LAZY LOADING
+// ==========================================
+let feedOffset = 0;
+const FEED_PAGE_SIZE = 10;
+let isFeedLoading = false;
+let hasMoreFeedPosts = true;
+
+function initFeedInfiniteScroll() {
+    const container = document.getElementById('postsContainer');
+    if (!container) return;
+
+    const initialPosts = container.querySelectorAll('.cyber-post-card');
+    feedOffset = initialPosts.length;
+
+    // If initial batch returned fewer than page size, there are no more posts
+    if (initialPosts.length < FEED_PAGE_SIZE) {
+        hasMoreFeedPosts = false;
+        const endMsg = document.getElementById('feedEndOfList');
+        if (endMsg && initialPosts.length > 0) {
+            endMsg.style.display = 'block';
+        }
+    }
+
+    initSentinelObserver();
+
+    // Backup scroll listener for smooth experience across browsers
+    let scrollTicking = false;
+    window.addEventListener('scroll', () => {
+        if (!scrollTicking) {
+            window.requestAnimationFrame(() => {
+                checkFeedScroll();
+                scrollTicking = false;
+            });
+            scrollTicking = true;
+        }
+    }, { passive: true });
+}
+
+function initSentinelObserver() {
+    const sentinel = document.getElementById('feedLoadingSentinel');
+    if (!sentinel || !window.IntersectionObserver) return;
+
+    const observer = new IntersectionObserver((entries) => {
+        const entry = entries[0];
+        if (entry && entry.isIntersecting) {
+            loadNextFeedBatch();
+        }
+    }, {
+        root: null,
+        rootMargin: '350px',
+        threshold: 0.05
+    });
+
+    observer.observe(sentinel);
+}
+
+function checkFeedScroll() {
+    if (isFeedLoading || !hasMoreFeedPosts) return;
+
+    const feedView = document.getElementById('feedView');
+    if (feedView && feedView.style.display === 'none') return;
+
+    const scrollY = window.scrollY || window.pageYOffset;
+    const windowHeight = window.innerHeight;
+    const documentHeight = document.documentElement.scrollHeight;
+
+    if (scrollY + windowHeight >= documentHeight - 400) {
+        loadNextFeedBatch();
+    }
+}
+
+async function loadNextFeedBatch() {
+    if (isFeedLoading || !hasMoreFeedPosts) return;
+
+    const container = document.getElementById('postsContainer');
+    if (!container) return;
+
+    const feedView = document.getElementById('feedView');
+    if (feedView && feedView.style.display === 'none') return;
+
+    isFeedLoading = true;
+    const spinner = document.getElementById('feedSpinner');
+    const endMsg = document.getElementById('feedEndOfList');
+    if (spinner) spinner.style.display = 'flex';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const feedType = urlParams.get('feed_type') || 'all';
+    const q = urlParams.get('q') || '';
+    const tag = urlParams.get('tag') || '';
+
+    try {
+        const params = new URLSearchParams({
+            feed_type: feedType,
+            limit: FEED_PAGE_SIZE,
+            offset: feedOffset
+        });
+        if (q) params.set('q', q);
+        if (tag) params.set('tag', tag);
+        if (window.CURRENT_USER_ID) params.set('user_id', window.CURRENT_USER_ID);
+
+        const res = await fetch(`/api/feed?${params.toString()}`);
+        if (!res.ok) throw new Error('Ошибка связи с сервером');
+
+        const posts = await res.json();
+
+        if (!posts || posts.length === 0) {
+            hasMoreFeedPosts = false;
+            if (feedOffset > 0 && endMsg) {
+                endMsg.style.display = 'block';
+            }
+        } else {
+            posts.forEach(post => {
+                if (!document.getElementById(`post-${post.id}`)) {
+                    const postEl = createPostElement(post);
+                    container.appendChild(postEl);
+                }
+            });
+
+            feedOffset += posts.length;
+
+            if (posts.length < FEED_PAGE_SIZE) {
+                hasMoreFeedPosts = false;
+                if (endMsg) endMsg.style.display = 'block';
+            }
+
+            const pill = document.getElementById('feedCountPill');
+            if (pill) {
+                const totalInDom = container.querySelectorAll('.cyber-post-card').length;
+                pill.textContent = `${totalInDom} постов`;
+            }
+        }
+    } catch (err) {
+        console.error('Lazy loading feed error:', err);
+    } finally {
+        isFeedLoading = false;
+        if (spinner) spinner.style.display = 'none';
+    }
 }
 
 // ==========================================
@@ -803,6 +1132,12 @@ function handleSSEEvent(event) {
                 }
             }
             break;
+
+        case 'new_message': {
+            const msg = event.payload || event.message;
+            if (msg) handleIncomingSSEMessage(msg);
+            break;
+        }
     }
 }
 
@@ -845,7 +1180,7 @@ let currentProfileUserData = null;
 function navigateTo(view, userId = null) {
     currentView = view;
 
-    const views = ['feed', 'profile', 'showcase'];
+    const views = ['feed', 'profile', 'showcase', 'messages'];
     views.forEach(v => {
         const el = document.getElementById(`${v}View`);
         if (el) el.style.display = (v === view) ? 'block' : 'none';
@@ -854,10 +1189,12 @@ function navigateTo(view, userId = null) {
     const tabFeed = document.getElementById('tabNavFeed');
     const tabProfile = document.getElementById('tabNavProfile');
     const tabGifts = document.getElementById('tabNavGifts');
+    const tabMessages = document.getElementById('tabNavMessages');
 
     if (tabFeed) tabFeed.classList.toggle('active', view === 'feed');
     if (tabProfile) tabProfile.classList.toggle('active', view === 'profile' || view === 'my-profile');
     if (tabGifts) tabGifts.classList.toggle('active', view === 'showcase');
+    if (tabMessages) tabMessages.classList.toggle('active', view === 'messages');
 
     if (view === 'my-profile') {
         const myId = window.CURRENT_USER_ID;
@@ -873,6 +1210,14 @@ function navigateTo(view, userId = null) {
     } else if (view === 'showcase') {
         loadShowcaseGifts();
         window.history.pushState({}, '', '/?view=showcase');
+    } else if (view === 'messages') {
+        if (!window.IS_AUTHENTICATED && !window.CURRENT_USER_ID) {
+            openAuthModal('login');
+            showToast('Войдите в аккаунт для доступа к личным сообщениям', 'error');
+            return;
+        }
+        loadConversations();
+        window.history.pushState({}, '', '/?view=messages');
     } else {
         window.history.pushState({}, '', '/');
     }
@@ -946,6 +1291,9 @@ function renderUserProfile(data) {
         const followClass = data.is_following ? 'btn-following' : 'btn-primary';
 
         actionsBox.innerHTML = `
+            <button class="btn btn-secondary btn-sm" onclick="openChatWithUser(${user.id}, '${escapeHtml(user.display_name)}', '${escapeHtml(user.username)}', '${escapeHtml(user.avatar_url)}')">
+                <span>💬 Сообщение</span>
+            </button>
             <button class="btn btn-outline btn-sm" onclick="openSendGiftModal(${user.id}, '${escapeHtml(user.display_name)}', '${escapeHtml(user.username)}')">
                 <span>🎁 Отправить артефакт</span>
             </button>
@@ -964,6 +1312,12 @@ function renderUserProfile(data) {
 }
 
 async function toggleProfileFollow(userId) {
+    const heroBtn = document.querySelector('#heroActionsContainer .btn-following, #heroActionsContainer .btn-primary');
+    if (heroBtn) {
+        const wasFollowing = heroBtn.classList.contains('btn-following');
+        heroBtn.innerHTML = `<span>${wasFollowing ? 'Подписаться' : 'Отписаться'}</span>`;
+        heroBtn.className = `btn ${wasFollowing ? 'btn-primary' : 'btn-following'} btn-sm`;
+    }
     await toggleFollow(userId);
     loadUserProfile(userId);
 }
@@ -1409,4 +1763,333 @@ async function loadShowcaseGifts() {
     } catch (err) {
         showToast(err.message, 'error');
     }
+}
+
+// ==========================================
+// DIRECT MESSAGES (ЛИЧНЫЕ СООБЩЕНИЯ) CLIENT LOGIC
+// ==========================================
+
+let activeChatUserId = null;
+let activeInterlocutorData = null;
+let cachedConversations = [];
+
+async function loadConversations() {
+    const listEl = document.getElementById('conversationsList');
+    if (!listEl) return;
+
+    try {
+        const res = await fetch('/api/messages/conversations');
+        if (!res.ok) {
+            if (res.status === 401) return;
+            throw new Error('Ошибка загрузки диалогов');
+        }
+
+        const convs = await res.json();
+        cachedConversations = convs || [];
+        renderConversationsList(cachedConversations);
+        updateUnreadMessagesCountBadge();
+    } catch (err) {
+        listEl.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function renderConversationsList(convs) {
+    const listEl = document.getElementById('conversationsList');
+    if (!listEl) return;
+
+    if (!convs || convs.length === 0) {
+        listEl.innerHTML = '<div class="chat-empty-hint">Пока нет диалогов. Начните общение с любым пользователем!</div>';
+        return;
+    }
+
+    listEl.innerHTML = '';
+    convs.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'conversation-item' + (c.user.id === activeChatUserId ? ' active' : '');
+        item.dataset.userId = c.user.id;
+
+        const previewText = c.last_message ? escapeHtml(c.last_message.content) : '<span style="opacity: 0.6; font-style: italic;">Нажмите, чтобы открыть чат</span>';
+        const timeText = c.last_message ? formatTime(c.last_message.created_at) : '';
+        const unreadBadge = c.unread_count > 0 ? `<span class="conv-unread-badge">${c.unread_count}</span>` : '';
+
+        item.innerHTML = `
+            <div class="conv-avatar-wrap">
+                <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="conv-avatar">
+                <span class="chat-online-dot"></span>
+            </div>
+            <div class="conv-info">
+                <div class="conv-top-line">
+                    <span class="conv-name">${escapeHtml(c.user.display_name)}</span>
+                    <span class="conv-time">${timeText}</span>
+                </div>
+                <div class="conv-bottom-line">
+                    <span class="conv-preview">${previewText}</span>
+                    ${unreadBadge}
+                </div>
+            </div>
+        `;
+
+        item.onclick = () => {
+            openChatWithUser(c.user.id, c.user.display_name, c.user.username, c.user.avatar_url);
+        };
+
+        listEl.appendChild(item);
+    });
+}
+
+function filterConversations() {
+    const q = (document.getElementById('chatSearchInput')?.value || '').toLowerCase().trim();
+    if (!q) {
+        renderConversationsList(cachedConversations);
+        return;
+    }
+
+    const filtered = cachedConversations.filter(c => 
+        c.user.display_name.toLowerCase().includes(q) || 
+        c.user.username.toLowerCase().includes(q) ||
+        (c.last_message && c.last_message.content.toLowerCase().includes(q))
+    );
+    renderConversationsList(filtered);
+}
+
+async function openChatWithUser(userId, displayName = null, username = null, avatarUrl = null) {
+    if (!window.IS_AUTHENTICATED && !window.CURRENT_USER_ID) {
+        openAuthModal('login');
+        showToast('Войдите в систему для отправки сообщений', 'error');
+        return;
+    }
+
+    if (userId === window.CURRENT_USER_ID) {
+        showToast('Нельзя начать диалог с самим собой', 'error');
+        return;
+    }
+
+    navigateTo('messages');
+    activeChatUserId = userId;
+
+    // Update active highlight in conversation sidebar
+    document.querySelectorAll('.conversation-item').forEach(el => {
+        el.classList.toggle('active', parseInt(el.dataset.userId) === userId);
+    });
+
+    // Populate header details
+    if (displayName && username) {
+        activeInterlocutorData = { id: userId, display_name: displayName, username: username, avatar_url: avatarUrl };
+        updateChatHeader(displayName, username, avatarUrl);
+    } else {
+        // Fetch user data if not passed
+        try {
+            const res = await fetch(`/api/users/${userId}/profile`);
+            if (res.ok) {
+                const data = await res.json();
+                activeInterlocutorData = data.user;
+                updateChatHeader(data.user.display_name, data.user.username, data.user.avatar_url);
+            }
+        } catch (e) {}
+    }
+
+    const placeholder = document.getElementById('chatNoSelection');
+    const activeWin = document.getElementById('chatActiveWindow');
+    if (placeholder) placeholder.style.display = 'none';
+    if (activeWin) activeWin.style.display = 'flex';
+
+    await loadChatMessages(userId);
+
+    const input = document.getElementById('chatMessageInput');
+    if (input) input.focus();
+}
+
+function updateChatHeader(displayName, username, avatarUrl) {
+    const nameEl = document.getElementById('chatInterlocutorName');
+    const handleEl = document.getElementById('chatInterlocutorHandle');
+    const avatarEl = document.getElementById('chatInterlocutorAvatar');
+
+    if (nameEl) nameEl.textContent = displayName;
+    if (handleEl) handleEl.textContent = '@' + username;
+    if (avatarEl) avatarEl.src = avatarUrl;
+}
+
+function openInterlocutorProfile() {
+    if (activeChatUserId) {
+        navigateTo('profile', activeChatUserId);
+    }
+}
+
+async function loadChatMessages(userId) {
+    const container = document.getElementById('chatMessagesContainer');
+    if (!container) return;
+    container.innerHTML = '<div class="chat-empty-hint">Загрузка переписки...</div>';
+
+    try {
+        const res = await fetch(`/api/messages/${userId}`);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
+        const messages = await res.json();
+        renderChatMessages(messages);
+        updateUnreadMessagesCountBadge();
+    } catch (err) {
+        container.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function renderChatMessages(messages) {
+    const container = document.getElementById('chatMessagesContainer');
+    if (!container) return;
+
+    if (!messages || messages.length === 0) {
+        container.innerHTML = '<div class="chat-empty-hint">Нет сообщений. Напишите первое сообщение! 💬</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    messages.forEach(m => {
+        appendChatMessageElement(m, container);
+    });
+
+    scrollChatToBottom();
+}
+
+function appendChatMessageElement(m, container) {
+    if (!container) container = document.getElementById('chatMessagesContainer');
+    if (!container) return;
+
+    // Remove empty hint if present
+    const hint = container.querySelector('.chat-empty-hint');
+    if (hint) hint.remove();
+
+    const isOut = (m.sender_id === window.CURRENT_USER_ID);
+    const row = document.createElement('div');
+    row.className = 'chat-bubble-row ' + (isOut ? 'out' : 'in');
+
+    const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
+
+    row.innerHTML = `
+        <div class="chat-bubble ${isOut ? 'out' : 'in'}">
+            <div class="chat-bubble-content">${escapeHtml(m.content)}</div>
+            <div class="chat-bubble-footer">
+                <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
+                ${statusCheck}
+            </div>
+        </div>
+    `;
+
+    container.appendChild(row);
+}
+
+function scrollChatToBottom() {
+    const container = document.getElementById('chatMessagesContainer');
+    if (container) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+async function handleSendMessage(e) {
+    if (e) e.preventDefault();
+
+    if (!activeChatUserId) {
+        showToast('Выберите собеседника', 'error');
+        return;
+    }
+
+    const input = document.getElementById('chatMessageInput');
+    if (!input) return;
+
+    const content = input.value.trim();
+    if (!content) return;
+
+    const sendBtn = document.getElementById('chatSendBtn');
+    if (sendBtn) sendBtn.disabled = true;
+
+    try {
+        const res = await fetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                receiver_id: activeChatUserId,
+                content: content
+            })
+        });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Ошибка отправки сообщения');
+        }
+
+        const msg = await res.json();
+        input.value = '';
+
+        // Play subtle outgoing sound
+        playAudioChime(600, 800, 0.08);
+
+        // Append to UI immediately
+        appendChatMessageElement(msg);
+        scrollChatToBottom();
+
+        // Refresh conversation sidebar list in background
+        loadConversations();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        if (sendBtn) sendBtn.disabled = false;
+        input.focus();
+    }
+}
+
+function handleIncomingSSEMessage(msg) {
+    // If incoming message belongs to currently open chat
+    if (activeChatUserId && (msg.sender_id === activeChatUserId || msg.receiver_id === activeChatUserId)) {
+        appendChatMessageElement(msg);
+        scrollChatToBottom();
+
+        if (msg.sender_id === activeChatUserId) {
+            // Mark read on server
+            fetch(`/api/messages/${activeChatUserId}`).catch(() => {});
+        }
+    } else {
+        // Notification for message in other chat
+        if (msg.sender_id !== window.CURRENT_USER_ID) {
+            playAudioChime(450, 750, 0.12);
+            const senderName = msg.sender ? msg.sender.display_name : 'Пользователь';
+            showToast(`💬 Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
+        }
+    }
+
+    // Refresh conversation list & unread count badge
+    loadConversations();
+}
+
+async function updateUnreadMessagesCountBadge() {
+    const badge = document.getElementById('hudMessagesBadge');
+    if (!badge) return;
+
+    try {
+        const res = await fetch('/api/messages/unread');
+        if (res.ok) {
+            const data = await res.json();
+            const count = data.unread_count || 0;
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    } catch (e) {}
+}
+
+function playAudioChime(freq1 = 520, freq2 = 780, duration = 0.1) {
+    try {
+        const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq1, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(freq2, ctx.currentTime + duration);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+    } catch (e) {}
 }
