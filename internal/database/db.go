@@ -153,12 +153,14 @@ func migrate(db *sql.DB) error {
 
 	UPDATE users SET password_hash = '$2b$10$VjKN/Wou1MxkZTTqqCfI9u1fx13uG6DbuQkSY1L6Emy2ZwpazYsE6' WHERE password_hash = '' OR password_hash IS NULL;
 
-	-- Миграция подарков на новую коллекцию Cyberpunk 2077
-	UPDATE gifts SET gift_type = 'cyber_heart' WHERE gift_type IN ('festive_box', 'supernova');
-	UPDATE gifts SET gift_type = 'cyber_skull' WHERE gift_type IN ('bear_heart', 'quantum_crown');
-	UPDATE gifts SET gift_type = 'black_ice' WHERE gift_type IN ('cute_kitten', 'cyber_unicorn');
-	UPDATE gifts SET gift_type = 'cyber_drone' WHERE gift_type IN ('gentle_bouquet', 'quantum_diamond');
-	UPDATE gifts SET gift_type = 'neuro_stimulator' WHERE gift_type IN ('cozy_cup', 'moon_rocket', 'infinite_coffee');
+	-- Миграция подарков на коллекцию из 9 Cyberpunk 3D-подарков (без фона)
+	UPDATE gifts SET gift_type = 'cyber_katana' WHERE gift_type IN ('black_ice', 'cute_kitten', 'cyber_unicorn');
+	UPDATE gifts SET gift_type = 'neuro_visor' WHERE gift_type IN ('gentle_bouquet', 'quantum_diamond');
+	UPDATE gifts SET gift_type = 'quantum_heart' WHERE gift_type IN ('cyber_heart', 'festive_box', 'supernova');
+	UPDATE gifts SET gift_type = 'samurai_helmet' WHERE gift_type IN ('cyber_skull', 'bear_heart', 'quantum_crown');
+	UPDATE gifts SET gift_type = 'synthwave_cassette' WHERE gift_type IN ('cozy_cup', 'moon_rocket');
+	UPDATE gifts SET gift_type = 'tactical_drone' WHERE gift_type IN ('cyber_drone');
+	UPDATE gifts SET gift_type = 'combat_stim' WHERE gift_type IN ('neuro_stimulator', 'infinite_coffee');
 
 	-- Полнотекстовый поиск с морфологией и триграммами (FTS + pg_trgm)
 	CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -198,11 +200,15 @@ func seed(db *sql.DB) error {
 	if err == nil && giftsCount == 0 {
 		giftsSQL := `
 		INSERT INTO gifts (sender_id, receiver_id, gift_type, message, is_anonymous, created_at) VALUES
-		(2, 1, 'festive_box', 'С праздником! Спасибо за шикарную платформу 🎁✨', false, NOW() - INTERVAL '2 hours'),
-		(3, 1, 'bear_heart', 'Тёплый мишка в знак благодарности за чистейший код платформы! 🧸❤️', false, NOW() - INTERVAL '1 hour'),
-		(2, 1, 'cute_kitten', 'Мурлыкающий пушистик для хорошего настроения 🐱🐾', true, NOW() - INTERVAL '30 minutes'),
-		(1, 2, 'cozy_cup', 'За молниеносный деплой и горячий кофе в команде! ☕', false, NOW() - INTERVAL '40 minutes'),
-		(1, 3, 'gentle_bouquet', 'За непревзойденный дизайн и эстетику интерфейса! 💐🌸', false, NOW() - INTERVAL '25 minutes')
+		(2, 1, 'cyber_katana', 'Лазерная катана для легенды Найт-Сити! 🗡️✨', false, NOW() - INTERVAL '2 hours'),
+		(3, 1, 'quantum_heart', 'Термоядерное кибер-сердце за невероятную платформу! ⚡❤️', false, NOW() - INTERVAL '1 hour 45 minutes'),
+		(2, 1, 'samurai_helmet', 'Боевой они-шлем самурая за чистейший код! 🤖🔥', true, NOW() - INTERVAL '1 hour 20 minutes'),
+		(1, 2, 'neuro_visor', 'Тактический визор для полного контроля над серверами! 🕶️🌐', false, NOW() - INTERVAL '1 hour'),
+		(1, 3, 'synthwave_cassette', 'Синтвейв ритмы для непревзойденного дизайна! 💾🎵', false, NOW() - INTERVAL '45 minutes'),
+		(2, 3, 'mantis_blade', 'Клинок богомола для молниеносной резки багов! 🦾⚡', false, NOW() - INTERVAL '30 minutes'),
+		(3, 2, 'tactical_drone', 'Стелс-дрон для круглосуточного мониторинга! 🛸📡', false, NOW() - INTERVAL '20 minutes'),
+		(1, 2, 'emp_grenade', 'ЭМИ-граната для нейтрализации сбоев сети! 💣⚡', false, NOW() - INTERVAL '15 minutes'),
+		(2, 1, 'combat_stim', 'Боевой нейро-инжектор MaxDoc для сверхпродуктивности! 💉🔋', false, NOW() - INTERVAL '5 minutes')
 		ON CONFLICT DO NOTHING;
 		`
 		_, _ = db.Exec(giftsSQL)

@@ -1404,63 +1404,105 @@ function createRunnerRow(u) {
 // DIGITAL GIFTS (CYBERPUNK 2077 GIFTS + СОКРЫТИЕ ПОДАРКОВ)
 // ==========================================
 const GIFT_SPECS = {
-    cyber_heart: {
-        id: 'cyber_heart',
-        title: 'Кибер-Сердце',
+    // 9 новых Cyberpunk 3D-подарков (без фона, Alpha=0)
+    cyber_katana: {
+        id: 'cyber_katana',
+        title: 'Кибер-Катана',
         rarity: 'Реликтовый',
-        badgeClass: 'badge-cyber-heart',
-        gif: '/static/gifts/01_Кибер_Сердце.gif',
-        png: '/static/gifts/01_Кибер_Сердце.png',
-        webp: '/static/gifts/01_Кибер_Сердце.webp'
+        badgeClass: 'badge-cyber-katana',
+        gif: '/static/gifts/01_Кибер_Катана.gif',
+        png: '/static/gifts/01_Кибер_Катана.png',
+        webp: '/static/gifts/01_Кибер_Катана.webp'
     },
-    cyber_skull: {
-        id: 'cyber_skull',
-        title: 'Кибер-Череп Oni',
-        rarity: 'Легендарный',
-        badgeClass: 'badge-cyber-skull',
-        gif: '/static/gifts/02_Кибер_Череп.gif',
-        png: '/static/gifts/02_Кибер_Череп.png',
-        webp: '/static/gifts/02_Кибер_Череп.webp'
-    },
-    black_ice: {
-        id: 'black_ice',
-        title: 'Чип Black ICE',
-        rarity: 'Военный',
-        badgeClass: 'badge-black-ice',
-        gif: '/static/gifts/03_Чип_Black_ICE.gif',
-        png: '/static/gifts/03_Чип_Black_ICE.png',
-        webp: '/static/gifts/03_Чип_Black_ICE.webp'
-    },
-    cyber_drone: {
-        id: 'cyber_drone',
-        title: 'Кибер-Дрон Сентри',
+    neuro_visor: {
+        id: 'neuro_visor',
+        title: 'Нейро-Визор HUD',
         rarity: 'Тактический',
-        badgeClass: 'badge-cyber-drone',
-        gif: '/static/gifts/04_Кибер_Дрон.gif',
-        png: '/static/gifts/04_Кибер_Дрон.png',
-        webp: '/static/gifts/04_Кибер_Дрон.webp'
+        badgeClass: 'badge-neuro-visor',
+        gif: '/static/gifts/02_Нейро_Визор.gif',
+        png: '/static/gifts/02_Нейро_Визор.png',
+        webp: '/static/gifts/02_Нейро_Визор.webp'
     },
-    neuro_stimulator: {
-        id: 'neuro_stimulator',
-        title: 'Нейро-Стимулятор',
+    quantum_heart: {
+        id: 'quantum_heart',
+        title: 'Квантовое Кибер-Сердце',
+        rarity: 'Реликтовый',
+        badgeClass: 'badge-quantum-heart',
+        gif: '/static/gifts/03_Квантовое_Сердце.gif',
+        png: '/static/gifts/03_Квантовое_Сердце.png',
+        webp: '/static/gifts/03_Квантовое_Сердце.webp'
+    },
+    samurai_helmet: {
+        id: 'samurai_helmet',
+        title: 'Боевой Шлем Самурая Oni',
+        rarity: 'Легендарный',
+        badgeClass: 'badge-samurai-helmet',
+        gif: '/static/gifts/04_Шлем_Самурая.gif',
+        png: '/static/gifts/04_Шлем_Самурая.png',
+        webp: '/static/gifts/04_Шлем_Самурая.webp'
+    },
+    synthwave_cassette: {
+        id: 'synthwave_cassette',
+        title: 'Синтвейв Нейро-Кассета',
+        rarity: 'Ретро-Вейв',
+        badgeClass: 'badge-synthwave-cassette',
+        gif: '/static/gifts/05_Синтвейв_Кассета.gif',
+        png: '/static/gifts/05_Синтвейв_Кассета.png',
+        webp: '/static/gifts/05_Синтвейв_Кассета.webp'
+    },
+    mantis_blade: {
+        id: 'mantis_blade',
+        title: 'Клинок Богомола',
+        rarity: 'Военный',
+        badgeClass: 'badge-mantis-blade',
+        gif: '/static/gifts/06_Клинок_Богомола.gif',
+        png: '/static/gifts/06_Клинок_Богомола.png',
+        webp: '/static/gifts/06_Клинок_Богомола.webp'
+    },
+    tactical_drone: {
+        id: 'tactical_drone',
+        title: 'Тактический Кибер-Дрон',
+        rarity: 'Тактический',
+        badgeClass: 'badge-tactical-drone',
+        gif: '/static/gifts/07_Кибер_Дрон.gif',
+        png: '/static/gifts/07_Кибер_Дрон.png',
+        webp: '/static/gifts/07_Кибер_Дрон.webp'
+    },
+    emp_grenade: {
+        id: 'emp_grenade',
+        title: 'Плазменная ЭМИ-Граната',
+        rarity: 'Спец-Оружие',
+        badgeClass: 'badge-emp-grenade',
+        gif: '/static/gifts/08_ЭМИ_Граната.gif',
+        png: '/static/gifts/08_ЭМИ_Граната.png',
+        webp: '/static/gifts/08_ЭМИ_Граната.webp'
+    },
+    combat_stim: {
+        id: 'combat_stim',
+        title: 'Нейро-Инжектор «MaxDoc»',
         rarity: 'Стимулятор',
-        badgeClass: 'badge-neuro-stimulator',
-        gif: '/static/gifts/05_Неоновый_Стимулятор.gif',
-        png: '/static/gifts/05_Неоновый_Стимулятор.png',
-        webp: '/static/gifts/05_Неоновый_Стимулятор.webp'
+        badgeClass: 'badge-combat-stim',
+        gif: '/static/gifts/09_Нейро_Инжектор.gif',
+        png: '/static/gifts/09_Нейро_Инжектор.png',
+        webp: '/static/gifts/09_Нейро_Инжектор.webp'
     },
-    // Fallbacks для обратной совместимости
-    festive_box: { id: 'cyber_heart', title: 'Кибер-Сердце', rarity: 'Реликтовый', badgeClass: 'badge-cyber-heart', gif: '/static/gifts/01_Кибер_Сердце.gif', png: '/static/gifts/01_Кибер_Сердце.png', webp: '/static/gifts/01_Кибер_Сердце.webp' },
-    bear_heart: { id: 'cyber_skull', title: 'Кибер-Череп Oni', rarity: 'Легендарный', badgeClass: 'badge-cyber-skull', gif: '/static/gifts/02_Кибер_Череп.gif', png: '/static/gifts/02_Кибер_Череп.png', webp: '/static/gifts/02_Кибер_Череп.webp' },
-    cute_kitten: { id: 'black_ice', title: 'Чип Black ICE', rarity: 'Военный', badgeClass: 'badge-black-ice', gif: '/static/gifts/03_Чип_Black_ICE.gif', png: '/static/gifts/03_Чип_Black_ICE.png', webp: '/static/gifts/03_Чип_Black_ICE.webp' },
-    gentle_bouquet: { id: 'cyber_drone', title: 'Кибер-Дрон Сентри', rarity: 'Тактический', badgeClass: 'badge-cyber-drone', gif: '/static/gifts/04_Кибер_Дрон.gif', png: '/static/gifts/04_Кибер_Дрон.png', webp: '/static/gifts/04_Кибер_Дрон.webp' },
-    cozy_cup: { id: 'neuro_stimulator', title: 'Нейро-Стимулятор', rarity: 'Стимулятор', badgeClass: 'badge-neuro-stimulator', gif: '/static/gifts/05_Неоновый_Стимулятор.gif', png: '/static/gifts/05_Неоновый_Стимулятор.png', webp: '/static/gifts/05_Неоновый_Стимулятор.webp' },
-    supernova: { id: 'cyber_heart', title: 'Кибер-Сердце', rarity: 'Реликтовый', badgeClass: 'badge-cyber-heart', gif: '/static/gifts/01_Кибер_Сердце.gif', png: '/static/gifts/01_Кибер_Сердце.png' },
-    quantum_crown: { id: 'cyber_skull', title: 'Кибер-Череп Oni', rarity: 'Легендарный', badgeClass: 'badge-cyber-skull', gif: '/static/gifts/02_Кибер_Череп.gif', png: '/static/gifts/02_Кибер_Череп.png' },
-    cyber_unicorn: { id: 'black_ice', title: 'Чип Black ICE', rarity: 'Военный', badgeClass: 'badge-black-ice', gif: '/static/gifts/03_Чип_Black_ICE.gif', png: '/static/gifts/03_Чип_Black_ICE.png' },
-    quantum_diamond: { id: 'cyber_drone', title: 'Кибер-Дрон Сентри', rarity: 'Тактический', badgeClass: 'badge-cyber-drone', gif: '/static/gifts/04_Кибер_Дрон.gif', png: '/static/gifts/04_Кибер_Дрон.png' },
-    infinite_coffee: { id: 'neuro_stimulator', title: 'Нейро-Стимулятор', rarity: 'Стимулятор', badgeClass: 'badge-neuro-stimulator', gif: '/static/gifts/05_Неоновый_Стимулятор.gif', png: '/static/gifts/05_Неоновый_Стимулятор.png' },
-    moon_rocket: { id: 'neuro_stimulator', title: 'Нейро-Стимулятор', rarity: 'Стимулятор', badgeClass: 'badge-neuro-stimulator', gif: '/static/gifts/05_Неоновый_Стимулятор.gif', png: '/static/gifts/05_Неоновый_Стимулятор.png' }
+    // Алиасы для обратной совместимости
+    cyber_heart: { id: 'quantum_heart', title: 'Квантовое Кибер-Сердце', rarity: 'Реликтовый', badgeClass: 'badge-quantum-heart', gif: '/static/gifts/03_Квантовое_Сердце.gif', png: '/static/gifts/03_Квантовое_Сердце.png', webp: '/static/gifts/03_Квантовое_Сердце.webp' },
+    cyber_skull: { id: 'samurai_helmet', title: 'Боевой Шлем Самурая Oni', rarity: 'Легендарный', badgeClass: 'badge-samurai-helmet', gif: '/static/gifts/04_Шлем_Самурая.gif', png: '/static/gifts/04_Шлем_Самурая.png', webp: '/static/gifts/04_Шлем_Самурая.webp' },
+    black_ice: { id: 'cyber_katana', title: 'Кибер-Катана', rarity: 'Реликтовый', badgeClass: 'badge-cyber-katana', gif: '/static/gifts/01_Кибер_Катана.gif', png: '/static/gifts/01_Кибер_Катана.png', webp: '/static/gifts/01_Кибер_Катана.webp' },
+    cyber_drone: { id: 'tactical_drone', title: 'Тактический Кибер-Дрон', rarity: 'Тактический', badgeClass: 'badge-tactical-drone', gif: '/static/gifts/07_Кибер_Дрон.gif', png: '/static/gifts/07_Кибер_Дрон.png', webp: '/static/gifts/07_Кибер_Дрон.webp' },
+    neuro_stimulator: { id: 'combat_stim', title: 'Нейро-Инжектор «MaxDoc»', rarity: 'Стимулятор', badgeClass: 'badge-combat-stim', gif: '/static/gifts/09_Нейро_Инжектор.gif', png: '/static/gifts/09_Нейро_Инжектор.png', webp: '/static/gifts/09_Нейро_Инжектор.webp' },
+    festive_box: { id: 'quantum_heart', title: 'Квантовое Кибер-Сердце', rarity: 'Реликтовый', badgeClass: 'badge-quantum-heart', gif: '/static/gifts/03_Квантовое_Сердце.gif', png: '/static/gifts/03_Квантовое_Сердце.png', webp: '/static/gifts/03_Квантовое_Сердце.webp' },
+    supernova: { id: 'quantum_heart', title: 'Квантовое Кибер-Сердце', rarity: 'Реликтовый', badgeClass: 'badge-quantum-heart', gif: '/static/gifts/03_Квантовое_Сердце.gif', png: '/static/gifts/03_Квантовое_Сердце.png' },
+    bear_heart: { id: 'samurai_helmet', title: 'Боевой Шлем Самурая Oni', rarity: 'Легендарный', badgeClass: 'badge-samurai-helmet', gif: '/static/gifts/04_Шлем_Самурая.gif', png: '/static/gifts/04_Шлем_Самурая.png' },
+    quantum_crown: { id: 'samurai_helmet', title: 'Боевой Шлем Самурая Oni', rarity: 'Легендарный', badgeClass: 'badge-samurai-helmet', gif: '/static/gifts/04_Шлем_Самурая.gif', png: '/static/gifts/04_Шлем_Самурая.png' },
+    cute_kitten: { id: 'cyber_katana', title: 'Кибер-Катана', rarity: 'Реликтовый', badgeClass: 'badge-cyber-katana', gif: '/static/gifts/01_Кибер_Катана.gif', png: '/static/gifts/01_Кибер_Катана.png' },
+    cyber_unicorn: { id: 'cyber_katana', title: 'Кибер-Катана', rarity: 'Реликтовый', badgeClass: 'badge-cyber-katana', gif: '/static/gifts/01_Кибер_Катана.gif', png: '/static/gifts/01_Кибер_Катана.png' },
+    gentle_bouquet: { id: 'neuro_visor', title: 'Нейро-Визор HUD', rarity: 'Тактический', badgeClass: 'badge-neuro-visor', gif: '/static/gifts/02_Нейро_Визор.gif', png: '/static/gifts/02_Нейро_Визор.png' },
+    quantum_diamond: { id: 'neuro_visor', title: 'Нейро-Визор HUD', rarity: 'Тактический', badgeClass: 'badge-neuro-visor', gif: '/static/gifts/02_Нейро_Визор.gif', png: '/static/gifts/02_Нейро_Визор.png' },
+    cozy_cup: { id: 'synthwave_cassette', title: 'Синтвейв Нейро-Кассета', rarity: 'Ретро-Вейв', badgeClass: 'badge-synthwave-cassette', gif: '/static/gifts/05_Синтвейв_Кассета.gif', png: '/static/gifts/05_Синтвейв_Кассета.png' },
+    moon_rocket: { id: 'synthwave_cassette', title: 'Синтвейв Нейро-Кассета', rarity: 'Ретро-Вейв', badgeClass: 'badge-synthwave-cassette', gif: '/static/gifts/05_Синтвейв_Кассета.gif', png: '/static/gifts/05_Синтвейв_Кассета.png' },
+    infinite_coffee: { id: 'combat_stim', title: 'Нейро-Инжектор «MaxDoc»', rarity: 'Стимулятор', badgeClass: 'badge-combat-stim', gif: '/static/gifts/09_Нейро_Инжектор.gif', png: '/static/gifts/09_Нейро_Инжектор.png' }
 };
 
 function getGiftTitle(type) {
@@ -1468,7 +1510,7 @@ function getGiftTitle(type) {
 }
 
 function renderGiftCard(gift, container, prepend = false) {
-    const spec = GIFT_SPECS[gift.gift_type] || GIFT_SPECS.cyber_heart;
+    const spec = GIFT_SPECS[gift.gift_type] || GIFT_SPECS.cyber_katana;
     const card = document.createElement('div');
     card.className = 'artifact-card-item' + (gift.is_hidden ? ' is-hidden-gift' : '');
     card.id = `gift-card-${gift.id}`;
@@ -1559,7 +1601,7 @@ function openSendGiftModal(receiverId, displayName, username) {
     document.getElementById('giftReceiverName').textContent = `${displayName} (@${username})`;
     document.getElementById('giftMessage').value = '';
     document.getElementById('giftIsAnonymous').checked = false;
-    selectGiftType('cyber_heart');
+    selectGiftType('cyber_katana');
 
     const modal = document.getElementById('sendGiftModal');
     if (modal) modal.style.display = 'flex';
@@ -1575,7 +1617,7 @@ function selectGiftType(type) {
     document.querySelectorAll('.gift-select-item').forEach(item => {
         item.classList.toggle('active', item.getAttribute('data-type') === type);
     });
-    const spec = GIFT_SPECS[type] || GIFT_SPECS.cyber_heart;
+    const spec = GIFT_SPECS[type] || GIFT_SPECS.cyber_katana;
     const badge = document.getElementById('selectedRarityBadge');
     if (badge) badge.textContent = spec.rarity;
 }
@@ -1647,7 +1689,7 @@ function openGiftDetail(gift) {
     const modal = document.getElementById('giftDetailModal');
     if (!modal) return;
 
-    const spec = GIFT_SPECS[gift.gift_type] || GIFT_SPECS.cyber_heart;
+    const spec = GIFT_SPECS[gift.gift_type] || GIFT_SPECS.cyber_katana;
 
     const img = document.getElementById('unboxingImg');
     if (img) img.src = spec.gif || spec.png;

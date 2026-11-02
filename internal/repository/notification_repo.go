@@ -253,17 +253,25 @@ func truncateString(s string, maxLen int) string {
 
 func humanGiftTitle(giftType string) string {
 	switch giftType {
-	case "festive_box", "supernova":
-		return "Праздничный подарок"
-	case "bear_heart", "quantum_crown":
-		return "Мишка с сердечком"
-	case "cute_kitten", "cyber_unicorn":
-		return "Пушистый котёнок"
-	case "gentle_bouquet", "quantum_diamond":
-		return "Нежный букет"
-	case "cozy_cup", "moon_rocket", "infinite_coffee":
-		return "Чашка уюта"
+	case "cyber_katana":
+		return "Кибер-Катана"
+	case "neuro_visor":
+		return "Нейро-Визор HUD"
+	case "quantum_heart", "cyber_heart", "festive_box", "supernova":
+		return "Квантовое Кибер-Сердце"
+	case "samurai_helmet", "cyber_skull", "bear_heart", "quantum_crown":
+		return "Боевой Шлем Самурая Oni"
+	case "synthwave_cassette", "cozy_cup", "moon_rocket":
+		return "Синтвейв Нейро-Кассета"
+	case "mantis_blade":
+		return "Клинок Богомола"
+	case "tactical_drone", "cyber_drone", "gentle_bouquet", "quantum_diamond":
+		return "Тактический Кибер-Дрон"
+	case "emp_grenade":
+		return "Плазменная ЭМИ-Граната"
+	case "combat_stim", "neuro_stimulator", "infinite_coffee":
+		return "Нейро-Инжектор «MaxDoc»"
 	default:
-		return "Цифровой подарок"
+		return "Кибер-подарок"
 	}
 }

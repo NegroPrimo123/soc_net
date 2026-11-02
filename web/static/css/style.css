@@ -1254,35 +1254,76 @@ input:focus, textarea:focus, select:focus {
     border-radius: var(--radius-pill);
 }
 
-.badge-festive {
+/* 9 Cyberpunk 3D Gifts Rarity Badges */
+.badge-cyber-katana {
     background: rgba(0, 240, 255, 0.15);
-    color: #e26d5c;
-    border: 1px solid rgba(0, 240, 255, 0.3);
+    color: #00f0ff;
+    border: 1px solid rgba(0, 240, 255, 0.4);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
 }
 
-.badge-heart {
-    background: rgba(244, 63, 94, 0.15);
-    color: #f43f5e;
-    border: 1px solid rgba(244, 63, 94, 0.3);
+.badge-neuro-visor {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
 }
 
-.badge-kitten {
-    background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
-    border: 1px solid rgba(245, 158, 11, 0.3);
+.badge-quantum-heart, .badge-cyber-heart {
+    background: rgba(255, 0, 85, 0.15);
+    color: #ff0055;
+    border: 1px solid rgba(255, 0, 85, 0.4);
+    box-shadow: 0 0 10px rgba(255, 0, 85, 0.25);
 }
 
-.badge-bouquet {
-    background: rgba(139, 92, 246, 0.15);
-    color: #a78bfa;
-    border: 1px solid rgba(139, 92, 246, 0.3);
+.badge-samurai-helmet, .badge-cyber-skull {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.25);
 }
 
-.badge-cozy {
-    background: rgba(16, 185, 129, 0.15);
-    color: #34d399;
-    border: 1px solid rgba(16, 185, 129, 0.3);
+.badge-synthwave-cassette {
+    background: rgba(192, 132, 252, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(192, 132, 252, 0.4);
+    box-shadow: 0 0 10px rgba(192, 132, 252, 0.25);
 }
+
+.badge-mantis-blade, .badge-black-ice {
+    background: rgba(249, 115, 22, 0.15);
+    color: #f97316;
+    border: 1px solid rgba(249, 115, 22, 0.4);
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.25);
+}
+
+.badge-tactical-drone, .badge-cyber-drone {
+    background: rgba(45, 212, 191, 0.15);
+    color: #2dd4bf;
+    border: 1px solid rgba(45, 212, 191, 0.4);
+    box-shadow: 0 0 10px rgba(45, 212, 191, 0.25);
+}
+
+.badge-emp-grenade {
+    background: rgba(129, 140, 248, 0.15);
+    color: #818cf8;
+    border: 1px solid rgba(129, 140, 248, 0.4);
+    box-shadow: 0 0 10px rgba(129, 140, 248, 0.25);
+}
+
+.badge-combat-stim, .badge-neuro-stimulator {
+    background: rgba(0, 255, 102, 0.15);
+    color: #00ff66;
+    border: 1px solid rgba(0, 255, 102, 0.4);
+    box-shadow: 0 0 10px rgba(0, 255, 102, 0.25);
+}
+
+/* Fallbacks */
+.badge-festive { background: rgba(0, 240, 255, 0.15); color: #e26d5c; border: 1px solid rgba(0, 240, 255, 0.3); }
+.badge-heart { background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.3); }
+.badge-kitten { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+.badge-bouquet { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+.badge-cozy { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
 
 .artifact-stage {
     width: 140px;

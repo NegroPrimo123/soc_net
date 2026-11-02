@@ -3,138 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ CYBERPUNK 2077 GIFTS — Коллекция неоновых подарков</title>
+    <title>⚡ CYBERPUNK 2077 GIFTS — Коллекция из 9 прозрачных 3D-подарков</title>
     <style>
         :root {
-            --bg: #090b10;
-            --card-bg: #111420;
+            --bg-dark: #0a0c14;
+            --card-bg: rgba(18, 22, 34, 0.75);
             --neon-cyan: #00f0ff;
             --neon-pink: #ff0055;
-            --neon-yellow: #ffea00;
             --neon-green: #00ff66;
-            --text-main: #e2e8f0;
-            --text-dim: #718096;
-            --border-glow: rgba(0, 240, 255, 0.4);
+            --neon-orange: #ff7700;
+            --text-main: #f0f4f8;
+            --text-dim: #8896ab;
         }
         * { box-sizing: border-box; }
         body {
-            background-color: var(--bg);
+            background-color: var(--bg-dark);
             color: var(--text-main);
-            font-family: 'Courier New', Consolas, monospace, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 40px 20px;
             background-image: 
-                linear-gradient(rgba(0, 240, 255, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
-            background-size: 32px 32px;
+                radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(255, 0, 85, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(0, 255, 102, 0.05) 0%, transparent 50%);
+            min-height: 100vh;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
         }
         header {
             text-align: center;
-            margin-bottom: 50px;
-            position: relative;
+            margin-bottom: 55px;
         }
-        .cyber-badge {
+        .tag {
             display: inline-block;
-            background: rgba(255, 0, 85, 0.15);
-            color: var(--neon-pink);
-            border: 1px solid var(--neon-pink);
-            padding: 6px 16px;
+            background: linear-gradient(90deg, rgba(0,240,255,0.15), rgba(255,0,85,0.15));
+            border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+            padding: 6px 20px;
+            border-radius: 20px;
             font-size: 0.85rem;
             letter-spacing: 2px;
-            font-weight: bold;
+            font-weight: 600;
             text-transform: uppercase;
-            margin-bottom: 12px;
-            box-shadow: 0 0 15px rgba(255, 0, 85, 0.4);
+            margin-bottom: 15px;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
         }
         h1 {
-            font-size: 2.8rem;
-            margin: 0 0 10px 0;
-            color: #ffffff;
-            text-shadow: 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-cyan);
-            letter-spacing: 3px;
-            text-transform: uppercase;
+            font-size: 3rem;
+            margin: 0 0 12px 0;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #ffffff 30%, var(--neon-cyan) 75%, var(--neon-pink) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
         .subtitle {
-            color: var(--neon-cyan);
-            font-size: 1.1rem;
-            letter-spacing: 1px;
+            color: var(--text-dim);
+            font-size: 1.15rem;
             max-width: 700px;
             margin: 0 auto;
-            text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+            line-height: 1.6;
         }
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-            gap: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 32px;
             margin-bottom: 50px;
         }
         .card {
             background: var(--card-bg);
-            border: 1px solid rgba(0, 240, 255, 0.3);
-            border-radius: 4px;
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
             overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
             transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
             display: flex;
             flex-direction: column;
-            position: relative;
-        }
-        .card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
         }
         .card:hover {
             transform: translateY(-8px);
-            border-color: var(--neon-cyan);
-            box-shadow: 0 16px 40px rgba(0, 240, 255, 0.25);
+            border-color: rgba(0, 240, 255, 0.5);
+            box-shadow: 0 24px 50px rgba(0, 240, 255, 0.22);
         }
         .card-media {
-            background: #05070c;
-            padding: 20px;
+            padding: 28px;
             text-align: center;
-            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+            background: 
+                linear-gradient(45deg, #121622 25%, transparent 25%), 
+                linear-gradient(-45deg, #121622 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #121622 75%), 
+                linear-gradient(-45deg, transparent 75%, #121622 75%);
+            background-size: 24px 24px;
+            background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+            background-color: #0c0f18;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            position: relative;
         }
         .card-media img {
             width: 100%;
-            max-width: 290px;
+            max-width: 260px;
             height: auto;
-            border: 1px solid rgba(0, 240, 255, 0.25);
-            box-shadow: 0 0 25px rgba(0, 0, 0, 0.9);
+            filter: drop-shadow(0 15px 25px rgba(0, 0, 0, 0.7));
+            transition: transform 0.3s ease;
+        }
+        .card:hover .card-media img {
+            transform: scale(1.04);
+        }
+        .transparency-badge {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            background: rgba(0, 0, 0, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #a0aec0;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            backdrop-filter: blur(4px);
         }
         .card-body {
-            padding: 24px;
+            padding: 26px;
             flex: 1;
             display: flex;
             flex-direction: column;
         }
         .card-title {
-            font-size: 1.4rem;
+            font-size: 1.35rem;
             margin: 0 0 10px 0;
             color: #ffffff;
-            letter-spacing: 1px;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         .card-desc {
-            font-size: 0.92rem;
-            color: #a0aec0;
+            font-size: 0.95rem;
+            color: var(--text-dim);
             line-height: 1.6;
-            margin-bottom: 16px;
+            margin-bottom: 18px;
             flex: 1;
         }
-        .tech-info {
-            background: rgba(0, 0, 0, 0.4);
-            border-left: 3px solid var(--neon-pink);
+        .feature-box {
+            background: rgba(0, 240, 255, 0.05);
+            border-left: 3px solid var(--neon-cyan);
+            border-radius: 8px;
             padding: 10px 14px;
-            font-size: 0.82rem;
-            color: var(--neon-cyan);
-            margin-bottom: 20px;
+            font-size: 0.85rem;
+            color: #d1d5db;
+            margin-bottom: 22px;
         }
         .downloads {
             display: flex;
@@ -145,162 +162,242 @@
             text-align: center;
             padding: 10px 12px;
             text-decoration: none;
-            font-weight: bold;
+            font-weight: 600;
             font-size: 0.85rem;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            border-radius: 2px;
+            border-radius: 12px;
             transition: all 0.2s ease;
         }
         .btn-gif {
-            background: transparent;
+            background: rgba(0, 240, 255, 0.1);
             color: var(--neon-cyan);
-            border: 1px solid var(--neon-cyan);
-            box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+            border: 1px solid rgba(0, 240, 255, 0.4);
         }
         .btn-gif:hover {
             background: var(--neon-cyan);
             color: #000;
-            box-shadow: 0 0 20px var(--neon-cyan);
+            box-shadow: 0 0 15px var(--neon-cyan);
         }
         .btn-webp {
-            background: transparent;
+            background: rgba(255, 0, 85, 0.1);
             color: var(--neon-pink);
-            border: 1px solid var(--neon-pink);
-            box-shadow: 0 0 10px rgba(255, 0, 85, 0.2);
+            border: 1px solid rgba(255, 0, 85, 0.4);
         }
         .btn-webp:hover {
             background: var(--neon-pink);
             color: #fff;
-            box-shadow: 0 0 20px var(--neon-pink);
+            box-shadow: 0 0 15px var(--neon-pink);
         }
         .btn-png {
-            background: transparent;
-            color: var(--neon-green);
-            border: 1px solid var(--neon-green);
-            box-shadow: 0 0 10px rgba(0, 255, 102, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         .btn-png:hover {
-            background: var(--neon-green);
+            background: #fff;
             color: #000;
-            box-shadow: 0 0 20px var(--neon-green);
+            box-shadow: 0 0 15px #fff;
         }
         footer {
             text-align: center;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             color: var(--text-dim);
-            padding: 20px 0;
-            border-top: 1px solid rgba(0, 240, 255, 0.2);
+            padding: 25px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <div class="cyber-badge">// NIGHT CITY NEURAL GIFTS //</div>
-            <h1>⚡ CYBERPUNK COLLECTION</h1>
-            <p class="subtitle">&gt; Пакет подарков высшего военного грейда. Неоновый блум, плазменные ядра, титановые импланты и цифровой глитч.</p>
+            <div class="tag">⚡ CYBERPUNK COLLECTION (9 GIFTS)</div>
+            <h1>Коллекция киберпанк-подарков</h1>
+            <p class="subtitle">9 высокотехнологичных 3D-подарков на 100% прозрачном фоне (Alpha=0). Неоновые лазеры, плазменные ядра, хром и плавная анимация.</p>
         </header>
 
         <div class="grid">
-            <!-- Gift 1 -->
+            <!-- 1: Katana -->
             <div class="card">
                 <div class="card-media">
-                    <img src="01_Кибер_Сердце.gif" alt="Кибер-Сердце">
+                    <span class="transparency-badge">Прозрачный фон</span>
+                    <img src="01_Кибер_Катана.gif" alt="Кибер-Катана">
                 </div>
                 <div class="card-body">
-                    <h3 class="card-title">⚡ 01. Кибер-Сердце</h3>
-                    <p class="card-desc">Бионический термоядерный реактор из тёмного титана с пульсирующей плазменной камерой, искрящимися артериями и телеметрией ЭКГ.</p>
-                    <div class="tech-info">
-                        <strong>ANIMATION:</strong> Двойной такт сердечного пульса, электрические дуги, анимация кардиограммы и вспышка ядра.
+                    <h3 class="card-title">🗡️ 01. Кибер-Катана</h3>
+                    <p class="card-desc">Высокотехнологичный клинок с лазерным неоновым лезвием, карбоновой рукоятью и голографическими кольцами энергии.</p>
+                    <div class="feature-box">
+                        <strong>Анимация:</strong> Бегущий световой импульс по лезвию, вращающиеся кольца энергии и электрические искры.
                     </div>
                     <div class="downloads">
-                        <a href="01_Кибер_Сердце.gif" download class="btn btn-gif">GIF</a>
-                        <a href="01_Кибер_Сердце.webp" download class="btn btn-webp">WebP</a>
-                        <a href="01_Кибер_Сердце.png" download class="btn btn-png">PNG</a>
+                        <a href="01_Кибер_Катана.gif" download class="btn btn-gif">GIF</a>
+                        <a href="01_Кибер_Катана.webp" download class="btn btn-webp">WebP</a>
+                        <a href="01_Кибер_Катана.png" download class="btn btn-png">PNG</a>
                     </div>
                 </div>
             </div>
 
-            <!-- Gift 2 -->
+            <!-- 2: Visor -->
             <div class="card">
                 <div class="card-media">
-                    <img src="02_Кибер_Череп.gif" alt="Кибер-Череп">
+                    <span class="transparency-badge">Прозрачный фон</span>
+                    <img src="02_Нейро_Визор.gif" alt="Нейро-Визор">
                 </div>
                 <div class="card-body">
-                    <h3 class="card-title">💀 02. Кибер-Череп Oni</h3>
-                    <p class="card-desc">Угловатый титановый шлем-маска они с горящим неоновым визором, вращающимися голографическими прицельными кольцами и хроматическим глитчем.</p>
-                    <div class="tech-info">
-                        <strong>ANIMATION:</strong> Лазерное сканирование визора, вращение HUD-колец захвата цели и цифровые искажения.
+                    <h3 class="card-title">🕶️ 02. Нейро-Визор HUD</h3>
+                    <p class="card-desc">Смарт-очки дополненной реальности из полированного хрома со светящимися линзами и цифровой телеметрией.</p>
+                    <div class="feature-box">
+                        <strong>Анимация:</strong> Лазерный луч сканирования данных, пульсирующие прицельные метки и неоновые блики.
                     </div>
                     <div class="downloads">
-                        <a href="02_Кибер_Череп.gif" download class="btn btn-gif">GIF</a>
-                        <a href="02_Кибер_Череп.webp" download class="btn btn-webp">WebP</a>
-                        <a href="02_Кибер_Череп.png" download class="btn btn-png">PNG</a>
+                        <a href="02_Нейро_Визор.gif" download class="btn btn-gif">GIF</a>
+                        <a href="02_Нейро_Визор.webp" download class="btn btn-webp">WebP</a>
+                        <a href="02_Нейро_Визор.png" download class="btn btn-png">PNG</a>
                     </div>
                 </div>
             </div>
 
-            <!-- Gift 3 -->
+            <!-- 3: Quantum Heart -->
             <div class="card">
                 <div class="card-media">
-                    <img src="03_Чип_Black_ICE.gif" alt="Чип Black ICE">
+                    <span class="transparency-badge">Прозрачный фон</span>
+                    <img src="03_Квантовое_Сердце.gif" alt="Квантовое Сердце">
                 </div>
                 <div class="card-body">
-                    <h3 class="card-title">💾 03. Чип Black ICE</h3>
-                    <p class="card-desc">Военный зашифрованный нейрочип из обсидианового кремния с золотыми контактами, потоком кода матрицы и сканирующим световым лучом.</p>
-                    <div class="tech-info">
-                        <strong>ANIMATION:</strong> Вертикальное лазерное сканирование, водопад hex-кодов матрицы и пульсация логотипа процессора.
+                    <h3 class="card-title">⚡ 03. Квантовое Кибер-Сердце</h3>
+                    <p class="card-desc">Термоядерный силовой реактор из тёмного титана с магнитной ловушкой и бушующей внутри плазмой.</p>
+                    <div class="feature-box">
+                        <strong>Анимация:</strong> Ритмичная пульсация квантового ядра (двойной такт), вспышки плазмы и орбитальные искры.
                     </div>
                     <div class="downloads">
-                        <a href="03_Чип_Black_ICE.gif" download class="btn btn-gif">GIF</a>
-                        <a href="03_Чип_Black_ICE.webp" download class="btn btn-webp">WebP</a>
-                        <a href="03_Чип_Black_ICE.png" download class="btn btn-png">PNG</a>
+                        <a href="03_Квантовое_Сердце.gif" download class="btn btn-gif">GIF</a>
+                        <a href="03_Квантовое_Сердце.webp" download class="btn btn-webp">WebP</a>
+                        <a href="03_Квантовое_Сердце.png" download class="btn btn-png">PNG</a>
                     </div>
                 </div>
             </div>
 
-            <!-- Gift 4 -->
+            <!-- 4: Oni Helmet -->
             <div class="card">
                 <div class="card-media">
-                    <img src="04_Кибер_Дрон.gif" alt="Кибер-Дрон">
+                    <span class="transparency-badge">Прозрачный фон</span>
+                    <img src="04_Шлем_Самурая.gif" alt="Шлем Самурая">
                 </div>
                 <div class="card-body">
-                    <h3 class="card-title">🛸 04. Кибер-Дрон Сентри</h3>
-                    <p class="card-desc">Тактический разведывательный стелс-дрон с двухвекторными плазменными маневровыми двигателями и круговым лазерным радаром.</p>
-                    <div class="tech-info">
-                        <strong>ANIMATION:</strong> Физика парения в воздухе, факелы плазменных двигателей, сканирующий световой конус и радарные волны.
+                    <h3 class="card-title">🤖 04. Боевой Шлем Самурая Они</h3>
+                    <p class="card-desc">Титановый шлем кибер-самурая с горящими неоновыми рогами-радиаторами и лазерным визором захвата цели.</p>
+                    <div class="feature-box">
+                        <strong>Анимация:</strong> Горизонтальное сканирование LED-визора, пульсация рогов и голографический прицел.
                     </div>
                     <div class="downloads">
-                        <a href="04_Кибер_Дрон.gif" download class="btn btn-gif">GIF</a>
-                        <a href="04_Кибер_Дрон.webp" download class="btn btn-webp">WebP</a>
-                        <a href="04_Кибер_Дрон.png" download class="btn btn-png">PNG</a>
+                        <a href="04_Шлем_Самурая.gif" download class="btn btn-gif">GIF</a>
+                        <a href="04_Шлем_Самурая.webp" download class="btn btn-webp">WebP</a>
+                        <a href="04_Шлем_Самурая.png" download class="btn btn-png">PNG</a>
                     </div>
                 </div>
             </div>
 
-            <!-- Gift 5 -->
+            <!-- 5: Synth Cassette -->
             <div class="card">
                 <div class="card-media">
-                    <img src="05_Неоновый_Стимулятор.gif" alt="Неоновый Стимулятор">
+                    <span class="transparency-badge">Прозрачный фон</span>
+                    <img src="05_Синтвейв_Кассета.gif" alt="Синтвейв Кассета">
                 </div>
                 <div class="card-body">
-                    <h3 class="card-title">⚡ 05. Нейро-Стимулятор</h3>
-                    <p class="card-desc">Боевой инжектор с биолюминесцентной неоновой плазмой, поднимающимися нанопузырьками, индикатором заряда и высоковольтными молниями.</p>
-                    <div class="tech-info">
-                        <strong>ANIMATION:</strong> Искрящиеся электрические разряды между иглами, кипение сыворотки и бегущие светодиодные индикаторы.
+                    <h3 class="card-title">💾 05. Синтвейв Нейро-Кассета</h3>
+                    <p class="card-desc">Ретро-футуристичная прозрачная кассета с неоновыми бобинами плёнки, лазерными дорожками и эквалайзером.</p>
+                    <div class="feature-box">
+                        <strong>Анимация:</strong> Вращающиеся катушки плёнки, живой танцующий эквалайзер звука и лазерные блики.
                     </div>
                     <div class="downloads">
-                        <a href="05_Неоновый_Стимулятор.gif" download class="btn btn-gif">GIF</a>
-                        <a href="05_Неоновый_Стимулятор.webp" download class="btn btn-webp">WebP</a>
-                        <a href="05_Неоновый_Стимулятор.png" download class="btn btn-png">PNG</a>
+                        <a href="05_Синтвейв_Кассета.gif" download class="btn btn-gif">GIF</a>
+                        <a href="05_Синтвейв_Кассета.webp" download class="btn btn-webp">WebP</a>
+                        <a href="05_Синтвейв_Кассета.png" download class="btn btn-png">PNG</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6: Mantis Arm -->
+            <div class="card">
+                <div class="card-media">
+                    <span class="transparency-badge">Прозрачный фон</span>
+                    <img src="06_Клинок_Богомола.gif" alt="Клинок Богомола">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-title">🦾 06. Клинок Богомола</h3>
+                    <p class="card-desc">Бионическая рука из карбона и титана с выдвинутым термо-клинком богомола, раскалённым до оранжевого свечения.</p>
+                    <div class="feature-box">
+                        <strong>Анимация:</strong> Бегущий термо-импульс по лезвию клинка, искры и пульсирующие энергоканалы предплечья.
+                    </div>
+                    <div class="downloads">
+                        <a href="06_Клинок_Богомола.gif" download class="btn btn-gif">GIF</a>
+                        <a href="06_Клинок_Богомола.webp" download class="btn btn-webp">WebP</a>
+                        <a href="06_Клинок_Богомола.png" download class="btn btn-png">PNG</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 7: Cyber Drone -->
+            <div class="card">
+                <div class="card-media">
+                    <span class="transparency-badge">Прозрачный фон</span>
+                    <img src="07_Кибер_Дрон.gif" alt="Кибер-Дрон">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-title">🛸 07. Тактический Кибер-Дрон</h3>
+                    <p class="card-desc">Стелс-дрон разведки с векторными плазменными двигателями, мультиспектральной оптикой и круговым сонаром.</p>
+                    <div class="feature-box">
+                        <strong>Анимация:</strong> Парение в воздухе, факелы плазменных двигателей, вспышка сенсора и расходящиеся радарные кольца.
+                    </div>
+                    <div class="downloads">
+                        <a href="07_Кибер_Дрон.gif" download class="btn btn-gif">GIF</a>
+                        <a href="07_Кибер_Дрон.webp" download class="btn btn-webp">WebP</a>
+                        <a href="07_Кибер_Дрон.png" download class="btn btn-png">PNG</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 8: EMP Grenade -->
+            <div class="card">
+                <div class="card-media">
+                    <span class="transparency-badge">Прозрачный фон</span>
+                    <img src="08_ЭМИ_Граната.gif" alt="ЭМИ-Граната">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-title">💣 08. Плазменная ЭМИ-Граната</h3>
+                    <p class="card-desc">Тактическая сферическая граната из титана со светящимися силовыми кольцами и таймером детонации.</p>
+                    <div class="feature-box">
+                        <strong>Анимация:</strong> Электрические микро-дуги молний по корпусу, мигающий LED-диод и орбитальные плазменные искры.
+                    </div>
+                    <div class="downloads">
+                        <a href="08_ЭМИ_Граната.gif" download class="btn btn-gif">GIF</a>
+                        <a href="08_ЭМИ_Граната.webp" download class="btn btn-webp">WebP</a>
+                        <a href="08_ЭМИ_Граната.png" download class="btn btn-png">PNG</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 9: Combat Stim -->
+            <div class="card">
+                <div class="card-media">
+                    <span class="transparency-badge">Прозрачный фон</span>
+                    <img src="09_Нейро_Инжектор.gif" alt="Нейро-Инжектор">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-title">💉 09. Нейро-Инжектор «MaxDoc»</h3>
+                    <p class="card-desc">Боевой стимулятор из карбона с прозрачной колбой, наполненной биолюминесцентной восстанавливающей сывороткой.</p>
+                    <div class="feature-box">
+                        <strong>Анимация:</strong> Поднимающиеся нанопузырьки в колбе, мягкое сияние исцеляющей ауры и искры на сопле инжектора.
+                    </div>
+                    <div class="downloads">
+                        <a href="09_Нейро_Инжектор.gif" download class="btn btn-gif">GIF</a>
+                        <a href="09_Нейро_Инжектор.webp" download class="btn btn-webp">WebP</a>
+                        <a href="09_Нейро_Инжектор.png" download class="btn btn-png">PNG</a>
                     </div>
                 </div>
             </div>
         </div>
 
         <footer>
-            <p>&gt; STATUS: ALL ASSETS SYNCHRONIZED // NIGHT CITY NETWORKS // 512x512 RES</p>
+            <p>Все 9 подарков подготовлены с чистым альфа-каналом (без фона) в разрешении 512×512 px. Полная совместимость с Telegram, ВКонтакте и Discord.</p>
         </footer>
     </div>
 </body>
