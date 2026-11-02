@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,6 +99,20 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
+	}
+
+	// Создаем уведомление получателю о новом личном сообщении
+	if h.notifRepo != nil {
+		_, _ = h.notifRepo.CreateNotification(req.ReceiverID, currentUser.ID, "message", currentUser.ID, req.Content)
+		if h.hub != nil {
+			h.hub.Broadcast(events.EventNotification, map[string]interface{}{
+				"user_id":     req.ReceiverID,
+				"action_type": "message",
+				"actor":       currentUser,
+				"title":       fmt.Sprintf("Новое сообщение от %s", currentUser.DisplayName),
+				"content":     req.Content,
+			})
+		}
 	}
 
 	// Рассылка real-time события через SSE

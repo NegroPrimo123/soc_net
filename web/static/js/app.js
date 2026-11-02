@@ -1,11 +1,10 @@
-// GoSocial Client-side Application Logic v7.0 (Minimalist Cyberpunk Edition)
+// GoSocial Client-side Application Logic v8.0 (Cozy Modern Edition)
 
 document.addEventListener('DOMContentLoaded', () => {
     initClock();
     initComposer();
     formatAllPostContents();
     initSSE();
-    initProfileCardTilt();
     initFeedInfiniteScroll();
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -26,7 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chatWith) {
             setTimeout(() => openChatWithUser(parseInt(chatWith, 10)), 300);
         } else {
-            // Automatically open first dialog if available
             setTimeout(() => {
                 const firstItem = document.querySelector('.conversation-item');
                 if (firstItem && firstItem.dataset.userId) {
@@ -40,9 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (sendGiftParam) {
-        window.IS_AUTHENTICATED = true;
-        window.CURRENT_USER_ID = 1;
-        openSendGiftModal(parseInt(sendGiftParam, 10), 'Алексей Ковалев', 'alex');
+        openSendGiftModal(parseInt(sendGiftParam, 10), 'Пользователь', 'user');
     } else if (giftDetailParam) {
         openGiftDetailById(parseInt(giftDetailParam, 10));
     }
@@ -54,12 +50,17 @@ document.addEventListener('DOMContentLoaded', () => {
             closeSendGiftModal();
             closeGiftDetailModal();
             closeEditProfileModal();
+            closeNotificationsPanel();
         }
     });
+
+    // Update unread badges periodically
+    updateUnreadNotifsBadges();
+    updateUnreadMessagesCountBadge();
 });
 
 // ==========================================
-// TELEMETRY CLOCK
+// CLOCK
 // ==========================================
 function initClock() {
     const el = document.getElementById('telemetryClock');
@@ -67,7 +68,7 @@ function initClock() {
     const update = () => {
         const now = new Date();
         const timeStr = now.toTimeString().split(' ')[0];
-        el.textContent = `CYBER // ${timeStr}`;
+        el.textContent = `GoSocial • ${timeStr}`;
     };
     update();
     setInterval(update, 1000);
@@ -82,8 +83,8 @@ function showToast(message, type = 'success') {
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    const icon = type === 'success' ? '⚡' : '✕';
-    toast.innerHTML = `<span style="font-weight: bold; color: ${type==='success'?'#00f0ff':'#ff0055'};">${icon}</span><span>${escapeHtml(message)}</span>`;
+    const icon = type === 'success' ? '✓' : '✕';
+    toast.innerHTML = `<span style="font-weight: bold; color: ${type==='success'?'#10b981':'#f43f5e'};">${icon}</span><span>${escapeHtml(message)}</span>`;
 
     container.appendChild(toast);
     setTimeout(() => {
@@ -116,16 +117,20 @@ function switchAuthTab(tab) {
 
     if (tab === 'login') {
         loginForm.style.display = 'flex';
+        loginForm.style.flexDirection = 'column';
         registerForm.style.display = 'none';
         tabLoginBtn.classList.add('active');
         tabRegisterBtn.classList.remove('active');
-        document.getElementById('loginUsername').focus();
+        const userInp = document.getElementById('loginUsername');
+        if (userInp) userInp.focus();
     } else {
         loginForm.style.display = 'none';
         registerForm.style.display = 'flex';
+        registerForm.style.flexDirection = 'column';
         tabLoginBtn.classList.remove('active');
         tabRegisterBtn.classList.add('active');
-        document.getElementById('regUsername').focus();
+        const regInp = document.getElementById('regUsername');
+        if (regInp) regInp.focus();
     }
 }
 
@@ -155,13 +160,13 @@ async function submitLogin(username, password) {
             throw new Error(data.error || 'Ошибка авторизации');
         }
 
-        showToast(`Добро пожаловать, ${data.user.display_name}! 🚀`, 'success');
+        showToast(`Добро пожаловать, ${data.user.display_name}! 🌟`, 'success');
         closeAuthModal();
         setTimeout(() => {
             window.location.reload();
         }, 300);
     } catch (err) {
-        showToast(err.message === 'Failed to fetch' ? 'Ошибка связи с сервером! Убедитесь, что сервер запущен.' : err.message, 'error');
+        showToast(err.message === 'Failed to fetch' ? 'Ошибка связи с сервером!' : err.message, 'error');
     }
 }
 
@@ -214,14 +219,58 @@ async function handleLogout() {
 }
 
 // ==========================================
-// COMPOSER & POSTS
+// COMPOSER & FILE UPLOAD FROM DISK
 // ==========================================
+let currentUploadedFileUrl = '';
+
 function initComposer() {
     const textarea = document.getElementById('postContent');
     if (!textarea) return;
 
     textarea.addEventListener('input', () => {
         handleComposerInput();
+    });
+
+    // Drag-and-drop файлов на карточку композитора
+    const card = document.getElementById('composerCard');
+    if (card) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+            card.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                card.style.borderColor = '#e26d5c';
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            card.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                card.style.borderColor = '';
+            }, false);
+        });
+
+        card.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files && files.length > 0) {
+                uploadSingleFile(files[0]);
+            }
+        });
+    }
+
+    // Вставка из буфера обмена (Ctrl+V скриншота)
+    document.addEventListener('paste', (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let item of items) {
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                const blob = item.getAsFile();
+                if (blob) {
+                    expandComposer();
+                    uploadSingleFile(blob);
+                }
+            }
+        }
     });
 }
 
@@ -232,9 +281,9 @@ function handleComposerInput() {
 
     charCount.textContent = `${textarea.value.length} / 500`;
     if (textarea.value.length > 500) {
-        charCount.style.color = '#ff0055';
+        charCount.style.color = '#f43f5e';
     } else {
-        charCount.style.color = '#64748b';
+        charCount.style.color = '#94a3b8';
     }
 }
 
@@ -261,36 +310,85 @@ function toggleImageBox() {
     box.style.display = (box.style.display === 'none') ? 'block' : 'none';
 }
 
-function setImagePreset(url) {
-    const input = document.getElementById('postImageUrl');
-    if (input) {
-        input.value = url;
-        updateImagePreview();
-    }
-}
-
 function updateImagePreview() {
     const input = document.getElementById('postImageUrl');
-    const container = document.getElementById('imagePreviewContainer');
-    const img = document.getElementById('imagePreview');
-    if (!input || !container || !img) return;
-
+    if (!input) return;
     const url = input.value.trim();
     if (url) {
-        img.src = url;
-        container.style.display = 'block';
-    } else {
-        container.style.display = 'none';
+        currentUploadedFileUrl = url;
     }
 }
 
-function clearImageInput() {
-    const input = document.getElementById('postImageUrl');
-    const container = document.getElementById('imagePreviewContainer');
-    const img = document.getElementById('imagePreview');
-    if (input) input.value = '';
-    if (container) container.style.display = 'none';
-    if (img) img.src = '';
+async function handleComposerFileUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    await uploadSingleFile(file);
+    e.target.value = '';
+}
+
+async function uploadSingleFile(file) {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Пожалуйста, войдите в аккаунт для загрузки файлов 🔐', 'error');
+        openAuthModal('login');
+        return;
+    }
+
+    if (file.size > 30 * 1024 * 1024) {
+        showToast('Размер файла не должен превышать 30 МБ', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showToast('Загрузка файла с диска...', 'success');
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Ошибка загрузки файла');
+        }
+
+        const data = await res.json();
+        currentUploadedFileUrl = data.url;
+
+        const previewBox = document.getElementById('composerUploadPreview');
+        const previewImg = document.getElementById('composerPreviewImg');
+        const previewName = document.getElementById('composerPreviewName');
+        const previewSize = document.getElementById('composerPreviewSize');
+
+        if (previewBox && previewName && previewSize) {
+            previewName.textContent = data.filename;
+            previewSize.textContent = formatBytes(data.size);
+            if (data.is_image && previewImg) {
+                previewImg.src = data.url;
+                previewImg.style.display = 'block';
+            } else if (previewImg) {
+                previewImg.style.display = 'none';
+            }
+            previewBox.style.display = 'block';
+        }
+
+        expandComposer();
+        showToast('Файл успешно прикреплен с диска! 📎', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function clearComposerFile() {
+    currentUploadedFileUrl = '';
+    const fileInput = document.getElementById('composerFileInput');
+    if (fileInput) fileInput.value = '';
+    const urlInput = document.getElementById('postImageUrl');
+    if (urlInput) urlInput.value = '';
+    const previewBox = document.getElementById('composerUploadPreview');
+    if (previewBox) previewBox.style.display = 'none';
 }
 
 function insertTag(tag) {
@@ -311,12 +409,17 @@ async function createPost() {
     }
 
     const textarea = document.getElementById('postContent');
-    const content = textarea.value.trim();
-    const imageInput = document.getElementById('postImageUrl');
-    const imageUrl = imageInput ? imageInput.value.trim() : '';
+    let content = textarea.value.trim();
+    const urlInput = document.getElementById('postImageUrl');
+    const imageUrl = currentUploadedFileUrl || (urlInput ? urlInput.value.trim() : '');
+
+    // Если в тексте поста указан только URL изображения, очищаем текст, чтобы не дублировать
+    if (imageUrl && content === imageUrl) {
+        content = '';
+    }
 
     if (!content && !imageUrl) {
-        showToast('Введите текст публикации или ссылку на фото', 'error');
+        showToast('Введите текст публикации или прикрепите файл', 'error');
         return;
     }
 
@@ -344,7 +447,7 @@ async function createPost() {
         const post = await response.json();
         textarea.value = '';
         handleComposerInput();
-        clearImageInput();
+        clearComposerFile();
         const imageBox = document.getElementById('composerImageBox');
         if (imageBox) imageBox.style.display = 'none';
 
@@ -353,7 +456,7 @@ async function createPost() {
         const emptyNotice = document.querySelector('.cyber-empty-card');
         if (emptyNotice) emptyNotice.remove();
 
-        showToast('Публикация успешно размещена! 🚀', 'success');
+        showToast('Публикация успешно размещена! 🌟', 'success');
     } catch (err) {
         showToast(err.message === 'Failed to fetch' ? 'Ошибка связи с сервером Go!' : err.message, 'error');
     }
@@ -457,7 +560,7 @@ async function deletePost(postId) {
             if (typeof feedOffset !== 'undefined' && feedOffset > 0) feedOffset--;
             const pill = document.getElementById('feedCountPill');
             if (pill) {
-                const totalInDom = document.querySelectorAll('#postsContainer .cyber-post-card').length;
+                const totalInDom = document.querySelectorAll('#postsContainer .post-card').length;
                 pill.textContent = `${totalInDom} постов`;
             }
         }
@@ -469,7 +572,7 @@ async function deletePost(postId) {
 }
 
 // ==========================================
-// LIKES & COMMENTS
+// LIKES & COMMENTS (OPTIMISTIC UI UPDATES)
 // ==========================================
 async function toggleLike(postId) {
     if (!window.IS_AUTHENTICATED) {
@@ -483,7 +586,7 @@ async function toggleLike(postId) {
     const likeCount = document.getElementById(`likes-${postId}`);
     const heartIcon = likeBtn ? likeBtn.querySelector('.heart-icon') : null;
 
-    // Оптимистичное обновление интерфейса: мгновенный визуальный отклик 0мс
+    // Мгновенный оптимистичный отклик 0мс
     const wasLiked = likeBtn ? likeBtn.classList.contains('active') : false;
     const currentCount = parseInt(likeCount ? likeCount.textContent || '0' : '0', 10);
     const newLiked = !wasLiked;
@@ -512,7 +615,6 @@ async function toggleLike(postId) {
         if (!response.ok) throw new Error('Ошибка при лайке');
 
         const data = await response.json();
-        // Точная синхронизация с данными сервера
         if (likeCount) likeCount.textContent = data.likes_count;
         if (likeBtn && heartIcon) {
             if (data.is_liked) {
@@ -524,7 +626,7 @@ async function toggleLike(postId) {
             }
         }
     } catch (err) {
-        // Откат в случае ошибки соединения
+        // Откат при сбое сети
         if (likeCount) likeCount.textContent = currentCount;
         if (likeBtn && heartIcon) {
             if (wasLiked) {
@@ -598,6 +700,18 @@ async function addComment(postId) {
     }
 }
 
+function sharePost(postId) {
+    const url = `${window.location.origin}/?post=${postId}`;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка на публикацию скопирована в буфер обмена 🔗', 'success');
+    }).catch(() => {
+        showToast('Публикация #' + postId, 'success');
+    });
+}
+
+// ==========================================
+// FOLLOW / UNFOLLOW (OPTIMISTIC)
+// ==========================================
 async function toggleFollow(targetUserId) {
     if (!window.IS_AUTHENTICATED) {
         showToast('Войдите в аккаунт, чтобы подписываться 👥', 'error');
@@ -609,7 +723,7 @@ async function toggleFollow(targetUserId) {
     const followBtn = userRow ? userRow.querySelector('button') : null;
     const wasFollowing = followBtn ? followBtn.classList.contains('btn-following') : false;
 
-    // Оптимистичное обновление интерфейса: мгновенное изменение текста и стиля
+    // Оптимистичное обновление интерфейса
     if (followBtn) {
         if (!wasFollowing) {
             followBtn.textContent = 'Читаю';
@@ -645,7 +759,6 @@ async function toggleFollow(targetUserId) {
             }
         }
     } catch (err) {
-        // Откат при ошибке
         if (followBtn) {
             if (wasFollowing) {
                 followBtn.textContent = 'Читаю';
@@ -660,34 +773,45 @@ async function toggleFollow(targetUserId) {
 }
 
 // ==========================================
-// RENDER HELPERS
+// POST RENDERING HELPERS
 // ==========================================
 function renderPostAtTop(post) {
     const container = document.getElementById('postsContainer');
     if (!container) return;
     const postEl = createPostElement(post);
     container.insertBefore(postEl, container.firstChild);
-    feedOffset++;
+    if (typeof feedOffset !== 'undefined') feedOffset++;
     const pill = document.getElementById('feedCountPill');
     if (pill) {
-        const total = container.querySelectorAll('.cyber-post-card').length;
+        const total = container.querySelectorAll('.post-card').length;
         pill.textContent = `${total} постов`;
     }
 }
 
 function createPostElement(post) {
     const article = document.createElement('article');
-    article.className = 'cyber-post-card';
+    article.className = 'post-card';
     article.id = `post-${post.id}`;
 
     const formattedDate = formatFullDate(post.created_at);
     const isLiked = post.is_liked;
 
+    let finalImageUrl = (post.image_url || '').trim();
+    let rawContent = (post.content || '').trim();
+    const isImagePattern = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
+
+    if (!finalImageUrl && rawContent.startsWith('/uploads/') && isImagePattern.test(rawContent)) {
+        finalImageUrl = rawContent;
+        rawContent = '';
+    } else if (finalImageUrl && (rawContent === finalImageUrl || (rawContent.startsWith('/uploads/') && isImagePattern.test(rawContent)))) {
+        rawContent = '';
+    }
+
     let mediaHtml = '';
-    if (post.image_url) {
+    if (finalImageUrl) {
         mediaHtml = `
             <div class="post-media" id="post-media-${post.id}">
-                <img src="${escapeHtml(post.image_url)}" alt="Медиа" loading="lazy">
+                <img src="${escapeHtml(finalImageUrl)}" alt="Медиа" loading="lazy">
             </div>
         `;
     }
@@ -701,7 +825,7 @@ function createPostElement(post) {
                 <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
                 <div class="comment-bubble">
                     <div class="comment-author-line">
-                        <span class="comment-author cursor-pointer" onclick="openUserProfile(${c.user.id})">${escapeHtml(c.user.display_name)}</span>
+                        <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
                         <span class="comment-time">${formatTime(c.created_at)}</span>
                     </div>
                     <div class="comment-text">${escapeHtml(c.content)}</div>
@@ -710,63 +834,77 @@ function createPostElement(post) {
         `).join('');
     }
 
+    const isOwner = (window.IS_AUTHENTICATED && window.CURRENT_USER_ID === post.user_id);
+    const ownerActionsHtml = isOwner ? `
+        <div class="post-owner-actions">
+            <button class="icon-btn-subtle" onclick="openEditPost(${post.id})" title="Редактировать">✏️</button>
+            <button class="icon-btn-subtle" onclick="deletePost(${post.id})" title="Удалить">🗑️</button>
+        </div>
+    ` : '';
+
     article.innerHTML = `
         <div class="post-header">
-            <img src="${escapeHtml(post.user.avatar_url)}" alt="${escapeHtml(post.user.display_name)}" class="mini-avatar cursor-pointer" onclick="openUserProfile(${post.user.id})">
-            <div class="post-user-info">
-                <div class="author-line">
-                    <span class="post-author cursor-pointer" onclick="openUserProfile(${post.user.id})">${escapeHtml(post.user.display_name)}</span>
-                    <span class="post-handle cursor-pointer" onclick="openUserProfile(${post.user.id})">@${escapeHtml(post.user.username)}</span>
-                </div>
-                <div class="meta-line">
-                    <time class="post-time">${formattedDate}</time>
-                    ${editedHtml}
+            <div class="author-block">
+                <img src="${escapeHtml(post.user.avatar_url)}" alt="avatar" class="author-avatar cursor-pointer" onclick="openUserProfile(${post.user.id})">
+                <div class="author-meta">
+                    <div class="author-name-row">
+                        <span class="author-name cursor-pointer" onclick="openUserProfile(${post.user.id})">${escapeHtml(post.user.display_name)}</span>
+                        <span class="author-handle cursor-pointer" onclick="openUserProfile(${post.user.id})">@${escapeHtml(post.user.username)}</span>
+                    </div>
+                    <div class="meta-line">
+                        <time class="post-time">${formattedDate}</time>
+                        ${editedHtml}
+                    </div>
                 </div>
             </div>
-            <div class="post-header-actions">
-                <button class="btn-icon-action btn-edit" title="Редактировать" onclick="openEditPost(${post.id})">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                </button>
-                <button class="btn-icon-action btn-delete" title="Удалить" onclick="deletePost(${post.id})">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                </button>
-            </div>
+            ${ownerActionsHtml}
         </div>
-        <div class="post-content" id="post-content-${post.id}">
-            ${formatHashtags(post.content)}
-        </div>
+
+        <div class="post-content" id="post-content-${post.id}" ${rawContent ? '' : 'style="display:none;"'}>${formatHashtags(rawContent)}</div>
+
         <div class="post-edit-box" id="post-edit-box-${post.id}" style="display: none;">
             <textarea id="edit-textarea-${post.id}" rows="3">${escapeHtml(post.content)}</textarea>
-            <div class="edit-actions">
-                <button class="btn btn-primary btn-xs" onclick="saveEditPost(${post.id})">Сохранить</button>
+            <div class="edit-actions-row">
                 <button class="btn btn-secondary btn-xs" onclick="cancelEditPost(${post.id})">Отмена</button>
+                <button class="btn btn-primary btn-xs" onclick="saveEditPost(${post.id})">Сохранить</button>
             </div>
         </div>
+
         ${mediaHtml}
-        <div class="post-footer">
-            <button class="post-action-btn like-btn ${isLiked ? 'active' : ''}" onclick="toggleLike(${post.id})">
-                <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-                    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+
+        <div class="post-actions-bar">
+            <button class="action-btn like-btn ${isLiked ? 'active' : ''}" onclick="toggleLike(${post.id})">
+                <svg class="heart-icon" width="18" height="18" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                 </svg>
-                <span class="like-count" id="likes-${post.id}">${post.likes_count}</span>
+                <span id="likes-${post.id}">${post.likes_count}</span>
             </button>
 
-            <button class="post-action-btn comment-btn" onclick="toggleComments(${post.id})">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <button class="action-btn comment-btn" onclick="toggleComments(${post.id})">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
                 </svg>
-                <span id="comment-count-${post.id}">${post.comments_count || 0}</span>
+                <span id="comment-count-${post.id}">${post.comments_count}</span>
             </button>
 
-            <button class="post-action-btn gift-btn" onclick="openSendGiftModal(${post.user.id}, '${escapeHtml(post.user.display_name)}', '${escapeHtml(post.user.username)}')" title="Отправить артефакт">
-                <span class="gift-icon">🎁</span>
-                <span>Подарок</span>
+            <button class="action-btn share-btn" onclick="sharePost(${post.id})" title="Поделиться">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="18" cy="5" r="3"></circle>
+                    <circle cx="6" cy="12" r="3"></circle>
+                    <circle cx="18" cy="19" r="3"></circle>
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                </svg>
             </button>
         </div>
-        <div class="comments-section" id="comments-section-${post.id}" style="display: block;">
-            <div class="comments-list" id="comments-list-${post.id}">${commentsHtml}</div>
+
+        <div class="comments-section" id="comments-section-${post.id}" style="display: none;">
+            <div class="comments-list" id="comments-list-${post.id}">
+                ${commentsHtml}
+            </div>
+
             <div class="comment-input-row">
-                <input type="text" id="comment-input-${post.id}" placeholder="Написать комментарий..." onkeydown="if(event.key==='Enter') addComment(${post.id})">
+                <input type="text" id="comment-input-${post.id}" placeholder="Напишите комментарий..." onkeydown="if(event.key==='Enter')addComment(${post.id})">
                 <button class="btn btn-secondary btn-sm" onclick="addComment(${post.id})">Отправить</button>
             </div>
         </div>
@@ -776,24 +914,27 @@ function createPostElement(post) {
 }
 
 function formatAllPostContents() {
+    document.querySelectorAll('.post-card').forEach(card => {
+        const contentEl = card.querySelector('.post-content');
+        const mediaImg = card.querySelector('.post-media img');
+        if (contentEl && mediaImg) {
+            const text = contentEl.textContent.trim();
+            const imgSrc = mediaImg.getAttribute('src') ? mediaImg.getAttribute('src').trim() : '';
+            if (text && imgSrc && text === imgSrc) {
+                contentEl.style.display = 'none';
+            }
+        }
+    });
     document.querySelectorAll('.post-content').forEach(el => {
-        el.innerHTML = formatHashtags(el.textContent.trim());
+        el.innerHTML = formatHashtags(el.textContent);
     });
 }
 
 function formatHashtags(text) {
     if (!text) return '';
-    const escaped = escapeHtml(text);
-    return escaped.replace(/#([\w\u0400-\u04FF]+)/gi, (match) => {
-        return `<span class="post-hashtag" onclick="filterByTag('${match}')">${match}</span>`;
+    return escapeHtml(text).replace(/(#[\w\u0400-\u04FF]+)/gi, (tag) => {
+        return `<span class="hashtag-inline cursor-pointer" style="color: #e26d5c; font-weight: 600;" onclick="event.stopPropagation(); filterByTag('${tag}')">${tag}</span>`;
     });
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 function formatTime(isoString) {
@@ -806,9 +947,49 @@ function formatFullDate(isoString) {
     return `${formatTime(isoString)} • ${d.toLocaleDateString()}`;
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function formatBytes(bytes, decimals = 1) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
 // ==========================================
-// SEARCH & TAGS & FEED TABS (SPA IN-PLACE REFRESH)
+// SEARCH & FEED FILTER
 // ==========================================
+function executeSearch() {
+    const query = document.getElementById('searchInput')?.value.trim();
+    reloadFeedAsync({ q: query });
+}
+
+function clearSearch() {
+    const input = document.getElementById('searchInput');
+    if (input) input.value = '';
+    reloadFeedAsync({ q: '', tag: '' });
+}
+
+function filterByTag(tag) {
+    reloadFeedAsync({ tag: tag });
+}
+
+function switchFeedTab(type) {
+    reloadFeedAsync({ feed_type: type });
+}
+
+const FEED_PAGE_SIZE = 10;
+let feedOffset = 10;
+let isFeedLoading = false;
+let hasMoreFeedPosts = true;
+
 async function reloadFeedAsync(params = {}) {
     const container = document.getElementById('postsContainer');
     if (!container) return;
@@ -818,9 +999,8 @@ async function reloadFeedAsync(params = {}) {
     const spinner = document.getElementById('feedSpinner');
     const endMsg = document.getElementById('feedEndOfList');
     if (endMsg) endMsg.style.display = 'none';
-    if (spinner) spinner.style.display = 'flex';
+    if (spinner) spinner.style.display = 'inline-flex';
 
-    // Update query params
     const url = new URL(window.location.href);
     if ('feed_type' in params) {
         if (params.feed_type === 'all') url.searchParams.delete('feed_type');
@@ -837,18 +1017,15 @@ async function reloadFeedAsync(params = {}) {
 
     window.history.pushState({}, '', url.toString());
 
-    // Update active UI tabs
     const currentFeedType = url.searchParams.get('feed_type') || 'all';
     document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => {
         const isFollow = btn.getAttribute('onclick') && btn.getAttribute('onclick').includes('following');
         btn.classList.toggle('active', isFollow ? currentFeedType === 'following' : currentFeedType === 'all');
     });
 
-    // Update search bar UI
     const searchInput = document.getElementById('searchInput');
     if (searchInput && 'q' in params) searchInput.value = params.q || '';
 
-    // Fetch initial 10 posts
     feedOffset = 0;
     hasMoreFeedPosts = true;
 
@@ -872,7 +1049,7 @@ async function reloadFeedAsync(params = {}) {
             hasMoreFeedPosts = false;
             container.innerHTML = `
                 <div class="cyber-empty-card">
-                    <span class="empty-glyph">⌁</span>
+                    <span class="empty-glyph">📝</span>
                     <h3>Ничего не найдено</h3>
                     <p>Попробуйте изменить поисковый запрос или сбросить фильтры.</p>
                 </div>
@@ -892,7 +1069,7 @@ async function reloadFeedAsync(params = {}) {
 
         const pill = document.getElementById('feedCountPill');
         if (pill) {
-            const total = container.querySelectorAll('.cyber-post-card').length;
+            const total = container.querySelectorAll('.post-card').length;
             pill.textContent = `${total} постов`;
         }
     } catch (err) {
@@ -902,148 +1079,59 @@ async function reloadFeedAsync(params = {}) {
     }
 }
 
-function executeSearch() {
-    const input = document.getElementById('searchInput');
-    if (!input) return;
-    const q = input.value.trim();
-    reloadFeedAsync({ q: q, tag: '' });
-}
-
-function clearSearch() {
-    const input = document.getElementById('searchInput');
-    if (input) input.value = '';
-    reloadFeedAsync({ q: '', tag: '' });
-}
-
-function filterByTag(tag) {
-    reloadFeedAsync({ tag: tag, q: '' });
-}
-
-function switchFeedTab(type) {
-    reloadFeedAsync({ feed_type: type });
-}
-
-// ==========================================
-// INFINITE SCROLL & LAZY LOADING
-// ==========================================
-let feedOffset = 0;
-const FEED_PAGE_SIZE = 10;
-let isFeedLoading = false;
-let hasMoreFeedPosts = true;
-
+// Lazy loading infinite scroll
 function initFeedInfiniteScroll() {
-    const container = document.getElementById('postsContainer');
-    if (!container) return;
-
-    const initialPosts = container.querySelectorAll('.cyber-post-card');
-    feedOffset = initialPosts.length;
-
-    // If initial batch returned fewer than page size, there are no more posts
-    if (initialPosts.length < FEED_PAGE_SIZE) {
-        hasMoreFeedPosts = false;
-        const endMsg = document.getElementById('feedEndOfList');
-        if (endMsg && initialPosts.length > 0) {
-            endMsg.style.display = 'block';
-        }
-    }
-
-    initSentinelObserver();
-
-    // Backup scroll listener for smooth experience across browsers
-    let scrollTicking = false;
-    window.addEventListener('scroll', () => {
-        if (!scrollTicking) {
-            window.requestAnimationFrame(() => {
-                checkFeedScroll();
-                scrollTicking = false;
-            });
-            scrollTicking = true;
-        }
-    }, { passive: true });
-}
-
-function initSentinelObserver() {
     const sentinel = document.getElementById('feedLoadingSentinel');
-    if (!sentinel || !window.IntersectionObserver) return;
+    if (!sentinel) return;
 
-    const observer = new IntersectionObserver((entries) => {
-        const entry = entries[0];
-        if (entry && entry.isIntersecting) {
-            loadNextFeedBatch();
+    const observer = new IntersectionObserver(async (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && !isFeedLoading && hasMoreFeedPosts) {
+            await loadMoreFeedPosts();
         }
-    }, {
-        root: null,
-        rootMargin: '350px',
-        threshold: 0.05
-    });
+    }, { rootMargin: '300px' });
 
     observer.observe(sentinel);
 }
 
-function checkFeedScroll() {
+async function loadMoreFeedPosts() {
     if (isFeedLoading || !hasMoreFeedPosts) return;
-
-    const feedView = document.getElementById('feedView');
-    if (feedView && feedView.style.display === 'none') return;
-
-    const scrollY = window.scrollY || window.pageYOffset;
-    const windowHeight = window.innerHeight;
-    const documentHeight = document.documentElement.scrollHeight;
-
-    if (scrollY + windowHeight >= documentHeight - 400) {
-        loadNextFeedBatch();
-    }
-}
-
-async function loadNextFeedBatch() {
-    if (isFeedLoading || !hasMoreFeedPosts) return;
-
-    const container = document.getElementById('postsContainer');
-    if (!container) return;
-
-    const feedView = document.getElementById('feedView');
-    if (feedView && feedView.style.display === 'none') return;
-
     isFeedLoading = true;
+
     const spinner = document.getElementById('feedSpinner');
     const endMsg = document.getElementById('feedEndOfList');
-    if (spinner) spinner.style.display = 'flex';
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const feedType = urlParams.get('feed_type') || 'all';
-    const q = urlParams.get('q') || '';
-    const tag = urlParams.get('tag') || '';
+    if (spinner) spinner.style.display = 'inline-flex';
 
     try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const feedType = urlParams.get('feed_type') || 'all';
+        const searchQuery = urlParams.get('q') || '';
+        const tagQuery = urlParams.get('tag') || '';
+
         const params = new URLSearchParams({
             feed_type: feedType,
             limit: FEED_PAGE_SIZE,
             offset: feedOffset
         });
-        if (q) params.set('q', q);
-        if (tag) params.set('tag', tag);
+        if (searchQuery) params.set('q', searchQuery);
+        if (tagQuery) params.set('tag', tagQuery);
         if (window.CURRENT_USER_ID) params.set('user_id', window.CURRENT_USER_ID);
 
         const res = await fetch(`/api/feed?${params.toString()}`);
-        if (!res.ok) throw new Error('Ошибка связи с сервером');
+        if (!res.ok) throw new Error('Ошибка загрузки постов');
 
         const posts = await res.json();
+        const container = document.getElementById('postsContainer');
 
         if (!posts || posts.length === 0) {
             hasMoreFeedPosts = false;
-            if (feedOffset > 0 && endMsg) {
-                endMsg.style.display = 'block';
-            }
+            if (endMsg) endMsg.style.display = 'block';
         } else {
             posts.forEach(post => {
-                if (!document.getElementById(`post-${post.id}`)) {
-                    const postEl = createPostElement(post);
-                    container.appendChild(postEl);
-                }
+                const el = createPostElement(post);
+                container.appendChild(el);
             });
-
             feedOffset += posts.length;
-
             if (posts.length < FEED_PAGE_SIZE) {
                 hasMoreFeedPosts = false;
                 if (endMsg) endMsg.style.display = 'block';
@@ -1051,7 +1139,7 @@ async function loadNextFeedBatch() {
 
             const pill = document.getElementById('feedCountPill');
             if (pill) {
-                const totalInDom = container.querySelectorAll('.cyber-post-card').length;
+                const totalInDom = container.querySelectorAll('.post-card').length;
                 pill.textContent = `${totalInDom} постов`;
             }
         }
@@ -1064,142 +1152,42 @@ async function loadNextFeedBatch() {
 }
 
 // ==========================================
-// REAL-TIME SERVER-SENT EVENTS (SSE)
+// NAVIGATION (SPA ROUTING)
 // ==========================================
-function initSSE() {
-    if (!window.EventSource) return;
-
-    try {
-        const es = new EventSource('/api/events');
-
-        es.onmessage = (e) => {
-            if (!e.data) return;
-            try {
-                const event = JSON.parse(e.data);
-                handleSSEEvent(event);
-            } catch (err) {}
-        };
-
-        es.onerror = () => {
-            // Reconnection handled automatically by browser EventSource
-        };
-    } catch (e) {}
-}
-
-function handleSSEEvent(event) {
-    switch (event.type) {
-        case 'new_post':
-            if (event.post && event.post.user_id !== window.CURRENT_USER_ID) {
-                renderPostAtTop(event.post);
-                showToast(`Новый пост от ${event.post.user.display_name}! 🚀`, 'success');
-            }
-            break;
-
-        case 'like_update':
-            const likeCount = document.getElementById(`likes-${event.post_id}`);
-            if (likeCount) likeCount.textContent = event.likes_count;
-            break;
-
-        case 'new_comment':
-            const countEl = document.getElementById(`comment-count-${event.post_id}`);
-            if (countEl) countEl.textContent = event.comments_count;
-
-            const commentsList = document.getElementById(`comments-list-${event.post_id}`);
-            if (commentsList && event.comment && event.comment.user_id !== window.CURRENT_USER_ID) {
-                const c = event.comment;
-                const commentEl = document.createElement('div');
-                commentEl.className = 'comment-item';
-                commentEl.innerHTML = `
-                    <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
-                    <div class="comment-bubble">
-                        <div class="comment-author-line">
-                            <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
-                            <span class="comment-time">${formatTime(c.created_at)}</span>
-                        </div>
-                        <div class="comment-text">${escapeHtml(c.content)}</div>
-                    </div>
-                `;
-                commentsList.appendChild(commentEl);
-            }
-            break;
-
-        case 'new_gift':
-            if (event.gift) {
-                showToast(`🎁 Новый цифровой артефакт в сети! ✨`, 'success');
-                const showcaseGrid = document.getElementById('globalShowcaseGrid');
-                if (showcaseGrid) {
-                    renderGiftCard(event.gift, showcaseGrid, true);
-                }
-            }
-            break;
-
-        case 'new_message': {
-            const msg = event.payload || event.message;
-            if (msg) handleIncomingSSEMessage(msg);
-            break;
-        }
-    }
-}
-
-// ==========================================
-// 3D TILT EFFECT — ТОЛЬКО ДЛЯ ПРОФИЛЯ ПОЛЬЗОВАТЕЛЕЙ!
-// ==========================================
-function initProfileCardTilt() {
-    const card = document.getElementById('profileHeroCard');
-    if (!card || card._tiltInit) return;
-    card._tiltInit = true;
-
-    card.addEventListener('mousemove', (e) => {
-        const rect = card.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const width = rect.width;
-        const height = rect.height;
-
-        const xNorm = x / width;
-        const yNorm = y / height;
-
-        const rotateX = ((yNorm - 0.5) * -7).toFixed(2);
-        const rotateY = ((xNorm - 0.5) * 7).toFixed(2);
-
-        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.01, 1.01, 1.01)`;
-    });
-
-    card.addEventListener('mouseleave', () => {
-        card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
-    });
-}
-
-// ==========================================
-// NAVIGATION (SPA SWITCHER)
-// ==========================================
-let currentView = 'feed';
 let currentProfileUserId = null;
 let currentProfileUserData = null;
 
 function navigateTo(view, userId = null) {
-    currentView = view;
-
-    const views = ['feed', 'profile', 'showcase', 'messages'];
-    views.forEach(v => {
+    ['feed', 'profile', 'showcase', 'messages'].forEach(v => {
         const el = document.getElementById(`${v}View`);
-        if (el) el.style.display = (v === view) ? 'block' : 'none';
+        if (el) el.style.display = 'none';
     });
 
-    const tabFeed = document.getElementById('tabNavFeed');
-    const tabProfile = document.getElementById('tabNavProfile');
-    const tabGifts = document.getElementById('tabNavGifts');
-    const tabMessages = document.getElementById('tabNavMessages');
+    ['Feed', 'Profile', 'Gifts', 'Messages'].forEach(t => {
+        const btn = document.getElementById(`tabNav${t}`);
+        if (btn) btn.classList.remove('active');
+    });
 
-    if (tabFeed) tabFeed.classList.toggle('active', view === 'feed');
-    if (tabProfile) tabProfile.classList.toggle('active', view === 'profile' || view === 'my-profile');
-    if (tabGifts) tabGifts.classList.toggle('active', view === 'showcase');
-    if (tabMessages) tabMessages.classList.toggle('active', view === 'messages');
-
-    if (view === 'my-profile') {
-        const myId = window.CURRENT_USER_ID;
-        navigateTo('profile', myId);
-        return;
+    if (view === 'feed') {
+        const el = document.getElementById('feedView');
+        if (el) el.style.display = 'block';
+        const btn = document.getElementById('tabNavFeed');
+        if (btn) btn.classList.add('active');
+    } else if (view === 'profile' || view === 'my-profile') {
+        const el = document.getElementById('profileView');
+        if (el) el.style.display = 'block';
+        const btn = document.getElementById('tabNavProfile');
+        if (btn) btn.classList.add('active');
+    } else if (view === 'showcase') {
+        const el = document.getElementById('showcaseView');
+        if (el) el.style.display = 'block';
+        const btn = document.getElementById('tabNavGifts');
+        if (btn) btn.classList.add('active');
+    } else if (view === 'messages') {
+        const el = document.getElementById('messagesView');
+        if (el) el.style.display = 'block';
+        const btn = document.getElementById('tabNavMessages');
+        if (btn) btn.classList.add('active');
     }
 
     if (view === 'profile') {
@@ -1207,6 +1195,10 @@ function navigateTo(view, userId = null) {
         currentProfileUserId = uid;
         loadUserProfile(uid);
         window.history.pushState({}, '', `/?view=profile&user=${uid}`);
+    } else if (view === 'my-profile') {
+        currentProfileUserId = window.CURRENT_USER_ID;
+        loadUserProfile(window.CURRENT_USER_ID);
+        window.history.pushState({}, '', `/?view=profile&user=${window.CURRENT_USER_ID}`);
     } else if (view === 'showcase') {
         loadShowcaseGifts();
         window.history.pushState({}, '', '/?view=showcase');
@@ -1253,15 +1245,13 @@ function renderUserProfile(data) {
     document.getElementById('heroBio').textContent = user.bio || 'Информация о пользователе пока не заполнена.';
     document.getElementById('heroAvatar').src = user.avatar_url;
 
-    // Баннер
     const banner = document.getElementById('heroBanner');
     if (user.banner_url) {
         banner.style.backgroundImage = `url('${user.banner_url}')`;
     } else {
-        banner.style.backgroundImage = 'linear-gradient(135deg, #0e172a 0%, #1e1b4b 50%, #0369a1 100%)';
+        banner.style.backgroundImage = 'linear-gradient(135deg, #2d3748 0%, #1a202c 50%, #4a5568 100%)';
     }
 
-    // Счетчики
     document.getElementById('heroStatPosts').textContent = data.posts ? data.posts.length : 0;
     document.getElementById('heroStatGifts').textContent = `🎁 ${data.gifts ? data.gifts.length : 0}`;
     document.getElementById('heroStatFollowers').textContent = data.followers ? data.followers.length : 0;
@@ -1272,7 +1262,6 @@ function renderUserProfile(data) {
     document.getElementById('netFollowersCount').textContent = data.followers ? data.followers.length : 0;
     document.getElementById('netFollowingCount').textContent = data.following ? data.following.length : 0;
 
-    // Действия в профиле
     const actionsBox = document.getElementById('heroActionsContainer');
     actionsBox.innerHTML = '';
 
@@ -1295,7 +1284,7 @@ function renderUserProfile(data) {
                 <span>💬 Сообщение</span>
             </button>
             <button class="btn btn-outline btn-sm" onclick="openSendGiftModal(${user.id}, '${escapeHtml(user.display_name)}', '${escapeHtml(user.username)}')">
-                <span>🎁 Отправить артефакт</span>
+                <span>🎁 Отправить подарок</span>
             </button>
             <button class="btn ${followClass} btn-sm" onclick="toggleProfileFollow(${user.id})">
                 <span>${followText}</span>
@@ -1308,7 +1297,6 @@ function renderUserProfile(data) {
     renderProfileNetwork(data.followers, data.following);
 
     switchProfileTab('posts');
-    initProfileCardTilt();
 }
 
 async function toggleProfileFollow(userId) {
@@ -1343,7 +1331,7 @@ function renderProfilePosts(posts) {
     if (!posts || posts.length === 0) {
         container.innerHTML = `
             <div class="cyber-empty-card">
-                <span class="empty-glyph">⌁</span>
+                <span class="empty-glyph">📝</span>
                 <h3>Пока нет публикаций</h3>
                 <p>Этот автор еще не разместил постов.</p>
             </div>
@@ -1366,10 +1354,10 @@ function renderProfileGifts(gifts) {
         grid.innerHTML = `
             <div class="cyber-empty-card" style="grid-column: 1 / -1;">
                 <span class="empty-glyph">🎁</span>
-                <h3>Коллекция артефактов пуста</h3>
-                <p>Станьте первым, кто подарит этому пользователю цифровой артефакт!</p>
+                <h3>Коллекция подарков пуста</h3>
+                <p>Станьте первым, кто подарит этому пользователю подарок из коллекции «Цветные карандаши»!</p>
                 <button class="btn btn-primary btn-sm" style="margin-top: 0.8rem;" onclick="openCurrentProfileGiftModal()">
-                    <span>🎁 Отправить первый артефакт</span>
+                    <span>🎁 Отправить первый подарок</span>
                 </button>
             </div>
         `;
@@ -1413,45 +1401,78 @@ function createRunnerRow(u) {
 }
 
 // ==========================================
-// DIGITAL GIFTS SPECIFICATION & RENDERING
+// DIGITAL GIFTS (CYBERPUNK 2077 GIFTS + СОКРЫТИЕ ПОДАРКОВ)
 // ==========================================
 const GIFT_SPECS = {
-    supernova: { title: 'Nexus Core', rarity: 'Mythic', icon: '💠', class: 'rarity-mythic' },
-    quantum_crown: { title: 'Archon Crown', rarity: 'Legendary', icon: '👑', class: 'rarity-legendary' },
-    cyber_unicorn: { title: 'Synth Pegasus', rarity: 'Mythic', icon: '🦄', class: 'rarity-mythic' },
-    moon_rocket: { title: 'Hyperdrive', rarity: 'Epic', icon: '🚀', class: 'rarity-epic' },
-    infinite_coffee: { title: 'Neural Elixir', rarity: 'Rare', icon: '☕', class: 'rarity-rare' },
-    quantum_diamond: { title: 'Chrono Prism', rarity: 'Legendary', icon: '💎', class: 'rarity-legendary' }
+    cyber_heart: {
+        id: 'cyber_heart',
+        title: 'Кибер-Сердце',
+        rarity: 'Реликтовый',
+        badgeClass: 'badge-cyber-heart',
+        gif: '/static/gifts/01_Кибер_Сердце.gif',
+        png: '/static/gifts/01_Кибер_Сердце.png',
+        webp: '/static/gifts/01_Кибер_Сердце.webp'
+    },
+    cyber_skull: {
+        id: 'cyber_skull',
+        title: 'Кибер-Череп Oni',
+        rarity: 'Легендарный',
+        badgeClass: 'badge-cyber-skull',
+        gif: '/static/gifts/02_Кибер_Череп.gif',
+        png: '/static/gifts/02_Кибер_Череп.png',
+        webp: '/static/gifts/02_Кибер_Череп.webp'
+    },
+    black_ice: {
+        id: 'black_ice',
+        title: 'Чип Black ICE',
+        rarity: 'Военный',
+        badgeClass: 'badge-black-ice',
+        gif: '/static/gifts/03_Чип_Black_ICE.gif',
+        png: '/static/gifts/03_Чип_Black_ICE.png',
+        webp: '/static/gifts/03_Чип_Black_ICE.webp'
+    },
+    cyber_drone: {
+        id: 'cyber_drone',
+        title: 'Кибер-Дрон Сентри',
+        rarity: 'Тактический',
+        badgeClass: 'badge-cyber-drone',
+        gif: '/static/gifts/04_Кибер_Дрон.gif',
+        png: '/static/gifts/04_Кибер_Дрон.png',
+        webp: '/static/gifts/04_Кибер_Дрон.webp'
+    },
+    neuro_stimulator: {
+        id: 'neuro_stimulator',
+        title: 'Нейро-Стимулятор',
+        rarity: 'Стимулятор',
+        badgeClass: 'badge-neuro-stimulator',
+        gif: '/static/gifts/05_Неоновый_Стимулятор.gif',
+        png: '/static/gifts/05_Неоновый_Стимулятор.png',
+        webp: '/static/gifts/05_Неоновый_Стимулятор.webp'
+    },
+    // Fallbacks для обратной совместимости
+    festive_box: { id: 'cyber_heart', title: 'Кибер-Сердце', rarity: 'Реликтовый', badgeClass: 'badge-cyber-heart', gif: '/static/gifts/01_Кибер_Сердце.gif', png: '/static/gifts/01_Кибер_Сердце.png', webp: '/static/gifts/01_Кибер_Сердце.webp' },
+    bear_heart: { id: 'cyber_skull', title: 'Кибер-Череп Oni', rarity: 'Легендарный', badgeClass: 'badge-cyber-skull', gif: '/static/gifts/02_Кибер_Череп.gif', png: '/static/gifts/02_Кибер_Череп.png', webp: '/static/gifts/02_Кибер_Череп.webp' },
+    cute_kitten: { id: 'black_ice', title: 'Чип Black ICE', rarity: 'Военный', badgeClass: 'badge-black-ice', gif: '/static/gifts/03_Чип_Black_ICE.gif', png: '/static/gifts/03_Чип_Black_ICE.png', webp: '/static/gifts/03_Чип_Black_ICE.webp' },
+    gentle_bouquet: { id: 'cyber_drone', title: 'Кибер-Дрон Сентри', rarity: 'Тактический', badgeClass: 'badge-cyber-drone', gif: '/static/gifts/04_Кибер_Дрон.gif', png: '/static/gifts/04_Кибер_Дрон.png', webp: '/static/gifts/04_Кибер_Дрон.webp' },
+    cozy_cup: { id: 'neuro_stimulator', title: 'Нейро-Стимулятор', rarity: 'Стимулятор', badgeClass: 'badge-neuro-stimulator', gif: '/static/gifts/05_Неоновый_Стимулятор.gif', png: '/static/gifts/05_Неоновый_Стимулятор.png', webp: '/static/gifts/05_Неоновый_Стимулятор.webp' },
+    supernova: { id: 'cyber_heart', title: 'Кибер-Сердце', rarity: 'Реликтовый', badgeClass: 'badge-cyber-heart', gif: '/static/gifts/01_Кибер_Сердце.gif', png: '/static/gifts/01_Кибер_Сердце.png' },
+    quantum_crown: { id: 'cyber_skull', title: 'Кибер-Череп Oni', rarity: 'Легендарный', badgeClass: 'badge-cyber-skull', gif: '/static/gifts/02_Кибер_Череп.gif', png: '/static/gifts/02_Кибер_Череп.png' },
+    cyber_unicorn: { id: 'black_ice', title: 'Чип Black ICE', rarity: 'Военный', badgeClass: 'badge-black-ice', gif: '/static/gifts/03_Чип_Black_ICE.gif', png: '/static/gifts/03_Чип_Black_ICE.png' },
+    quantum_diamond: { id: 'cyber_drone', title: 'Кибер-Дрон Сентри', rarity: 'Тактический', badgeClass: 'badge-cyber-drone', gif: '/static/gifts/04_Кибер_Дрон.gif', png: '/static/gifts/04_Кибер_Дрон.png' },
+    infinite_coffee: { id: 'neuro_stimulator', title: 'Нейро-Стимулятор', rarity: 'Стимулятор', badgeClass: 'badge-neuro-stimulator', gif: '/static/gifts/05_Неоновый_Стимулятор.gif', png: '/static/gifts/05_Неоновый_Стимулятор.png' },
+    moon_rocket: { id: 'neuro_stimulator', title: 'Нейро-Стимулятор', rarity: 'Стимулятор', badgeClass: 'badge-neuro-stimulator', gif: '/static/gifts/05_Неоновый_Стимулятор.gif', png: '/static/gifts/05_Неоновый_Стимулятор.png' }
 };
 
 function getGiftTitle(type) {
-    return (GIFT_SPECS[type] && GIFT_SPECS[type].title) || 'Цифровой артефакт';
-}
-
-function getGiftAnimationHtml(type) {
-    switch (type) {
-        case 'supernova':
-            return '<div class="anim-core"></div>';
-        case 'quantum_crown':
-            return '<div class="anim-crown">👑</div>';
-        case 'cyber_unicorn':
-            return '<div class="anim-pegasus">🦄</div>';
-        case 'moon_rocket':
-            return '<div class="anim-rocket">🚀</div>';
-        case 'infinite_coffee':
-            return '<div class="anim-coffee">☕</div>';
-        case 'quantum_diamond':
-            return '<div class="anim-diamond">💎</div>';
-        default:
-            return '<div class="anim-core"></div>';
-    }
+    return (GIFT_SPECS[type] && GIFT_SPECS[type].title) || 'Подарок';
 }
 
 function renderGiftCard(gift, container, prepend = false) {
-    const spec = GIFT_SPECS[gift.gift_type] || GIFT_SPECS.supernova;
+    const spec = GIFT_SPECS[gift.gift_type] || GIFT_SPECS.cyber_heart;
     const card = document.createElement('div');
-    card.className = 'artifact-card-item';
-    
+    card.className = 'artifact-card-item' + (gift.is_hidden ? ' is-hidden-gift' : '');
+    card.id = `gift-card-${gift.id}`;
+
     let senderText = '';
     if (gift.is_anonymous || !gift.sender) {
         senderText = 'От: <strong>Анонимный поклонник 🎭</strong>';
@@ -1460,15 +1481,28 @@ function renderGiftCard(gift, container, prepend = false) {
     }
 
     const noteHtml = gift.message ? `<div class="artifact-card-note" title="${escapeHtml(gift.message)}">«${escapeHtml(gift.message)}»</div>` : '';
+    const hiddenBadge = gift.is_hidden ? '<span class="gift-hidden-badge">🔒 Скрыт от других</span>' : '';
+
+    // Возможность скрывать подарки получателю
+    let hideBtnHtml = '';
+    if (currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID) {
+        hideBtnHtml = `
+            <button type="button" class="gift-hide-toggle-btn" onclick="toggleGiftHide(${gift.id}, event)">
+                ${gift.is_hidden ? '👁️ Показать в профиле' : '🙈 Скрыть от других'}
+            </button>
+        `;
+    }
 
     card.innerHTML = `
-        <span class="artifact-rarity-pill ${spec.class}">${spec.rarity}</span>
+        ${hiddenBadge}
+        <span class="artifact-rarity-pill ${spec.badgeClass}">${spec.rarity}</span>
         <div class="artifact-stage">
-            ${getGiftAnimationHtml(gift.gift_type)}
+            <img src="${spec.gif || spec.png}" alt="${escapeHtml(spec.title)}" class="gift-art-img" loading="lazy">
         </div>
         <div class="artifact-card-title">${spec.title}</div>
         <div class="artifact-card-sender">${senderText}</div>
         ${noteHtml}
+        ${hideBtnHtml}
     `;
 
     card.addEventListener('click', () => {
@@ -1482,9 +1516,27 @@ function renderGiftCard(gift, container, prepend = false) {
     }
 }
 
-// ==========================================
-// SEND GIFT MODAL & FLOW
-// ==========================================
+async function toggleGiftHide(giftId, event) {
+    if (event) event.stopPropagation();
+
+    try {
+        const res = await fetch(`/api/gifts/${giftId}/toggle-hide`, { method: 'POST' });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка изменения видимости подарка');
+        }
+
+        const data = await res.json();
+        showToast(data.is_hidden ? 'Подарок скрыт из вашего публичного профиля 🙈' : 'Подарок снова отображается в вашем профиле 👁️', 'success');
+
+        if (currentProfileUserId) {
+            loadUserProfile(currentProfileUserId);
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
 function openCurrentProfileGiftModal() {
     if (currentProfileUserData) {
         openSendGiftModal(currentProfileUserData.id, currentProfileUserData.display_name, currentProfileUserData.username);
@@ -1507,8 +1559,7 @@ function openSendGiftModal(receiverId, displayName, username) {
     document.getElementById('giftReceiverName').textContent = `${displayName} (@${username})`;
     document.getElementById('giftMessage').value = '';
     document.getElementById('giftIsAnonymous').checked = false;
-    updateGiftCharCount();
-    selectGiftType('supernova');
+    selectGiftType('cyber_heart');
 
     const modal = document.getElementById('sendGiftModal');
     if (modal) modal.style.display = 'flex';
@@ -1524,7 +1575,7 @@ function selectGiftType(type) {
     document.querySelectorAll('.gift-select-item').forEach(item => {
         item.classList.toggle('active', item.getAttribute('data-type') === type);
     });
-    const spec = GIFT_SPECS[type] || GIFT_SPECS.supernova;
+    const spec = GIFT_SPECS[type] || GIFT_SPECS.cyber_heart;
     const badge = document.getElementById('selectedRarityBadge');
     if (badge) badge.textContent = spec.rarity;
 }
@@ -1547,7 +1598,7 @@ async function handleSendGiftSubmit(e) {
     const btn = document.getElementById('btnSubmitGift');
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<span>Передача...</span>';
+        btn.innerHTML = '<span>Отправка...</span>';
     }
 
     try {
@@ -1566,7 +1617,7 @@ async function handleSendGiftSubmit(e) {
         if (!res.ok) throw new Error(data.error || 'Ошибка отправки подарка');
 
         closeSendGiftModal();
-        showToast(`🎁 Артефакт «${getGiftTitle(giftType)}» успешно вручен! ✨`, 'success');
+        showToast(`🎁 Подарок «${getGiftTitle(giftType)}» успешно вручен! ✨`, 'success');
 
         if (currentProfileUserId === receiverId) {
             loadUserProfile(receiverId);
@@ -1576,14 +1627,12 @@ async function handleSendGiftSubmit(e) {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = '<span>Вручить артефакт</span><span class="btn-arrow">⚡</span>';
+            btn.innerHTML = '<span>Отправить подарок</span><span class="btn-arrow">🎁</span>';
         }
     }
 }
 
-// ==========================================
-// UNBOXING / VIEW GIFT DETAIL MODAL
-// ==========================================
+// Unboxing detail modal
 async function openGiftDetailById(giftId) {
     try {
         const res = await fetch('/api/gifts/showcase');
@@ -1598,31 +1647,23 @@ function openGiftDetail(gift) {
     const modal = document.getElementById('giftDetailModal');
     if (!modal) return;
 
-    const spec = GIFT_SPECS[gift.gift_type] || GIFT_SPECS.supernova;
+    const spec = GIFT_SPECS[gift.gift_type] || GIFT_SPECS.cyber_heart;
 
-    // Stage
-    document.getElementById('unboxingGiftAnimation').innerHTML = getGiftAnimationHtml(gift.gift_type);
+    const img = document.getElementById('unboxingImg');
+    if (img) img.src = spec.gif || spec.png;
+
     document.getElementById('unboxingTitle').textContent = spec.title;
     const rarityEl = document.getElementById('unboxingRarity');
-    rarityEl.textContent = `${spec.rarity} Artifact`;
-    rarityEl.className = `unboxing-rarity ${spec.class}`;
+    rarityEl.textContent = spec.rarity;
+    rarityEl.className = `artifact-rarity-pill ${spec.badgeClass}`;
 
-    // Sender
-    const senderAvatar = document.getElementById('unboxingSenderAvatar');
     const senderName = document.getElementById('unboxingSenderName');
-    const senderHandle = document.getElementById('unboxingSenderHandle');
-
     if (gift.is_anonymous || !gift.sender) {
-        senderAvatar.src = 'https://api.dicebear.com/7.x/bottts/svg?seed=MysteryMask';
         senderName.textContent = 'Анонимный поклонник 🎭';
-        senderHandle.textContent = '@incognito';
     } else {
-        senderAvatar.src = gift.sender.avatar_url;
-        senderName.textContent = gift.sender.display_name;
-        senderHandle.textContent = `@${gift.sender.username}`;
+        senderName.textContent = `${gift.sender.display_name} (@${gift.sender.username})`;
     }
 
-    // Message
     const msgBox = document.getElementById('unboxingMessageBox');
     const msgText = document.getElementById('unboxingMessageText');
     if (gift.message) {
@@ -1632,9 +1673,7 @@ function openGiftDetail(gift) {
         msgBox.style.display = 'none';
     }
 
-    // Date
     document.getElementById('unboxingDate').textContent = formatFullDate(gift.created_at);
-
     modal.style.display = 'flex';
 }
 
@@ -1643,14 +1682,12 @@ function closeGiftDetailModal() {
     if (modal) modal.style.display = 'none';
 }
 
-// ==========================================
-// EDIT PROFILE MODAL
-// ==========================================
+// Edit Profile Modal
 function openEditProfileModal() {
     if (!currentProfileUserData) return;
     document.getElementById('editDisplayName').value = currentProfileUserData.display_name;
     document.getElementById('editBio').value = currentProfileUserData.bio || '';
-    document.getElementById('editAvatar').value = currentProfileUserData.avatar_url || '';
+    document.getElementById('editAvatar').value = currentProfileUserData.avatar_url;
     document.getElementById('editBanner').value = currentProfileUserData.banner_url || '';
 
     const modal = document.getElementById('editProfileModal');
@@ -1681,28 +1718,20 @@ async function handleProfileUpdate(e) {
             })
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Ошибка обновления профиля');
+        if (!res.ok) throw new Error('Ошибка обновления профиля');
 
         closeEditProfileModal();
         showToast('Профиль успешно обновлен! ✨', 'success');
-
-        loadUserProfile(window.CURRENT_USER_ID);
+        if (currentProfileUserId) loadUserProfile(currentProfileUserId);
     } catch (err) {
         showToast(err.message, 'error');
     }
 }
 
-// ==========================================
-// POST FROM PROFILE VIEW
-// ==========================================
 async function createProfilePost() {
     const textarea = document.getElementById('profPostContent');
     const content = textarea.value.trim();
-    if (!content) {
-        showToast('Введите текст публикации', 'error');
-        return;
-    }
+    if (!content) return;
 
     try {
         const res = await fetch('/api/posts', {
@@ -1719,7 +1748,7 @@ async function createProfilePost() {
         if (!res.ok) throw new Error(post.error || 'Ошибка публикации');
 
         textarea.value = '';
-        showToast('Пост опубликован в ваш профиль! 🚀', 'success');
+        showToast('Запись опубликована в ваш профиль! 🌟', 'success');
 
         const profPosts = document.getElementById('profPostsContainer');
         if (profPosts) {
@@ -1738,22 +1767,20 @@ async function createProfilePost() {
     }
 }
 
-// ==========================================
-// SHOWCASE GIFTS GALLERY (VAULT)
-// ==========================================
+// Showcase Gifts Gallery
 async function loadShowcaseGifts() {
     const grid = document.getElementById('globalShowcaseGrid');
     if (!grid) return;
-    grid.innerHTML = '<p class="text-muted" style="grid-column: 1 / -1; padding: 24px; text-align: center;">Загрузка хранилища артефактов...</p>';
+    grid.innerHTML = '<p class="text-muted" style="grid-column: 1 / -1; padding: 24px; text-align: center;">Загрузка подарков...</p>';
 
     try {
         const res = await fetch('/api/gifts/showcase');
-        if (!res.ok) throw new Error('Ошибка загрузки артефактов');
+        if (!res.ok) throw new Error('Ошибка загрузки подарков');
         const gifts = await res.json();
 
         grid.innerHTML = '';
         if (!gifts || gifts.length === 0) {
-            grid.innerHTML = '<p class="text-muted" style="grid-column: 1 / -1; padding: 24px; text-align: center;">В хранилище пока нет артефактов. Будьте первыми!</p>';
+            grid.innerHTML = '<p class="text-muted" style="grid-column: 1 / -1; padding: 24px; text-align: center;">В витрине пока нет подарков. Отправьте первый!</p>';
             return;
         }
 
@@ -1766,9 +1793,197 @@ async function loadShowcaseGifts() {
 }
 
 // ==========================================
-// DIRECT MESSAGES (ЛИЧНЫЕ СООБЩЕНИЯ) CLIENT LOGIC
+// NOTIFICATIONS SYSTEM WITH SMART GROUPING
 // ==========================================
+let cachedNotifications = [];
+let activeNotifFilter = 'all';
+let notifToastQueue = [];
+let notifToastTimeout = null;
 
+function toggleNotificationsPanel() {
+    const modal = document.getElementById('notificationsModal');
+    if (!modal) return;
+    if (modal.style.display === 'none' || !modal.style.display) {
+        modal.style.display = 'flex';
+        loadNotifications();
+    } else {
+        modal.style.display = 'none';
+    }
+}
+
+function closeNotificationsPanel() {
+    const modal = document.getElementById('notificationsModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function loadNotifications() {
+    const list = document.getElementById('notificationsList');
+    if (!list) return;
+
+    try {
+        const res = await fetch('/api/notifications');
+        if (!res.ok) throw new Error('Ошибка загрузки уведомлений');
+        const data = await res.json();
+        cachedNotifications = data || [];
+        renderNotificationsList(cachedNotifications, activeNotifFilter);
+        updateUnreadNotifsBadges();
+    } catch (err) {
+        list.innerHTML = `<div class="notif-empty-state"><p>${escapeHtml(err.message)}</p></div>`;
+    }
+}
+
+function filterNotifications(filterType) {
+    activeNotifFilter = filterType;
+    document.querySelectorAll('.notif-tab').forEach(t => {
+        t.classList.toggle('active', t.getAttribute('data-filter') === filterType);
+    });
+    renderNotificationsList(cachedNotifications, filterType);
+}
+
+function renderNotificationsList(notifs, filter = 'all') {
+    const list = document.getElementById('notificationsList');
+    if (!list) return;
+
+    let filtered = notifs;
+    if (filter !== 'all') {
+        filtered = notifs.filter(n => n.action_type === filter);
+    }
+
+    if (!filtered || filtered.length === 0) {
+        list.innerHTML = `
+            <div class="notif-empty-state">
+                <span class="notif-empty-glyph">🔕</span>
+                <p>Нет уведомлений в этой категории</p>
+            </div>
+        `;
+        return;
+    }
+
+    list.innerHTML = '';
+    filtered.forEach(n => {
+        const card = document.createElement('div');
+        card.className = 'notif-item-card' + (!n.is_read ? ' unread' : '');
+
+        let avatarsHtml = '';
+        (n.actors || []).forEach(a => {
+            avatarsHtml += `<img src="${escapeHtml(a.avatar_url)}" alt="${escapeHtml(a.display_name)}" class="notif-avatar" title="${escapeHtml(a.display_name)}">`;
+        });
+        if (!avatarsHtml) {
+            avatarsHtml = `<div class="notif-avatar" style="background:#e26d5c;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1rem;">🔔</div>`;
+        }
+
+        const unreadDot = !n.is_read ? '<span class="notif-unread-dot"></span>' : '';
+
+        card.innerHTML = `
+            <div class="notif-avatar-stack">${avatarsHtml}</div>
+            <div class="notif-body">
+                <div class="notif-title">${escapeHtml(n.title)}</div>
+                <div class="notif-snippet">${escapeHtml(n.snippet)}</div>
+                <div class="notif-time">${formatTime(n.latest_at)}</div>
+            </div>
+            ${unreadDot}
+        `;
+
+        card.onclick = async () => {
+            if (!n.is_read && n.ids && n.ids.length > 0) {
+                await fetch('/api/notifications/read', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: n.ids })
+                });
+                n.is_read = true;
+                card.classList.remove('unread');
+                updateUnreadNotifsBadges();
+            }
+
+            closeNotificationsPanel();
+
+            if (n.action_type === 'like' || n.action_type === 'comment') {
+                navigateTo('feed');
+                const postEl = document.getElementById(`post-${n.target_id}`);
+                if (postEl) {
+                    postEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    postEl.style.boxShadow = '0 0 0 3px #e26d5c';
+                    setTimeout(() => postEl.style.boxShadow = '', 2000);
+                }
+            } else if (n.action_type === 'follow') {
+                if (n.actors && n.actors.length > 0) {
+                    navigateTo('profile', n.actors[0].id);
+                }
+            } else if (n.action_type === 'message') {
+                navigateTo('messages');
+                if (n.actors && n.actors.length > 0) {
+                    openChatWithUser(n.actors[0].id);
+                }
+            } else if (n.action_type === 'gift') {
+                navigateTo('profile', window.CURRENT_USER_ID);
+                switchProfileTab('gifts');
+            }
+        };
+
+        list.appendChild(card);
+    });
+}
+
+async function markAllNotificationsRead() {
+    try {
+        await fetch('/api/notifications/read-all', { method: 'POST' });
+        cachedNotifications.forEach(n => n.is_read = true);
+        renderNotificationsList(cachedNotifications, activeNotifFilter);
+        updateUnreadNotifsBadges();
+        showToast('Все уведомления прочитаны ✓', 'success');
+    } catch (e) {
+        showToast('Ошибка обновления статуса', 'error');
+    }
+}
+
+async function updateUnreadNotifsBadges() {
+    try {
+        const res = await fetch('/api/notifications/unread');
+        if (res.ok) {
+            const data = await res.json();
+            const count = data.unread_count || 0;
+            const badgeNav = document.getElementById('hudNotifNavBadge');
+            const badgeHeader = document.getElementById('headerNotifBadge');
+            const modalBadge = document.getElementById('notifTotalBadge');
+
+            if (modalBadge) modalBadge.textContent = count;
+
+            [badgeNav, badgeHeader].forEach(b => {
+                if (!b) return;
+                if (count > 0) {
+                    b.textContent = count;
+                    b.style.display = 'inline-flex';
+                } else {
+                    b.style.display = 'none';
+                }
+            });
+        }
+    } catch (e) {}
+}
+
+function handleIncomingNotification(payload) {
+    updateUnreadNotifsBadges();
+    playAudioChime(520, 880, 0.15);
+
+    if (payload && payload.title) {
+        notifToastQueue.push(payload.title);
+    }
+
+    if (notifToastTimeout) clearTimeout(notifToastTimeout);
+    notifToastTimeout = setTimeout(() => {
+        if (notifToastQueue.length === 1) {
+            showToast(`🔔 ${notifToastQueue[0]}`, 'success');
+        } else if (notifToastQueue.length > 1) {
+            showToast(`🔔 Получено ${notifToastQueue.length} новых уведомлений`, 'success');
+        }
+        notifToastQueue = [];
+    }, 400);
+}
+
+// ==========================================
+// DIRECT MESSAGES (FIXED DOUBLE-SENDING BUG & ATTACHMENTS)
+// ==========================================
 let activeChatUserId = null;
 let activeInterlocutorData = null;
 let cachedConversations = [];
@@ -1859,112 +2074,128 @@ async function openChatWithUser(userId, displayName = null, username = null, ava
         return;
     }
 
-    if (userId === window.CURRENT_USER_ID) {
-        showToast('Нельзя начать диалог с самим собой', 'error');
-        return;
-    }
-
     navigateTo('messages');
     activeChatUserId = userId;
 
-    // Update active highlight in conversation sidebar
-    document.querySelectorAll('.conversation-item').forEach(el => {
-        el.classList.toggle('active', parseInt(el.dataset.userId) === userId);
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.toggle('active', parseInt(item.dataset.userId, 10) === userId);
     });
 
-    // Populate header details
-    if (displayName && username) {
-        activeInterlocutorData = { id: userId, display_name: displayName, username: username, avatar_url: avatarUrl };
-        updateChatHeader(displayName, username, avatarUrl);
-    } else {
-        // Fetch user data if not passed
-        try {
-            const res = await fetch(`/api/users/${userId}/profile`);
-            if (res.ok) {
-                const data = await res.json();
-                activeInterlocutorData = data.user;
-                updateChatHeader(data.user.display_name, data.user.username, data.user.avatar_url);
-            }
-        } catch (e) {}
-    }
-
-    const placeholder = document.getElementById('chatNoSelection');
+    const noSel = document.getElementById('chatNoSelection');
     const activeWin = document.getElementById('chatActiveWindow');
-    if (placeholder) placeholder.style.display = 'none';
+    if (noSel) noSel.style.display = 'none';
     if (activeWin) activeWin.style.display = 'flex';
 
-    await loadChatMessages(userId);
+    if (displayName && username && avatarUrl) {
+        activeInterlocutorData = { id: userId, display_name: displayName, username: username, avatar_url: avatarUrl };
+        updateChatHeader(activeInterlocutorData);
+    } else {
+        const found = cachedConversations.find(c => c.user.id === userId);
+        if (found) {
+            activeInterlocutorData = found.user;
+            updateChatHeader(found.user);
+        } else {
+            try {
+                const res = await fetch(`/api/users/${userId}/profile`);
+                if (res.ok) {
+                    const data = await res.json();
+                    activeInterlocutorData = data.user;
+                    updateChatHeader(data.user);
+                }
+            } catch (e) {}
+        }
+    }
 
+    await loadChatMessages(userId);
     const input = document.getElementById('chatMessageInput');
     if (input) input.focus();
 }
 
-function updateChatHeader(displayName, username, avatarUrl) {
-    const nameEl = document.getElementById('chatInterlocutorName');
-    const handleEl = document.getElementById('chatInterlocutorHandle');
-    const avatarEl = document.getElementById('chatInterlocutorAvatar');
+function updateChatHeader(user) {
+    if (!user) return;
+    const avatar = document.getElementById('chatInterlocutorAvatar');
+    const name = document.getElementById('chatInterlocutorName');
+    const handle = document.getElementById('chatInterlocutorHandle');
 
-    if (nameEl) nameEl.textContent = displayName;
-    if (handleEl) handleEl.textContent = '@' + username;
-    if (avatarEl) avatarEl.src = avatarUrl;
+    if (avatar) avatar.src = user.avatar_url;
+    if (name) name.textContent = user.display_name;
+    if (handle) handle.textContent = `@${user.username}`;
 }
 
 function openInterlocutorProfile() {
     if (activeChatUserId) {
-        navigateTo('profile', activeChatUserId);
+        openUserProfile(activeChatUserId);
     }
 }
 
 async function loadChatMessages(userId) {
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
-    container.innerHTML = '<div class="chat-empty-hint">Загрузка переписки...</div>';
+    container.innerHTML = '<div class="chat-empty-hint">Загрузка сообщений...</div>';
 
     try {
         const res = await fetch(`/api/messages/${userId}`);
         if (!res.ok) throw new Error('Ошибка загрузки сообщений');
         const messages = await res.json();
-        renderChatMessages(messages);
+
+        container.innerHTML = '';
+        if (!messages || messages.length === 0) {
+            container.innerHTML = `
+                <div class="chat-empty-hint">
+                    История переписки пуста. Отправьте первое сообщение, чтобы начать диалог! 👋
+                </div>
+            `;
+            return;
+        }
+
+        messages.forEach(m => {
+            appendChatMessageElement(m);
+        });
+        scrollChatToBottom();
         updateUnreadMessagesCountBadge();
     } catch (err) {
         container.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
     }
 }
 
-function renderChatMessages(messages) {
+function appendChatMessageElement(m) {
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
 
-    if (!messages || messages.length === 0) {
-        container.innerHTML = '<div class="chat-empty-hint">Нет сообщений. Напишите первое сообщение! 💬</div>';
+    // ВАЖНО: Защита от дублирования сообщений в DOM
+    if (document.getElementById(`chat-msg-${m.id}`)) {
         return;
     }
 
-    container.innerHTML = '';
-    messages.forEach(m => {
-        appendChatMessageElement(m, container);
-    });
-
-    scrollChatToBottom();
-}
-
-function appendChatMessageElement(m, container) {
-    if (!container) container = document.getElementById('chatMessagesContainer');
-    if (!container) return;
-
-    // Remove empty hint if present
     const hint = container.querySelector('.chat-empty-hint');
     if (hint) hint.remove();
 
     const isOut = (m.sender_id === window.CURRENT_USER_ID);
     const row = document.createElement('div');
+    row.id = `chat-msg-${m.id}`;
     row.className = 'chat-bubble-row ' + (isOut ? 'out' : 'in');
 
     const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
 
+    const trimmed = (m.content || '').trim();
+    const isImageFile = /\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(trimmed);
+    const isUploadedPath = trimmed.startsWith('/uploads/');
+    let contentHtml = '';
+
+    if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
+        // Отображаем ТОЛЬКО изображение без дублирования текстовой ссылки
+        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" style="max-width: 260px; max-height: 280px; object-fit: cover; border-radius: 12px; cursor: pointer; display: block;" onclick="window.open('${escapeHtml(trimmed)}', '_blank')"></div>`;
+    } else if (isUploadedPath) {
+        // Документ или другой прикрепленный файл
+        const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
+        contentHtml = `<a href="${escapeHtml(trimmed)}" target="_blank" download class="chat-file-attachment" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.08); border-radius: 10px; color: #fff; text-decoration: none; font-weight: 500;">📎 <span>${escapeHtml(fileName || 'Скачать файл')}</span></a>`;
+    } else {
+        contentHtml = escapeHtml(m.content);
+    }
+
     row.innerHTML = `
         <div class="chat-bubble ${isOut ? 'out' : 'in'}">
-            <div class="chat-bubble-content">${escapeHtml(m.content)}</div>
+            <div class="chat-bubble-content">${contentHtml}</div>
             <div class="chat-bubble-footer">
                 <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
                 ${statusCheck}
@@ -1982,8 +2213,12 @@ function scrollChatToBottom() {
     }
 }
 
+let isSendingMessage = false;
+
 async function handleSendMessage(e) {
     if (e) e.preventDefault();
+
+    if (isSendingMessage) return; // Защита от двойного клика
 
     if (!activeChatUserId) {
         showToast('Выберите собеседника', 'error');
@@ -1998,6 +2233,7 @@ async function handleSendMessage(e) {
 
     const sendBtn = document.getElementById('chatSendBtn');
     if (sendBtn) sendBtn.disabled = true;
+    isSendingMessage = true;
 
     try {
         const res = await fetch('/api/messages', {
@@ -2017,65 +2253,185 @@ async function handleSendMessage(e) {
         const msg = await res.json();
         input.value = '';
 
-        // Play subtle outgoing sound
         playAudioChime(600, 800, 0.08);
 
-        // Append to UI immediately
+        // Добавляем сообщение в интерфейс отправителя сразу
         appendChatMessageElement(msg);
         scrollChatToBottom();
 
-        // Refresh conversation sidebar list in background
         loadConversations();
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
+        isSendingMessage = false;
         if (sendBtn) sendBtn.disabled = false;
         input.focus();
     }
 }
 
+// Загрузка фото/файла в чат
+async function handleChatFileUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !activeChatUserId) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showToast('Загрузка в чат...', 'success');
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!res.ok) throw new Error('Ошибка при загрузке файла');
+        const data = await res.json();
+
+        // Автоматически отправляем в чат ссылку на файл
+        const input = document.getElementById('chatMessageInput');
+        if (input) {
+            input.value = data.url;
+            handleSendMessage();
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
 function handleIncomingSSEMessage(msg) {
-    // If incoming message belongs to currently open chat
+    // ВАЖНО: Если мы сами являемся отправителем, мы УЖЕ добавили сообщение в handleSendMessage
+    if (msg.sender_id === window.CURRENT_USER_ID) {
+        return;
+    }
+
     if (activeChatUserId && (msg.sender_id === activeChatUserId || msg.receiver_id === activeChatUserId)) {
         appendChatMessageElement(msg);
         scrollChatToBottom();
 
         if (msg.sender_id === activeChatUserId) {
-            // Mark read on server
             fetch(`/api/messages/${activeChatUserId}`).catch(() => {});
         }
     } else {
-        // Notification for message in other chat
-        if (msg.sender_id !== window.CURRENT_USER_ID) {
-            playAudioChime(450, 750, 0.12);
-            const senderName = msg.sender ? msg.sender.display_name : 'Пользователь';
-            showToast(`💬 Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
-        }
+        playAudioChime(450, 750, 0.12);
+        const senderName = msg.sender ? msg.sender.display_name : 'Пользователь';
+        showToast(`💬 Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
     }
 
-    // Refresh conversation list & unread count badge
     loadConversations();
+    updateUnreadMessagesCountBadge();
 }
 
 async function updateUnreadMessagesCountBadge() {
     const badge = document.getElementById('hudMessagesBadge');
-    if (!badge) return;
+    const headerBadge = document.getElementById('headerMessagesBadge');
 
     try {
         const res = await fetch('/api/messages/unread');
         if (res.ok) {
             const data = await res.json();
             const count = data.unread_count || 0;
-            if (count > 0) {
-                badge.textContent = count;
-                badge.style.display = 'inline-flex';
-            } else {
-                badge.style.display = 'none';
-            }
+            [badge, headerBadge].forEach(b => {
+                if (!b) return;
+                if (count > 0) {
+                    b.textContent = count;
+                    b.style.display = 'inline-flex';
+                } else {
+                    b.style.display = 'none';
+                }
+            });
         }
     } catch (e) {}
 }
 
+// ==========================================
+// REAL-TIME SSE HUB
+// ==========================================
+function initSSE() {
+    if (!window.EventSource) return;
+
+    try {
+        const es = new EventSource('/api/events');
+
+        es.onmessage = (e) => {
+            if (!e.data) return;
+            try {
+                const event = JSON.parse(e.data);
+                handleSSEEvent(event);
+            } catch (err) {}
+        };
+
+        es.onerror = () => {
+            // Браузер сам переподключит EventSource
+        };
+    } catch (e) {}
+}
+
+function handleSSEEvent(event) {
+    switch (event.type) {
+        case 'new_post':
+            if (event.post && event.post.user_id !== window.CURRENT_USER_ID) {
+                renderPostAtTop(event.post);
+                showToast(`Новая запись от ${event.post.user.display_name}! 🌟`, 'success');
+            }
+            break;
+
+        case 'like_update':
+            const likeCount = document.getElementById(`likes-${event.post_id}`);
+            if (likeCount) likeCount.textContent = event.likes_count;
+            break;
+
+        case 'new_comment':
+            const countEl = document.getElementById(`comment-count-${event.post_id}`);
+            if (countEl) countEl.textContent = event.comments_count;
+
+            const commentsList = document.getElementById(`comments-list-${event.post_id}`);
+            if (commentsList && event.comment && event.comment.user_id !== window.CURRENT_USER_ID) {
+                const c = event.comment;
+                const commentEl = document.createElement('div');
+                commentEl.className = 'comment-item';
+                commentEl.innerHTML = `
+                    <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
+                    <div class="comment-bubble">
+                        <div class="comment-author-line">
+                            <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
+                            <span class="comment-time">${formatTime(c.created_at)}</span>
+                        </div>
+                        <div class="comment-text">${escapeHtml(c.content)}</div>
+                    </div>
+                `;
+                commentsList.appendChild(commentEl);
+            }
+            break;
+
+        case 'new_gift':
+            if (event.gift) {
+                showToast(`🎁 Новый подарок в сети! ✨`, 'success');
+                const showcaseGrid = document.getElementById('globalShowcaseGrid');
+                if (showcaseGrid) {
+                    renderGiftCard(event.gift, showcaseGrid, true);
+                }
+            }
+            break;
+
+        case 'new_message': {
+            const msg = event.payload || event.message;
+            if (msg) handleIncomingSSEMessage(msg);
+            break;
+        }
+
+        case 'notification': {
+            if (event.payload && event.payload.user_id === window.CURRENT_USER_ID) {
+                handleIncomingNotification(event.payload);
+            }
+            break;
+        }
+    }
+}
+
+// Audio chime for notifications
 function playAudioChime(freq1 = 520, freq2 = 780, duration = 0.1) {
     try {
         const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
@@ -2085,7 +2441,7 @@ function playAudioChime(freq1 = 520, freq2 = 780, duration = 0.1) {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq1, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(freq2, ctx.currentTime + duration);
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
         osc.connect(gain);
         gain.connect(ctx.destination);

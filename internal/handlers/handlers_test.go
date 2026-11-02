@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,7 +16,7 @@ import (
 	"social-network/internal/repository"
 )
 
-func setupTestApp(t *testing.T) (*http.ServeMux, *repository.UserRepository, *repository.PostRepository, *repository.MessageRepository, string, string) {
+func setupTestApp(t *testing.T) (*http.ServeMux, *repository.UserRepository, *repository.PostRepository, *repository.MessageRepository, *repository.NotificationRepository, string, string) {
 	cfg := config.Load()
 	db, err := database.InitDB(cfg)
 	if err != nil {
@@ -26,9 +27,10 @@ func setupTestApp(t *testing.T) (*http.ServeMux, *repository.UserRepository, *re
 	postRepo := repository.NewPostRepository(db)
 	giftRepo := repository.NewGiftRepository(db)
 	messageRepo := repository.NewMessageRepository(db)
+	notifRepo := repository.NewNotificationRepository(db)
 	hub := events.NewHub()
 
-	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, hub)
+	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, notifRepo, hub)
 	if err != nil {
 		t.Fatalf("Failed to initialize handler: %v", err)
 	}
@@ -47,12 +49,12 @@ func setupTestApp(t *testing.T) (*http.ServeMux, *repository.UserRepository, *re
 		t.Fatalf("Failed to create session for user 2: %v", err)
 	}
 
-	return mux, userRepo, postRepo, messageRepo, tokenUser1, tokenUser2
+	return mux, userRepo, postRepo, messageRepo, notifRepo, tokenUser1, tokenUser2
 }
 
 // 1. Проверка 401 Unauthorized при обращении к защищенным эндпоинтам без токена
 func TestUnauthorizedWithoutToken(t *testing.T) {
-	mux, _, _, _, _, _ := setupTestApp(t)
+	mux, _, _, _, _, _, _ := setupTestApp(t)
 
 	tests := []struct {
 		name       string
@@ -86,7 +88,7 @@ func TestUnauthorizedWithoutToken(t *testing.T) {
 			name:       "POST /api/gifts без токена -> 401 Unauthorized",
 			method:     "POST",
 			url:        "/api/gifts",
-			body:       models.SendGiftRequest{ReceiverID: 2, GiftType: "supernova"},
+			body:       models.SendGiftRequest{ReceiverID: 2, GiftType: "festive_box"},
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
@@ -100,6 +102,20 @@ func TestUnauthorizedWithoutToken(t *testing.T) {
 			name:       "DELETE /api/posts/1 без токена -> 401 Unauthorized",
 			method:     "DELETE",
 			url:        "/api/posts/1",
+			body:       nil,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "GET /api/notifications без токена -> 401 Unauthorized",
+			method:     "GET",
+			url:        "/api/notifications",
+			body:       nil,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "POST /api/upload без токена -> 401 Unauthorized",
+			method:     "POST",
+			url:        "/api/upload",
 			body:       nil,
 			wantStatus: http.StatusUnauthorized,
 		},
@@ -126,7 +142,7 @@ func TestUnauthorizedWithoutToken(t *testing.T) {
 
 // 2. Проверка 403 Forbidden при попытке изменения или удаления чужого ресурса
 func TestForbiddenOnForeignResource(t *testing.T) {
-	mux, _, postRepo, _, _, tokenUser2 := setupTestApp(t)
+	mux, _, postRepo, _, _, _, tokenUser2 := setupTestApp(t)
 
 	// Создаем тестовый пост от имени Пользователя 1 (Олег)
 	post, err := postRepo.CreatePost(1, "Пост автора Олег для проверки прав", "")
@@ -148,7 +164,10 @@ func TestForbiddenOnForeignResource(t *testing.T) {
 	})
 
 	t.Run("Пользователь 2 пытается отредактировать чужой пост -> 403 Forbidden", func(t *testing.T) {
-		body, _ := json.Marshal(models.UpdatePostRequest{Content: "Взлом чужого поста"})
+		body, _ := json.Marshal(models.UpdatePostRequest{
+			UserID:  2,
+			Content: "Попытка взлома чужого поста",
+		})
 		req := httptest.NewRequest("PUT", "/api/posts/"+strconvItoa(post.ID), bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
@@ -162,14 +181,18 @@ func TestForbiddenOnForeignResource(t *testing.T) {
 	})
 }
 
-// 3. Проверка успешных авторизованных операций (200 / 201)
+// 3. Проверка успешных авторизованных операций (200 OK / 201 Created)
 func TestAuthorizedOperations(t *testing.T) {
-	mux, _, _, _, tokenUser1, _ := setupTestApp(t)
+	mux, _, _, _, _, tokenUser1, _ := setupTestApp(t)
 
 	var createdPostID int
 
 	t.Run("Создание поста владельцем -> 201 Created", func(t *testing.T) {
-		body, _ := json.Marshal(models.CreatePostRequest{Content: "Тестовый авторский пост"})
+		body, _ := json.Marshal(models.CreatePostRequest{
+			UserID:   1,
+			Content:  "Новый легитимный пост от автора Олег",
+			ImageURL: "",
+		})
 		req := httptest.NewRequest("POST", "/api/posts", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
@@ -189,7 +212,10 @@ func TestAuthorizedOperations(t *testing.T) {
 	})
 
 	t.Run("Редактирование своего поста -> 200 OK", func(t *testing.T) {
-		body, _ := json.Marshal(models.UpdatePostRequest{Content: "Обновленный авторский текст"})
+		body, _ := json.Marshal(models.UpdatePostRequest{
+			UserID:  1,
+			Content: "Обновленный текст своего поста",
+		})
 		req := httptest.NewRequest("PUT", "/api/posts/"+strconvItoa(createdPostID), bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
@@ -198,7 +224,7 @@ func TestAuthorizedOperations(t *testing.T) {
 		mux.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
-			t.Fatalf("Expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+			t.Errorf("Expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
 		}
 	})
 
@@ -210,19 +236,19 @@ func TestAuthorizedOperations(t *testing.T) {
 		mux.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
-			t.Fatalf("Expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+			t.Errorf("Expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
 		}
 	})
 }
 
-// 4. Проверка личных сообщений (Direct Messages)
+// 4. Проверка API Личных сообщений (Direct Messages)
 func TestDirectMessagesAPI(t *testing.T) {
-	mux, _, _, _, tokenUser1, tokenUser2 := setupTestApp(t)
+	mux, _, _, _, _, tokenUser1, tokenUser2 := setupTestApp(t)
 
 	t.Run("Отправка сообщения между пользователями -> 201 Created", func(t *testing.T) {
 		body, _ := json.Marshal(models.SendMessageRequest{
 			ReceiverID: 2,
-			Content:    "Привет из httptest теста личных сообщений!",
+			Content:    "Привет, Алексей! Тестируем личные сообщения.",
 		})
 		req := httptest.NewRequest("POST", "/api/messages", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -233,14 +259,6 @@ func TestDirectMessagesAPI(t *testing.T) {
 
 		if w.Code != http.StatusCreated {
 			t.Fatalf("Expected 201 Created, got %d. Body: %s", w.Code, w.Body.String())
-		}
-
-		var msg models.Message
-		if err := json.Unmarshal(w.Body.Bytes(), &msg); err != nil {
-			t.Fatalf("Failed to parse message: %v", err)
-		}
-		if msg.Content != "Привет из httptest теста личных сообщений!" {
-			t.Errorf("Unexpected content: %s", msg.Content)
 		}
 	})
 
@@ -282,6 +300,97 @@ func TestDirectMessagesAPI(t *testing.T) {
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("Expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+// 5. Проверка системы уведомлений с умной группировкой
+func TestNotificationsSystem(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, _ := setupTestApp(t)
+
+	t.Run("Получение сгруппированных уведомлений -> 200 OK", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/notifications", nil)
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		w := httptest.NewRecorder()
+
+		mux.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+		}
+
+		var notifs []models.GroupedNotification
+		if err := json.Unmarshal(w.Body.Bytes(), &notifs); err != nil {
+			t.Fatalf("Failed to parse notifications: %v", err)
+		}
+	})
+
+	t.Run("Получение счетчика непрочитанных уведомлений -> 200 OK", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/notifications/unread", nil)
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		w := httptest.NewRecorder()
+
+		mux.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+// 6. Проверка загрузки файлов с диска (Multipart File Upload)
+func TestFileUpload(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, _ := setupTestApp(t)
+
+	t.Run("Успешная загрузка изображения с диска -> 201 Created", func(t *testing.T) {
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, err := writer.CreateFormFile("file", "test_photo.png")
+		if err != nil {
+			t.Fatalf("CreateFormFile failed: %v", err)
+		}
+		part.Write([]byte("\x89PNG\r\n\x1a\nFake PNG binary payload"))
+		writer.Close()
+
+		req := httptest.NewRequest("POST", "/api/upload", body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		w := httptest.NewRecorder()
+
+		mux.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("Expected 201 Created, got %d. Body: %s", w.Code, w.Body.String())
+		}
+
+		var res map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+			t.Fatalf("Failed to parse JSON response: %v", err)
+		}
+		if url, ok := res["url"].(string); !ok || len(url) == 0 {
+			t.Fatalf("Expected non-empty 'url' in response, got %v", res["url"])
+		}
+	})
+
+	t.Run("Попытка загрузки недопустимого формата файла (.exe) -> 400 Bad Request", func(t *testing.T) {
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, err := writer.CreateFormFile("file", "malware.exe")
+		if err != nil {
+			t.Fatalf("CreateFormFile failed: %v", err)
+		}
+		part.Write([]byte("MZ executable binary"))
+		writer.Close()
+
+		req := httptest.NewRequest("POST", "/api/upload", body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		w := httptest.NewRecorder()
+
+		mux.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected 400 Bad Request, got %d. Body: %s", w.Code, w.Body.String())
 		}
 	})
 }

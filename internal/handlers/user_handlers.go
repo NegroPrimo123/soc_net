@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 
+	"social-network/internal/events"
 	"social-network/internal/models"
 )
 
@@ -74,6 +76,8 @@ func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 		wg        sync.WaitGroup
 	)
 
+	isOwner := (currentUserID == profileUserID)
+
 	// Параллельная загрузка данных профиля в 4 потока для минимизации TTFB
 	wg.Add(4)
 	go func() {
@@ -86,7 +90,8 @@ func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	}()
 	go func() {
 		defer wg.Done()
-		g, _ := h.giftRepo.GetByReceiverID(profileUserID)
+		// Владелец видит свои скрытые подарки, гости видят только открытые
+		g, _ := h.giftRepo.GetByReceiverID(profileUserID, isOwner)
 		if g == nil {
 			g = []models.Gift{}
 		}
@@ -116,7 +121,7 @@ func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 		Gifts:       gifts,
 		Followers:   followers,
 		Following:   following,
-		IsOwner:     currentUserID == profileUserID,
+		IsOwner:     isOwner,
 		IsFollowing: targetUser.IsFollowing,
 	}
 
@@ -138,7 +143,10 @@ func (h *Handler) GetUserGifts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gifts, err := h.giftRepo.GetByReceiverID(userID)
+	currentUser := h.getUserFromRequest(r)
+	isOwner := currentUser != nil && currentUser.ID == userID
+
+	gifts, err := h.giftRepo.GetByReceiverID(userID, isOwner)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -188,7 +196,8 @@ func (h *Handler) ToggleFollow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	followerID := req.FollowerID
-	if authUser := h.getUserFromRequest(r); authUser != nil {
+	var authUser *models.User
+	if authUser = h.getUserFromRequest(r); authUser != nil {
 		followerID = authUser.ID
 	}
 	if followerID <= 0 {
@@ -199,6 +208,23 @@ func (h *Handler) ToggleFollow(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
+	}
+
+	// Отправка уведомления при подписке
+	if h.notifRepo != nil && isFollowing && req.FollowingID != followerID {
+		actorName := "Пользователь"
+		if authUser != nil {
+			actorName = authUser.DisplayName
+		}
+		_, _ = h.notifRepo.CreateNotification(req.FollowingID, followerID, "follow", followerID, "")
+		if h.hub != nil {
+			h.hub.Broadcast(events.EventNotification, map[string]interface{}{
+				"user_id":     req.FollowingID,
+				"action_type": "follow",
+				"actor":       authUser,
+				"title":       fmt.Sprintf("%s подписался(-лась) на вас", actorName),
+			})
+		}
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
