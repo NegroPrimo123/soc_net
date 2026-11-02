@@ -18,6 +18,7 @@ const (
 	EventNewMessage   EventType = "new_message"
 	EventMessagesRead EventType = "messages_read"
 	EventNewGift      EventType = "new_gift"
+	EventNotification EventType = "notification"
 )
 
 type EventMessage struct {

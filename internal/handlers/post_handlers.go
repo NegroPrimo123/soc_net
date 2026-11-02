@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -180,7 +181,8 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := req.UserID
-	if authUser := h.getUserFromRequest(r); authUser != nil {
+	var authUser *models.User
+	if authUser = h.getUserFromRequest(r); authUser != nil {
 		userID = authUser.ID
 	}
 	if userID <= 0 {
@@ -191,6 +193,25 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+
+	// Отправка уведомления автору поста
+	if h.notifRepo != nil && isLiked {
+		if post, _ := h.postRepo.GetPostByID(postID, userID); post != nil && post.UserID != userID {
+			actorName := "Пользователь"
+			if authUser != nil {
+				actorName = authUser.DisplayName
+			}
+			_, _ = h.notifRepo.CreateNotification(post.UserID, userID, "like", postID, "")
+			if h.hub != nil {
+				h.hub.Broadcast(events.EventNotification, map[string]interface{}{
+					"user_id":     post.UserID,
+					"action_type": "like",
+					"actor":       authUser,
+					"title":       fmt.Sprintf("%s оценил(а) вашу публикацию", actorName),
+				})
+			}
+		}
 	}
 
 	if h.hub != nil {
@@ -234,7 +255,8 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := req.UserID
-	if authUser := h.getUserFromRequest(r); authUser != nil {
+	var authUser *models.User
+	if authUser = h.getUserFromRequest(r); authUser != nil {
 		userID = authUser.ID
 	}
 	if userID <= 0 {
@@ -245,6 +267,25 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+
+	// Отправка уведомления автору поста
+	if h.notifRepo != nil {
+		if post, _ := h.postRepo.GetPostByID(postID, userID); post != nil && post.UserID != userID {
+			actorName := "Пользователь"
+			if authUser != nil {
+				actorName = authUser.DisplayName
+			}
+			_, _ = h.notifRepo.CreateNotification(post.UserID, userID, "comment", postID, req.Content)
+			if h.hub != nil {
+				h.hub.Broadcast(events.EventNotification, map[string]interface{}{
+					"user_id":     post.UserID,
+					"action_type": "comment",
+					"actor":       authUser,
+					"title":       fmt.Sprintf("%s прокомментировал(а) вашу запись", actorName),
+				})
+			}
+		}
 	}
 
 	if h.hub != nil {

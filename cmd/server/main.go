@@ -26,12 +26,13 @@ func main() {
 	postRepo := repository.NewPostRepository(db)
 	giftRepo := repository.NewGiftRepository(db)
 	messageRepo := repository.NewMessageRepository(db)
+	notifRepo := repository.NewNotificationRepository(db)
 
 	// Инициализация и запуск Real-time SSE Hub (паттерн Hub/Subscriber)
 	hub := events.NewHub()
 	go hub.Run()
 
-	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, hub)
+	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, notifRepo, hub)
 	if err != nil {
 		log.Fatalf("Fatal: Handler initialization error: %v", err)
 	}

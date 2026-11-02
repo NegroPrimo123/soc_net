@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GoSocial — Minimalist Cyberpunk Social Network</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=7.0">
+    <title>GoSocial — Киберпанк Социальная Сеть</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=cyber_2077_v10">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"></noscript>
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"></noscript>
 </head>
 <body data-theme="cyberpunk">
 
-<!-- Toast уведомления -->
+<!-- Toast всплывающие уведомления -->
 <div id="toastContainer" class="toast-container"></div>
 
 <!-- ==========================================
@@ -24,9 +24,9 @@
     <div class="modal-card modal-auth-card">
         <button class="modal-close-btn" onclick="closeAuthModal()" title="Закрыть">✕</button>
         
-        <div class="modal-cyber-header">
-            <span class="cyber-badge-sm">ACCESS // CONTROL</span>
-            <h3>Идентификация в системе</h3>
+        <div class="modal-header">
+            <div class="modal-header-badge">ДОСТУП К АККАУНТУ</div>
+            <h3>Вход в GoSocial</h3>
         </div>
 
         <div class="auth-tabs">
@@ -53,7 +53,7 @@
 
             <!-- Быстрый демо-вход в 1 клик -->
             <div class="demo-auth-box">
-                <span class="demo-auth-title">Быстрый тестовый вход (пароль: password123):</span>
+                <span class="demo-auth-title">Быстрый вход для тестирования:</span>
                 <div class="demo-user-pills">
                     <button type="button" class="demo-pill" onclick="fillAndLogin('oleg', 'password123')">
                         <img src="/static/avatars/oleg.svg" alt="Oleg">
@@ -71,7 +71,7 @@
             </div>
 
             <button type="submit" class="btn btn-primary btn-block btn-lg">
-                <span>Авторизоваться</span>
+                <span>Войти в аккаунт</span>
                 <span class="btn-arrow">→</span>
             </button>
         </form>
@@ -109,14 +109,49 @@
     </div>
 </div>
 
-<!-- Модальное окно отправки подарка -->
+<!-- Модальное окно центра уведомлений (Умная группировка) -->
+<div id="notificationsModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeNotificationsPanel()">
+    <div class="modal-card modal-notif-card">
+        <div class="notif-modal-header">
+            <div class="notif-title-row">
+                <span class="notif-header-icon">🔔</span>
+                <h3>Центр уведомлений</h3>
+                <span class="notif-badge-pill" id="notifTotalBadge">0</span>
+            </div>
+            <div class="notif-actions-row">
+                <button class="btn btn-secondary btn-xs" onclick="markAllNotificationsRead()">
+                    <span>✓ Прочитать все</span>
+                </button>
+                <button class="modal-close-btn" onclick="closeNotificationsPanel()" title="Закрыть">✕</button>
+            </div>
+        </div>
+
+        <div class="notif-filter-tabs">
+            <button class="notif-tab active" data-filter="all" onclick="filterNotifications('all')">Все</button>
+            <button class="notif-tab" data-filter="like" onclick="filterNotifications('like')">Лайки</button>
+            <button class="notif-tab" data-filter="comment" onclick="filterNotifications('comment')">Комментарии</button>
+            <button class="notif-tab" data-filter="follow" onclick="filterNotifications('follow')">Подписки</button>
+            <button class="notif-tab" data-filter="message" onclick="filterNotifications('message')">Сообщения</button>
+            <button class="notif-tab" data-filter="gift" onclick="filterNotifications('gift')">Подарки</button>
+        </div>
+
+        <div id="notificationsList" class="notif-list-container">
+            <div class="notif-empty-state">
+                <span class="notif-empty-glyph">🔔</span>
+                <p>Загрузка уведомлений...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно отправки подарка («Цветные карандаши») -->
 <div id="sendGiftModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeSendGiftModal()">
     <div class="modal-card modal-gift-card">
         <button class="modal-close-btn" onclick="closeSendGiftModal()" title="Закрыть">✕</button>
         
-        <div class="modal-cyber-header">
-            <span class="cyber-badge-sm">GIFT // TRANSFER</span>
-            <h3>Отправить цифровой артефакт</h3>
+        <div class="modal-header">
+            <div class="modal-header-badge">CYBERPUNK 2077 GIFTS</div>
+            <h3>Отправить кибер-подарок</h3>
             <p id="giftModalReceiverText" class="modal-subtext">Получатель: <strong id="giftReceiverName">...</strong></p>
         </div>
 
@@ -124,68 +159,60 @@
             <input type="hidden" id="giftReceiverId" value="">
 
             <div class="form-label-row">
-                <label class="form-label">Выберите артефакт:</label>
-                <span class="selected-rarity-badge" id="selectedRarityBadge">Mythic</span>
+                <label class="form-label">Выберите подарок:</label>
+                <span class="selected-rarity-badge" id="selectedRarityBadge">Реликтовый</span>
             </div>
 
             <div class="gift-selection-grid">
-                <!-- 6 уникальных артефактов -->
-                <div class="gift-select-item active" data-type="supernova" onclick="selectGiftType('supernova')">
-                    <div class="gift-icon-box">
-                        <span class="gift-cyber-symbol">💠</span>
+                <!-- 5 Cyberpunk 2077 Gifts -->
+                <div class="gift-select-item active" data-type="cyber_heart" onclick="selectGiftType('cyber_heart')">
+                    <div class="gift-thumb-box">
+                        <img src="/static/gifts/01_Кибер_Сердце.png" alt="Кибер-Сердце" class="gift-select-img">
                     </div>
-                    <span class="gift-select-title">Nexus Core</span>
-                    <span class="gift-select-rarity rarity-mythic">Mythic</span>
+                    <span class="gift-select-title">Кибер-Сердце</span>
+                    <span class="gift-select-rarity badge-cyber-heart">Реликтовый</span>
                 </div>
 
-                <div class="gift-select-item" data-type="quantum_crown" onclick="selectGiftType('quantum_crown')">
-                    <div class="gift-icon-box">
-                        <span class="gift-cyber-symbol">👑</span>
+                <div class="gift-select-item" data-type="cyber_skull" onclick="selectGiftType('cyber_skull')">
+                    <div class="gift-thumb-box">
+                        <img src="/static/gifts/02_Кибер_Череп.png" alt="Кибер-Череп Oni" class="gift-select-img">
                     </div>
-                    <span class="gift-select-title">Archon Crown</span>
-                    <span class="gift-select-rarity rarity-legendary">Legendary</span>
+                    <span class="gift-select-title">Кибер-Череп Oni</span>
+                    <span class="gift-select-rarity badge-cyber-skull">Легендарный</span>
                 </div>
 
-                <div class="gift-select-item" data-type="cyber_unicorn" onclick="selectGiftType('cyber_unicorn')">
-                    <div class="gift-icon-box">
-                        <span class="gift-cyber-symbol">🦄</span>
+                <div class="gift-select-item" data-type="black_ice" onclick="selectGiftType('black_ice')">
+                    <div class="gift-thumb-box">
+                        <img src="/static/gifts/03_Чип_Black_ICE.png" alt="Чип Black ICE" class="gift-select-img">
                     </div>
-                    <span class="gift-select-title">Synth Pegasus</span>
-                    <span class="gift-select-rarity rarity-mythic">Mythic</span>
+                    <span class="gift-select-title">Чип Black ICE</span>
+                    <span class="gift-select-rarity badge-black-ice">Военный</span>
                 </div>
 
-                <div class="gift-select-item" data-type="moon_rocket" onclick="selectGiftType('moon_rocket')">
-                    <div class="gift-icon-box">
-                        <span class="gift-cyber-symbol">🚀</span>
+                <div class="gift-select-item" data-type="cyber_drone" onclick="selectGiftType('cyber_drone')">
+                    <div class="gift-thumb-box">
+                        <img src="/static/gifts/04_Кибер_Дрон.png" alt="Кибер-Дрон Сентри" class="gift-select-img">
                     </div>
-                    <span class="gift-select-title">Hyperdrive</span>
-                    <span class="gift-select-rarity rarity-epic">Epic</span>
+                    <span class="gift-select-title">Кибер-Дрон Сентри</span>
+                    <span class="gift-select-rarity badge-cyber-drone">Тактический</span>
                 </div>
 
-                <div class="gift-select-item" data-type="infinite_coffee" onclick="selectGiftType('infinite_coffee')">
-                    <div class="gift-icon-box">
-                        <span class="gift-cyber-symbol">☕</span>
+                <div class="gift-select-item" data-type="neuro_stimulator" onclick="selectGiftType('neuro_stimulator')">
+                    <div class="gift-thumb-box">
+                        <img src="/static/gifts/05_Неоновый_Стимулятор.png" alt="Нейро-Стимулятор" class="gift-select-img">
                     </div>
-                    <span class="gift-select-title">Neural Elixir</span>
-                    <span class="gift-select-rarity rarity-rare">Rare</span>
-                </div>
-
-                <div class="gift-select-item" data-type="quantum_diamond" onclick="selectGiftType('quantum_diamond')">
-                    <div class="gift-icon-box">
-                        <span class="gift-cyber-symbol">💎</span>
-                    </div>
-                    <span class="gift-select-title">Chrono Prism</span>
-                    <span class="gift-select-rarity rarity-legendary">Legendary</span>
+                    <span class="gift-select-title">Нейро-Стимулятор</span>
+                    <span class="gift-select-rarity badge-neuro-stimulator">Стимулятор</span>
                 </div>
             </div>
-            <input type="hidden" id="selectedGiftType" value="supernova">
+            <input type="hidden" id="selectedGiftType" value="cyber_heart">
 
             <div class="form-group" style="margin-top: 1.25rem;">
                 <div class="form-label-row">
-                    <label for="giftMessage">Пожелание или комментарий:</label>
+                    <label for="giftMessage">Теплое пожелание или записка:</label>
                     <span class="char-limit" id="giftCharLimit">0 / 300</span>
                 </div>
-                <textarea id="giftMessage" rows="3" placeholder="Напишите слова поддержки, благодарности за код или просто теплый привет..." maxlength="300" oninput="updateGiftCharCount()"></textarea>
+                <textarea id="giftMessage" rows="3" placeholder="Напишите слова поддержки, благодарности за помощь или просто приятный привет..." maxlength="300" oninput="updateGiftCharCount()"></textarea>
             </div>
 
             <!-- Тумблер анонимной отправки -->
@@ -195,7 +222,7 @@
                     <span class="toggle-slider"></span>
                 </label>
                 <div class="toggle-label-text">
-                    <strong>Анонимный режим 🎭</strong>
+                    <strong>Анонимный подарок 🎭</strong>
                     <small>Скрыть имя отправителя в карточке подарка</small>
                 </div>
             </div>
@@ -203,40 +230,34 @@
             <div class="modal-actions-row">
                 <button type="button" class="btn btn-secondary" onclick="closeSendGiftModal()">Отмена</button>
                 <button type="submit" class="btn btn-primary" id="btnSubmitGift">
-                    <span>Вручить артефакт</span>
-                    <span class="btn-arrow">⚡</span>
+                    <span>Отправить подарок</span>
+                    <span class="btn-arrow">🎁</span>
                 </button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Модальное окно детального просмотра артефакта -->
+<!-- Модальное окно распаковки / просмотра подарка -->
 <div id="giftDetailModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeGiftDetailModal()">
     <div class="modal-card modal-unboxing-card">
         <button class="modal-close-btn" onclick="closeGiftDetailModal()" title="Закрыть">✕</button>
-
+        
         <div class="unboxing-stage">
-            <div class="unboxing-artifact-halo">
-                <div id="unboxingGiftAnimation" class="unboxing-anim-container"></div>
-            </div>
-            <span class="unboxing-rarity" id="unboxingRarity">Mythic Artifact</span>
-            <h2 class="unboxing-title" id="unboxingTitle">Nexus Core</h2>
+            <img id="unboxingImg" src="" alt="Подарок" class="unboxing-gift-image">
+            <span class="artifact-rarity-pill" id="unboxingRarity">Праздничный</span>
         </div>
 
-        <div class="unboxing-sender-card">
-            <div class="sender-label">Отправитель:</div>
-            <div class="sender-profile" id="unboxingSenderProfile">
-                <img src="" alt="avatar" id="unboxingSenderAvatar" class="mini-avatar">
-                <div>
-                    <span class="sender-name" id="unboxingSenderName">Имя Отправителя</span>
-                    <span class="sender-handle" id="unboxingSenderHandle">@handle</span>
-                </div>
+        <div class="unboxing-content">
+            <h2 class="unboxing-title" id="unboxingTitle">Название подарка</h2>
+            <div class="unboxing-sender-line" id="unboxingSenderLine">
+                <span>От: </span>
+                <strong id="unboxingSenderName">Пользователь</strong>
             </div>
-        </div>
 
-        <div class="unboxing-message-bubble" id="unboxingMessageBox">
-            <p id="unboxingMessageText">"Сообщение к подарку"</p>
+            <div class="unboxing-message-card" id="unboxingMessageBox" style="display: none;">
+                <p id="unboxingMessageText">«Теплые слова...»</p>
+            </div>
         </div>
 
         <div class="unboxing-footer">
@@ -250,8 +271,8 @@
 <div id="editProfileModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeEditProfileModal()">
     <div class="modal-card">
         <button class="modal-close-btn" onclick="closeEditProfileModal()" title="Закрыть">✕</button>
-        <div class="modal-cyber-header">
-            <span class="cyber-badge-sm">CONFIG // PROFILE</span>
+        <div class="modal-header">
+            <div class="modal-header-badge">НАСТРОЙКИ ПРОФИЛЯ</div>
             <h3>Редактирование профиля</h3>
         </div>
         <form id="editProfileForm" onsubmit="handleProfileUpdate(event)">
@@ -261,7 +282,7 @@
             </div>
             <div class="form-group">
                 <label for="editBio">О себе (био)</label>
-                <textarea id="editBio" rows="3" placeholder="Расскажите о себе, ваших проектах и технологическом стеке..."></textarea>
+                <textarea id="editBio" rows="3" placeholder="Расскажите о себе, ваших интересах и проектах..."></textarea>
             </div>
             <div class="form-group">
                 <label for="editAvatar">URL аватарки</label>
@@ -280,50 +301,51 @@
 </div>
 
 <!-- ==========================================
-     НОВАЯ АРХИТЕКТУРА ИНТЕРФЕЙСА (CYBER COCKPIT)
+     ОСНОВНОЙ КАРКАС ПРИЛОЖЕНИЯ (WARM MODERN DOCK)
 ========================================== -->
 <div class="app-layout">
 
-    <!-- ЛЕВАЯ КОНСОЛЬ НАВИГАЦИИ (LEFT CYBER HUD DOCK) -->
+    <!-- ЛЕВАЯ КОЛОНКА НАВИГАЦИИ -->
     <aside class="hud-sidebar">
         <div class="hud-brand">
             <a href="/" class="brand-link" onclick="event.preventDefault(); navigateTo('feed');">
-                <div class="brand-glyph">GS</div>
+                <div class="brand-glyph">✦</div>
                 <div class="brand-meta">
-                    <span class="brand-name">GOSOCIAL</span>
-                    <span class="brand-sub">CYBER // OS</span>
+                    <span class="brand-name">GoSocial</span>
+                    <span class="brand-sub">cozy network</span>
                 </div>
             </a>
         </div>
 
         <nav class="hud-nav">
             <button class="hud-nav-item active" id="tabNavFeed" onclick="navigateTo('feed')">
-                <span class="hud-nav-num">01</span>
-                <span class="hud-nav-icon">🌐</span>
+                <span class="hud-nav-icon">🏠</span>
                 <span class="hud-nav-label">Лента</span>
             </button>
-            <button class="hud-nav-item" id="tabNavProfile" onclick="navigateTo('my-profile')">
-                <span class="hud-nav-num">02</span>
-                <span class="hud-nav-icon">👤</span>
-                <span class="hud-nav-label">Профиль</span>
-            </button>
-            <button class="hud-nav-item" id="tabNavGifts" onclick="navigateTo('showcase')">
-                <span class="hud-nav-num">03</span>
-                <span class="hud-nav-icon">🎁</span>
-                <span class="hud-nav-label">Артефакты</span>
+            <button class="hud-nav-item" id="tabNavNotifications" onclick="toggleNotificationsPanel()">
+                <span class="hud-nav-icon">🔔</span>
+                <span class="hud-nav-label">Уведомления</span>
+                <span class="hud-nav-badge notif-badge" id="hudNotifNavBadge" style="{{if gt .UnreadNotifsCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadNotifsCount}}</span>
             </button>
             <button class="hud-nav-item" id="tabNavMessages" onclick="navigateTo('messages')">
-                <span class="hud-nav-num">04</span>
                 <span class="hud-nav-icon">💬</span>
                 <span class="hud-nav-label">Сообщения</span>
                 <span class="hud-nav-badge" id="hudMessagesBadge" style="{{if gt .UnreadMessagesCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadMessagesCount}}</span>
+            </button>
+            <button class="hud-nav-item" id="tabNavGifts" onclick="navigateTo('showcase')">
+                <span class="hud-nav-icon">🎁</span>
+                <span class="hud-nav-label">Подарки</span>
+            </button>
+            <button class="hud-nav-item" id="tabNavProfile" onclick="navigateTo('my-profile')">
+                <span class="hud-nav-icon">👤</span>
+                <span class="hud-nav-label">Профиль</span>
             </button>
         </nav>
 
         <div class="hud-quick-action">
             <button class="btn btn-primary btn-block btn-hud-post" onclick="focusMainComposer()">
                 <span class="hud-btn-plus">+</span>
-                <span>Новый пост</span>
+                <span>Новая запись</span>
             </button>
         </div>
 
@@ -352,11 +374,11 @@
     <!-- ОСНОВНАЯ РАБОЧАЯ ОБЛАСТЬ -->
     <div class="app-main">
 
-        <!-- ВЕРХНЯЯ СЕНСОРНАЯ СТРОКА (TOP SENSOR BAR) -->
+        <!-- ВЕРХНЯЯ СТРОКА НАВИГАЦИИ И ПОИСКА -->
         <header class="top-sensor-bar">
             <div class="sensor-search-wrapper">
-                <span class="search-symbol">/</span>
-                <input type="text" id="searchInput" placeholder="Поиск постов, #хэштегов, авторов..." value="{{if .TagQuery}}{{.TagQuery}}{{else}}{{.SearchQuery}}{{end}}" onkeydown="if(event.key==='Enter') executeSearch()" autocomplete="off">
+                <span class="search-symbol">🔍</span>
+                <input type="text" id="searchInput" placeholder="Поиск записей, #тегов, авторов..." value="{{if .TagQuery}}{{.TagQuery}}{{else}}{{.SearchQuery}}{{end}}" onkeydown="if(event.key==='Enter') executeSearch()" autocomplete="off">
                 {{if or .SearchQuery .TagQuery}}
                 <button class="search-clear-btn" onclick="clearSearch()" title="Сбросить">✕</button>
                 {{end}}
@@ -370,7 +392,19 @@
                 </div>
                 {{end}}
 
-                <div class="telemetry-clock" id="telemetryClock">CYBER // NET</div>
+                <!-- Кнопка Уведомлений -->
+                <button class="header-icon-btn" onclick="toggleNotificationsPanel()" title="Уведомления">
+                    <span class="header-icon">🔔</span>
+                    <span class="header-badge" id="headerNotifBadge" style="{{if gt .UnreadNotifsCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadNotifsCount}}</span>
+                </button>
+
+                <!-- Кнопка Сообщений -->
+                <button class="header-icon-btn" onclick="navigateTo('messages')" title="Сообщения">
+                    <span class="header-icon">💬</span>
+                    <span class="header-badge" id="headerMessagesBadge" style="{{if gt .UnreadMessagesCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadMessagesCount}}</span>
+                </button>
+
+                <div class="telemetry-clock" id="telemetryClock">GoSocial</div>
 
                 {{if not .IsAuthenticated}}
                 <button class="btn btn-secondary btn-sm" onclick="openAuthModal('register')">Регистрация</button>
@@ -382,256 +416,202 @@
         <div class="content-viewport">
 
             <!-- ==========================================
-                 VIEW 1: ОБЩАЯ ЛЕНТА
+                 VIEW 1: ОБЩАЯ ЛЕНТА (ЧИСТЫЙ ЦЕНТРИРОВАННЫЙ ВИД)
             ========================================== -->
             <div id="feedView" class="view-panel active">
-                <div class="feed-grid-layout">
+                <div class="feed-centered-container">
 
-                    <!-- Центральная колонка ленты -->
-                    <div class="feed-center-column">
-
-                        <!-- Компактный интеллектуальный композитор постов -->
-                        <div class="cyber-composer-card" id="composerCard">
-                            <div class="composer-header-row">
-                                <img src="{{.CurrentUser.AvatarURL}}" alt="avatar" class="mini-avatar">
-                                <div class="composer-field-wrapper">
-                                    <textarea id="postContent" placeholder="О чем вы думаете? Напишите мысль или #хэштег..." rows="1" onfocus="expandComposer()" oninput="handleComposerInput()"></textarea>
-                                </div>
-                            </div>
-
-                            <!-- Раскрывающаяся панель медиа и тегов -->
-                            <div class="composer-expanded-drawer" id="composerDrawer" style="display: none;">
-                                <div class="composer-image-input-box" id="composerImageBox" style="display: none;">
-                                    <div class="image-input-row">
-                                        <span class="input-icon-alt">🔗</span>
-                                        <input type="url" id="postImageUrl" placeholder="Прямая ссылка на фото (https://...)" oninput="updateImagePreview()">
-                                        <button type="button" class="btn btn-secondary btn-xs" onclick="toggleImageBox()">Скрыть</button>
-                                    </div>
-                                    <div class="image-presets-row">
-                                        <span class="preset-label">Пресеты:</span>
-                                        <button type="button" class="preset-pill" onclick="setImagePreset('https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&auto=format&fit=crop&q=80')">💻 Код</button>
-                                        <button type="button" class="preset-pill" onclick="setImagePreset('https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=800&auto=format&fit=crop&q=80')">🗄️ Сервер</button>
-                                        <button type="button" class="preset-pill" onclick="setImagePreset('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80')">🚀 Космос</button>
-                                        <button type="button" class="preset-pill" onclick="setImagePreset('https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=800&auto=format&fit=crop&q=80')">🎨 UI/UX</button>
-                                    </div>
-                                    <div id="imagePreviewContainer" class="image-preview-wrapper" style="display: none;">
-                                        <img id="imagePreview" src="" alt="preview">
-                                        <button type="button" class="remove-preview-btn" onclick="clearImageInput()" title="Удалить фото">✕</button>
-                                    </div>
-                                </div>
-
-                                <div class="composer-toolbar">
-                                    <div class="composer-tools-left">
-                                        <button type="button" class="btn-tool-pill" onclick="toggleImageBox()">
-                                            <span class="tool-icon">📷</span>
-                                            <span>Фото</span>
-                                        </button>
-                                        <div class="quick-tags-strip">
-                                            <span class="quick-tag" onclick="insertTag('#golang')">#golang</span>
-                                            <span class="quick-tag" onclick="insertTag('#postgresql')">#postgresql</span>
-                                            <span class="quick-tag" onclick="insertTag('#дизайн')">#дизайн</span>
-                                            <span class="quick-tag" onclick="insertTag('#cyber')">#cyber</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="composer-tools-right">
-                                        <span class="char-count" id="charCount">0 / 500</span>
-                                        <button class="btn btn-primary btn-sm" onclick="createPost()">
-                                            <span>Опубликовать</span>
-                                            <span class="btn-arrow">→</span>
-                                        </button>
-                                    </div>
-                                </div>
+                    <!-- Форма создания нового поста с загрузкой с диска -->
+                    <div class="post-composer-card" id="composerCard">
+                        <div class="composer-header-row">
+                            <img src="{{.CurrentUser.AvatarURL}}" alt="avatar" class="mini-avatar">
+                            <div class="composer-field-wrapper">
+                                <textarea id="postContent" placeholder="Что у вас нового? Поделитесь мыслями или #хэштегом..." rows="2" onfocus="expandComposer()" oninput="handleComposerInput()"></textarea>
                             </div>
                         </div>
 
-                        <!-- Переключатель ленты: Все посты / Подписки -->
-                        <div class="feed-filter-bar">
-                            <div class="segmented-control">
-                                <button class="seg-btn {{if eq .FeedType "all"}}active{{end}}" onclick="switchFeedTab('all')">
-                                    <span>Все публикации</span>
-                                </button>
-                                <button class="seg-btn {{if eq .FeedType "following"}}active{{end}}" onclick="switchFeedTab('following')">
-                                    <span>Подписки</span>
-                                </button>
+                        <!-- Превью загруженного файла с диска -->
+                        <div id="composerUploadPreview" class="composer-upload-preview" style="display: none;">
+                            <div class="upload-preview-card">
+                                <img id="composerPreviewImg" src="" alt="Превью" class="upload-thumb">
+                                <div class="upload-file-info">
+                                    <span id="composerPreviewName" class="upload-file-name">file.jpg</span>
+                                    <span id="composerPreviewSize" class="upload-file-size">1.2 MB</span>
+                                </div>
+                                <button type="button" class="upload-remove-btn" onclick="clearComposerFile()" title="Удалить файл">✕</button>
                             </div>
-                            <span class="feed-count-pill" id="feedCountPill">{{len .Posts}} постов</span>
                         </div>
 
-                        <!-- Контейнер постов -->
-                        <div id="postsContainer" class="posts-list">
-                            {{if eq (len .Posts) 0}}
-                            <div class="cyber-empty-card">
-                                <span class="empty-glyph">⌁</span>
-                                <h3>Лента пуста</h3>
-                                <p>Опубликуйте первую запись или переключите фильтр поиска.</p>
+                        <!-- Раскрывающаяся панель медиа и тегов -->
+                        <div class="composer-expanded-drawer" id="composerDrawer" style="display: none;">
+                            <!-- Поле URL картинки (скрыто по умолчанию, доступно по клику) -->
+                            <div class="composer-image-input-box" id="composerImageBox" style="display: none;">
+                                <div class="image-input-row">
+                                    <span class="input-icon-alt">🔗</span>
+                                    <input type="url" id="postImageUrl" placeholder="Прямая ссылка на фото (https://...)" oninput="updateImagePreview()">
+                                    <button type="button" class="btn btn-secondary btn-xs" onclick="toggleImageBox()">Скрыть</button>
+                                </div>
                             </div>
-                            {{end}}
 
-                            {{range .Posts}}
-                            <article class="cyber-post-card" id="post-{{.ID}}">
-                                <div class="post-header">
-                                    <img src="{{.User.AvatarURL}}" alt="{{.User.DisplayName}}" class="mini-avatar cursor-pointer" onclick="openUserProfile({{.User.ID}})" title="Открыть профиль">
-                                    
-                                    <div class="post-user-info">
-                                        <div class="author-line">
-                                            <span class="post-author cursor-pointer" onclick="openUserProfile({{.User.ID}})">{{.User.DisplayName}}</span>
-                                            <span class="post-handle cursor-pointer" onclick="openUserProfile({{.User.ID}})">@{{.User.Username}}</span>
-                                        </div>
-                                        <div class="meta-line">
-                                            <time class="post-time">{{.CreatedAt.Format "15:04 • 02.01.2006"}}</time>
-                                            {{if .IsEdited}}
-                                            <span class="edited-badge">• (ред.)</span>
-                                            {{end}}
-                                        </div>
-                                    </div>
+                            <div class="composer-actions-bar">
+                                <div class="composer-left-tools">
+                                    <!-- Кнопка загрузки файла с диска -->
+                                    <button type="button" class="tool-btn btn-attach-disk" onclick="document.getElementById('composerFileInput').click()" title="Загрузить фото или файл с компьютера">
+                                        <span>📷 Фото / Файл</span>
+                                    </button>
+                                    <input type="file" id="composerFileInput" style="display: none;" accept="image/*,.pdf,.doc,.docx,.txt,.zip" onchange="handleComposerFileUpload(event)">
 
-                                    <div class="post-header-actions">
-                                        <button class="btn-icon-action btn-edit" title="Редактировать" onclick="openEditPost({{.ID}})">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                                        </button>
-                                        <button class="btn-icon-action btn-delete" title="Удалить" onclick="deletePost({{.ID}})">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <!-- Текст поста -->
-                                <div class="post-content" id="post-content-{{.ID}}">
-                                    {{.Content}}
-                                </div>
-
-                                <!-- Инлайн-редактирование -->
-                                <div class="post-edit-box" id="post-edit-box-{{.ID}}" style="display: none;">
-                                    <textarea id="edit-textarea-{{.ID}}" rows="3">{{.Content}}</textarea>
-                                    <div class="edit-actions">
-                                        <button class="btn btn-primary btn-xs" onclick="saveEditPost({{.ID}})">Сохранить</button>
-                                        <button class="btn btn-secondary btn-xs" onclick="cancelEditPost({{.ID}})">Отмена</button>
-                                    </div>
-                                </div>
-
-                                <!-- Медиа -->
-                                {{if .ImageURL}}
-                                <div class="post-media" id="post-media-{{.ID}}">
-                                    <img src="{{.ImageURL}}" alt="Медиа" loading="lazy">
-                                </div>
-                                {{end}}
-
-                                <!-- Футер поста с действиями -->
-                                <div class="post-footer">
-                                    <button class="post-action-btn like-btn {{if .IsLiked}}active{{end}}" onclick="toggleLike({{.ID}})">
-                                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="{{if .IsLiked}}currentColor{{else}}none{{end}}" stroke="currentColor" stroke-width="2">
-                                            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
-                                        </svg>
-                                        <span class="like-count" id="likes-{{.ID}}">{{.LikesCount}}</span>
+                                    <!-- Ссылка по URL -->
+                                    <button type="button" class="tool-btn" onclick="toggleImageBox()" title="Вставить ссылку на картинку">
+                                        <span>🔗 Ссылка</span>
                                     </button>
 
-                                    <button class="post-action-btn comment-btn" onclick="toggleComments({{.ID}})">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                                        </svg>
-                                        <span id="comment-count-{{.ID}}">{{.CommentsCount}}</span>
-                                    </button>
-
-                                    <button class="post-action-btn gift-btn" onclick="openSendGiftModal({{.User.ID}}, '{{.User.DisplayName}}', '{{.User.Username}}')" title="Отправить артефакт">
-                                        <span class="gift-icon">🎁</span>
-                                        <span>Подарок</span>
-                                    </button>
+                                    <!-- Быстрые хэштеги -->
+                                    <button type="button" class="chip-tag" onclick="insertTag('#мысли')">#мысли</button>
+                                    <button type="button" class="chip-tag" onclick="insertTag('#go')">#go</button>
+                                    <button type="button" class="chip-tag" onclick="insertTag('#дизайн')">#дизайн</button>
                                 </div>
 
-                                <!-- Блок комментариев -->
-                                <div class="comments-section" id="comments-section-{{.ID}}" style="display: block;">
-                                    <div class="comments-list" id="comments-list-{{.ID}}">
-                                        {{range .Comments}}
-                                        <div class="comment-item">
-                                            <img src="{{.User.AvatarURL}}" alt="avatar" class="comment-avatar">
-                                            <div class="comment-bubble">
-                                                <div class="comment-author-line">
-                                                    <span class="comment-author cursor-pointer" onclick="openUserProfile({{.User.ID}})">{{.User.DisplayName}}</span>
-                                                    <span class="comment-time">{{.CreatedAt.Format "15:04"}}</span>
-                                                </div>
-                                                <div class="comment-text">{{.Content}}</div>
-                                            </div>
-                                        </div>
-                                        {{end}}
-                                    </div>
-                                    <div class="comment-input-row">
-                                        <input type="text" id="comment-input-{{.ID}}" placeholder="Написать комментарий..." onkeydown="if(event.key==='Enter') addComment({{.ID}})">
-                                        <button class="btn btn-secondary btn-sm" onclick="addComment({{.ID}})">Отправить</button>
-                                    </div>
+                                <div class="composer-right-actions">
+                                    <span class="char-count" id="charCount">0 / 500</span>
+                                    <button class="btn btn-primary btn-sm" id="btnPublishPost" onclick="createPost()">
+                                        <span>Опубликовать</span>
+                                        <span class="btn-arrow">⚡</span>
+                                    </button>
                                 </div>
-                            </article>
-                            {{end}}
-                        </div>
-
-                        <!-- Индикатор постепенной загрузки ленты (Lazy Loading / Infinite Scroll) -->
-                        <div id="feedLoadingSentinel" class="feed-sentinel">
-                            <div id="feedSpinner" class="feed-spinner" style="display: none;">
-                                <span class="cyber-spinner-ring"></span>
-                                <span class="feed-spinner-text">Загрузка публикаций...</span>
-                            </div>
-                            <div id="feedEndOfList" class="feed-end-message" style="display: none;">
-                                <span>✦ Вы просмотрели все публикации ✦</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Правая телеметрия (Trends & Net Runners) -->
-                    <aside class="feed-side-column">
-                        <!-- Трендовые хэштеги -->
-                        <div class="cyber-panel">
-                            <div class="panel-header">
-                                <span class="panel-dot"></span>
-                                <h4>Трендовые сигналы</h4>
-                            </div>
-                            <div class="signal-tags-list">
-                                <div class="signal-tag-item" onclick="filterByTag('#golang')">
-                                    <span class="tag-title">#golang</span>
-                                    <span class="tag-meta">Go Backend</span>
-                                </div>
-                                <div class="signal-tag-item" onclick="filterByTag('#postgresql')">
-                                    <span class="tag-title">#postgresql</span>
-                                    <span class="tag-meta">Relational DB</span>
-                                </div>
-                                <div class="signal-tag-item" onclick="filterByTag('#дизайн')">
-                                    <span class="tag-title">#дизайн</span>
-                                    <span class="tag-meta">Minimal UI</span>
-                                </div>
-                                <div class="signal-tag-item" onclick="filterByTag('#architecture')">
-                                    <span class="tag-title">#architecture</span>
-                                    <span class="tag-meta">Clean Code</span>
-                                </div>
-                                <div class="signal-tag-item" onclick="filterByTag('#cyber')">
-                                    <span class="tag-title">#cyber</span>
-                                    <span class="tag-meta">Next Gen</span>
-                                </div>
-                            </div>
+                    <!-- Переключатель вкладок ленты -->
+                    <div class="feed-filter-bar">
+                        <div class="segmented-control">
+                            <button class="seg-btn {{if eq .FeedType "all"}}active{{end}}" onclick="switchFeedTab('all')">
+                                <span>Вся лента</span>
+                            </button>
+                            <button class="seg-btn {{if eq .FeedType "following"}}active{{end}}" onclick="switchFeedTab('following')">
+                                <span>Мои подписки</span>
+                            </button>
                         </div>
+                        <div class="feed-count-pill" id="feedCountPill">
+                            {{len .Posts}} постов
+                        </div>
+                    </div>
 
-                        <!-- Люди сообщества -->
-                        <div class="cyber-panel">
-                            <div class="panel-header">
-                                <span class="panel-dot"></span>
-                                <h4>Сетевые участники</h4>
-                            </div>
-                            <div id="usersList" class="network-runners-list">
-                                {{range .Users}}
-                                {{if ne .ID $.CurrentUser.ID}}
-                                <div class="runner-row" id="user-row-{{.ID}}">
-                                    <img src="{{.AvatarURL}}" alt="avatar" class="mini-avatar cursor-pointer" onclick="openUserProfile({{.ID}})">
-                                    <div class="runner-info cursor-pointer" onclick="openUserProfile({{.ID}})">
-                                        <span class="runner-name">{{.DisplayName}}</span>
-                                        <span class="runner-handle">@{{.Username}}</span>
+                    <!-- Контейнер постов ленты -->
+                    <div id="postsContainer" class="posts-list">
+                        {{if eq (len .Posts) 0}}
+                        <div class="cyber-empty-card">
+                            <span class="empty-glyph">📝</span>
+                            <h3>В ленте пока пусто</h3>
+                            <p>Будьте первым, кто опубликует запись в этой ленте!</p>
+                        </div>
+                        {{end}}
+
+                        {{range .Posts}}
+                        <article class="post-card" id="post-{{.ID}}">
+                            <div class="post-header">
+                                <div class="author-block">
+                                    <img src="{{.User.AvatarURL}}" alt="avatar" class="author-avatar cursor-pointer" onclick="openUserProfile({{.User.ID}})">
+                                    <div class="author-meta">
+                                        <div class="author-name-row">
+                                            <span class="author-name cursor-pointer" onclick="openUserProfile({{.User.ID}})">{{.User.DisplayName}}</span>
+                                            <span class="author-handle cursor-pointer" onclick="openUserProfile({{.User.ID}})">@{{.User.Username}}</span>
+                                        </div>
+                                        <div class="meta-line">
+                                            <time class="post-time">{{.CreatedAt.Format "15:04 • 02.01.2006"}}</time>
+                                            {{if .IsEdited}}<span class="edited-badge">• (ред.)</span>{{end}}
+                                        </div>
                                     </div>
-                                    <button class="btn btn-outline btn-xs {{if .IsFollowing}}btn-following{{end}}" onclick="toggleFollow({{.ID}})">
-                                        {{if .IsFollowing}}Читаю{{else}}Читать{{end}}
-                                    </button>
+                                </div>
+
+                                {{if eq .UserID $.CurrentUser.ID}}
+                                <div class="post-owner-actions">
+                                    <button class="icon-btn-subtle" onclick="openEditPost({{.ID}})" title="Редактировать">✏️</button>
+                                    <button class="icon-btn-subtle" onclick="deletePost({{.ID}})" title="Удалить">🗑️</button>
                                 </div>
                                 {{end}}
-                                {{end}}
                             </div>
+
+                            <div class="post-content" id="post-content-{{.ID}}">{{.Content}}</div>
+
+                            <!-- Редактор поста по месту -->
+                            <div class="post-edit-box" id="post-edit-box-{{.ID}}" style="display: none;">
+                                <textarea id="edit-textarea-{{.ID}}" rows="3">{{.Content}}</textarea>
+                                <div class="edit-actions-row">
+                                    <button class="btn btn-secondary btn-xs" onclick="cancelEditPost({{.ID}})">Отмена</button>
+                                    <button class="btn btn-primary btn-xs" onclick="saveEditPost({{.ID}})">Сохранить</button>
+                                </div>
+                            </div>
+
+                            {{if .ImageURL}}
+                            <div class="post-media" id="post-media-{{.ID}}">
+                                <img src="{{.ImageURL}}" alt="Медиа" loading="lazy">
+                            </div>
+                            {{end}}
+
+                            <div class="post-actions-bar">
+                                <button class="action-btn like-btn {{if .IsLiked}}active{{end}}" onclick="toggleLike({{.ID}})">
+                                    <svg class="heart-icon" width="18" height="18" viewBox="0 0 24 24" fill="{{if .IsLiked}}currentColor{{else}}none{{end}}" stroke="currentColor" stroke-width="2">
+                                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                    </svg>
+                                    <span id="likes-{{.ID}}">{{.LikesCount}}</span>
+                                </button>
+
+                                <button class="action-btn comment-btn" onclick="toggleComments({{.ID}})">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                                    </svg>
+                                    <span id="comment-count-{{.ID}}">{{.CommentsCount}}</span>
+                                </button>
+
+                                <button class="action-btn share-btn" onclick="sharePost({{.ID}})" title="Поделиться">
+                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="18" cy="5" r="3"></circle>
+                                        <circle cx="6" cy="12" r="3"></circle>
+                                        <circle cx="18" cy="19" r="3"></circle>
+                                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <!-- Секция комментариев -->
+                            <div class="comments-section" id="comments-section-{{.ID}}" style="display: none;">
+                                <div class="comments-list" id="comments-list-{{.ID}}">
+                                    {{range .Comments}}
+                                    <div class="comment-item">
+                                        <img src="{{.User.AvatarURL}}" alt="avatar" class="comment-avatar">
+                                        <div class="comment-bubble">
+                                            <div class="comment-author-line">
+                                                <span class="comment-author">{{.User.DisplayName}}</span>
+                                                <span class="comment-time">{{.CreatedAt.Format "15:04"}}</span>
+                                            </div>
+                                            <div class="comment-text">{{.Content}}</div>
+                                        </div>
+                                    </div>
+                                    {{end}}
+                                </div>
+
+                                <div class="comment-input-row">
+                                    <input type="text" id="comment-input-{{.ID}}" placeholder="Напишите комментарий..." onkeydown="if(event.key==='Enter')addComment({{.ID}})">
+                                    <button class="btn btn-secondary btn-sm" onclick="addComment({{.ID}})">Отправить</button>
+                                </div>
+                            </div>
+                        </article>
+                        {{end}}
+                    </div>
+
+                    <!-- Индикатор постепенной загрузки ленты (Lazy Loading) -->
+                    <div id="feedLoadingSentinel" class="feed-sentinel">
+                        <div id="feedSpinner" class="feed-spinner" style="display: none;">
+                            <span class="spinner-ring"></span>
+                            <span class="feed-spinner-text">Загрузка публикаций...</span>
                         </div>
-                    </aside>
+                        <div id="feedEndOfList" class="feed-end-message" style="display: none;">
+                            <span>✦ Вы просмотрели все публикации ✦</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -639,86 +619,72 @@
                  VIEW 2: ИНДИВИДУАЛЬНЫЙ ПРОФИЛЬ
             ========================================== -->
             <div id="profileView" class="view-panel" style="display: none;">
-                <div class="profile-dossier-layout">
-
+                <div class="profile-layout">
                     <!-- Верхний бар возврата -->
                     <div class="profile-action-bar">
                         <button class="btn btn-secondary btn-sm" onclick="navigateTo('feed')">
                             <span>← В общую ленту</span>
                         </button>
-                        <div class="profile-dossier-tag">DOSSIER // <span id="profileBreadcrumbUser">@user</span></div>
+                        <div class="profile-breadcrumb-tag"><span id="profileBreadcrumbUser">@user</span></div>
                     </div>
 
-                    <!-- ГЛАВНАЯ КАРТОЧКА ПРОФИЛЯ (ЕДИНСТВЕННАЯ С ЭФФЕКТОМ 3D TILT!) -->
-                    <div class="profile-biometric-card" id="profileHeroCard">
-                        <div class="dossier-cover-banner" id="heroBanner">
-                            <div class="banner-grid-overlay"></div>
-                        </div>
-
-                        <div class="dossier-body">
-                            <div class="dossier-avatar-row">
-                                <div class="dossier-avatar-frame">
-                                    <img src="" alt="avatar" class="dossier-avatar" id="heroAvatar">
-                                    <span class="dossier-status-dot" id="heroOnlineStatus"></span>
-                                </div>
-
-                                <div class="dossier-actions" id="heroActionsContainer">
-                                    <!-- Динамические кнопки (Редактировать / Подписаться / Подарить) -->
-                                </div>
+                    <!-- Карточка профиля -->
+                    <div class="profile-hero-card">
+                        <div class="profile-hero-banner" id="heroBanner"></div>
+                        <div class="profile-hero-body">
+                            <div class="hero-avatar-row">
+                                <img src="/static/avatars/default.svg" alt="avatar" id="heroAvatar" class="hero-avatar">
+                                <div class="hero-actions" id="heroActionsContainer"></div>
                             </div>
 
-                            <div class="dossier-info-block">
-                                <div class="dossier-title-line">
-                                    <h2 class="dossier-name" id="heroDisplayName">Загрузка...</h2>
-                                    <span class="dossier-rank-badge" id="heroRoleBadge">OPERATOR</span>
-                                </div>
-                                <span class="dossier-handle" id="heroUsername">@username</span>
-                                <p class="dossier-bio" id="heroBio">Биография пользователя</p>
+                            <div class="hero-info-section">
+                                <h2 class="hero-display-name" id="heroDisplayName">Имя Фамилия</h2>
+                                <span class="hero-username" id="heroUsername">@username</span>
+                                <p class="hero-bio" id="heroBio">Биография пользователя...</p>
                             </div>
 
-                            <!-- Сводные счетчики телеметрии -->
-                            <div class="dossier-metrics-strip">
-                                <div class="metric-box active" id="statCardPosts" onclick="switchProfileTab('posts')">
-                                    <span class="metric-value" id="heroStatPosts">0</span>
-                                    <span class="metric-label">Постов</span>
+                            <div class="profile-stats-row">
+                                <div class="stat-pill" id="statCardPosts" onclick="switchProfileTab('posts')">
+                                    <span class="stat-num" id="heroStatPosts">0</span>
+                                    <span class="stat-label">постов</span>
                                 </div>
-                                <div class="metric-box gift-metric" id="statCardGifts" onclick="switchProfileTab('gifts')">
-                                    <span class="metric-value" id="heroStatGifts">🎁 0</span>
-                                    <span class="metric-label">Артефактов</span>
+                                <div class="stat-pill" id="statCardGifts" onclick="switchProfileTab('gifts')">
+                                    <span class="stat-num" id="heroStatGifts">🎁 0</span>
+                                    <span class="stat-label">подарков</span>
                                 </div>
-                                <div class="metric-box" id="statCardFollowers" onclick="switchProfileTab('network')">
-                                    <span class="metric-value" id="heroStatFollowers">0</span>
-                                    <span class="metric-label">Подписчиков</span>
+                                <div class="stat-pill" id="statCardNetwork" onclick="switchProfileTab('network')">
+                                    <span class="stat-num" id="heroStatFollowers">0</span>
+                                    <span class="stat-label">подписчиков</span>
                                 </div>
-                                <div class="metric-box" id="statCardFollowing" onclick="switchProfileTab('network')">
-                                    <span class="metric-value" id="heroStatFollowing">0</span>
-                                    <span class="metric-label">Подписок</span>
+                                <div class="stat-pill" onclick="switchProfileTab('network')">
+                                    <span class="stat-num" id="heroStatFollowing">0</span>
+                                    <span class="stat-label">подписок</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Табы профиля -->
-                    <div class="dossier-tabs-nav">
-                        <button class="dossier-tab active" id="profTabBtnPosts" onclick="switchProfileTab('posts')">
-                            <span>Публикации</span>
-                            <span class="tab-chip" id="badgeProfPosts">0</span>
+                    <!-- Вкладки контента профиля -->
+                    <div class="profile-tabs-nav">
+                        <button class="tab-btn active" id="profTabBtnPosts" onclick="switchProfileTab('posts')">
+                            <span>Записи</span>
+                            <span class="tab-badge" id="badgeProfPosts">0</span>
                         </button>
-                        <button class="dossier-tab" id="profTabBtnGifts" onclick="switchProfileTab('gifts')">
-                            <span>Артефакты</span>
-                            <span class="tab-chip" id="badgeProfGifts">0</span>
+                        <button class="tab-btn" id="profTabBtnGifts" onclick="switchProfileTab('gifts')">
+                            <span>🎁 Подарки</span>
+                            <span class="tab-badge" id="badgeProfGifts">0</span>
                         </button>
-                        <button class="dossier-tab" id="profTabBtnNetwork" onclick="switchProfileTab('network')">
-                            <span>Связи & Подписки</span>
+                        <button class="tab-btn" id="profTabBtnNetwork" onclick="switchProfileTab('network')">
+                            <span>Сеть контактов</span>
                         </button>
                     </div>
 
-                    <!-- Содержимое табов профиля -->
-                    <div class="dossier-panes-body">
-                        <!-- Вкладка постов -->
-                        <div id="profTabContentPosts" class="dossier-pane active">
+                    <!-- Контент вкладок профиля -->
+                    <div class="profile-tab-panes">
+                        <!-- Вкладка записей -->
+                        <div id="profTabContentPosts" class="tab-pane active">
                             <!-- Блок постинга в свой профиль -->
-                            <div id="profComposerCard" class="cyber-composer-card" style="display: none; margin-bottom: 1.25rem;">
+                            <div id="profComposerCard" class="post-composer-card" style="display: none; margin-bottom: 1.25rem;">
                                 <div class="composer-header-row">
                                     <img src="{{.CurrentUser.AvatarURL}}" alt="user" class="mini-avatar">
                                     <div class="composer-field-wrapper">
@@ -738,15 +704,15 @@
                             </div>
                         </div>
 
-                        <!-- Вкладка подарков профиля -->
-                        <div id="profTabContentGifts" class="dossier-pane" style="display: none;">
+                        <!-- Вкладка подарков профиля с поддержкой скрытия -->
+                        <div id="profTabContentGifts" class="tab-pane" style="display: none;">
                             <div class="pane-action-header">
                                 <div>
-                                    <h3>Коллекция цифровых артефактов</h3>
-                                    <p>Уникальные реликвии, полученные пользователем</p>
+                                    <h3>Коллекция подарков «Цветные карандаши»</h3>
+                                    <p>Тёплые подарки и артефакты, полученные пользователем</p>
                                 </div>
                                 <button class="btn btn-primary btn-sm" id="btnHeroSendGift" onclick="openCurrentProfileGiftModal()">
-                                    <span>🎁 Вручить артефакт</span>
+                                    <span>🎁 Отправить подарок</span>
                                 </button>
                             </div>
                             <div class="artifacts-grid" id="profGiftsGrid">
@@ -755,19 +721,17 @@
                         </div>
 
                         <!-- Вкладка подписчиков и подписок -->
-                        <div id="profTabContentNetwork" class="dossier-pane" style="display: none;">
+                        <div id="profTabContentNetwork" class="tab-pane" style="display: none;">
                             <div class="network-split-grid">
-                                <div class="cyber-panel">
+                                <div class="sub-panel">
                                     <div class="panel-header">
-                                        <span class="panel-dot"></span>
                                         <h4>Подписчики (<span id="netFollowersCount">0</span>)</h4>
                                     </div>
                                     <div class="network-runners-list" id="profFollowersList"></div>
                                 </div>
 
-                                <div class="cyber-panel">
+                                <div class="sub-panel">
                                     <div class="panel-header">
-                                        <span class="panel-dot"></span>
                                         <h4>Подписки (<span id="netFollowingCount">0</span>)</h4>
                                     </div>
                                     <div class="network-runners-list" id="profFollowingList"></div>
@@ -779,52 +743,31 @@
             </div>
 
             <!-- ==========================================
-                 VIEW 3: ВИТРИНА АРТЕФАКТОВ (VAULT)
+                 VIEW 3: ВИТРИНА ПОДАРКОВ (VAULT)
             ========================================== -->
             <div id="showcaseView" class="view-panel" style="display: none;">
                 <div class="vault-container">
                     <div class="vault-hero-card">
-                        <span class="cyber-badge-sm">COLLECTION // VAULT</span>
-                        <h2>Хранилище цифровых артефактов</h2>
-                        <p>Уникальные цифровые реликвии, которыми обмениваются участники сети в знак уважения и признания высокого мастерства.</p>
-                        
-                        <div class="vault-specs-row">
-                            <div class="vault-spec-pill">
-                                <strong>6</strong> типов артефактов
-                            </div>
-                            <div class="vault-spec-pill">
-                                <strong>60 FPS</strong> плавная CSS-анимация
-                            </div>
-                            <div class="vault-spec-pill">
-                                <strong>🎭 Stealth</strong> режим анонимности
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="vault-feed-header">
-                        <h3>Все переданные артефакты сети</h3>
-                        <p>Нажмите на артефакт для детального осмотра</p>
+                        <div class="modal-header-badge">CYBERPUNK 2077 ARTIFACTS</div>
+                        <h2>Витрина кибер-подарков Найт-Сити</h2>
+                        <p>Коллекция высокотехнологичных артефактов: плазменные ядра, зашифрованные чипы Black ICE, боевые дроны и стимуляторы. Дарите артефакты друзьям и союзникам в сети!</p>
                     </div>
 
                     <div class="artifacts-grid" id="globalShowcaseGrid">
-                        <!-- Загрузка артефактов -->
+                        <!-- Сетка артефактов -->
                     </div>
                 </div>
             </div>
 
-            <!-- ПАНЕЛЬ ЛИЧНЫХ СООБЩЕНИЙ (DIRECT MESSAGES VIEW) -->
+            <!-- ==========================================
+                 VIEW 4: ЛИЧНЫЕ СООБЩЕНИЯ (DIRECT MESSAGES)
+            ========================================== -->
             <div id="messagesView" class="view-panel" style="display: none;">
-                <div class="chat-layout-wrapper">
-                    <!-- Левая колонка: список диалогов -->
+                <div class="chat-layout-card">
+                    <!-- Левая колонка: список собеседников -->
                     <div class="chat-sidebar">
-                        <div class="chat-sidebar-header">
-                            <div class="chat-sidebar-title">
-                                <span class="cyber-badge-sm">MESSENGER // DIRECT</span>
-                                <h3>Личные сообщения</h3>
-                            </div>
-                            <div class="chat-search-box">
-                                <input type="text" id="chatSearchInput" placeholder="Поиск по диалогам..." oninput="filterConversations()">
-                            </div>
+                        <div class="chat-search-bar">
+                            <input type="text" id="chatSearchInput" placeholder="Поиск по диалогам..." oninput="filterConversations()">
                         </div>
 
                         <div class="conversations-list" id="conversationsList">
@@ -838,8 +781,8 @@
                         <!-- Заглушка, когда диалог еще не выбран -->
                         <div class="chat-no-selection" id="chatNoSelection">
                             <div class="chat-placeholder-icon">💬</div>
-                            <h3>Выберите собеседника</h3>
-                            <p>Выберите диалог из списка слева или нажмите «💬 Сообщение» в профиле пользователя, чтобы начать переписку в реальном времени.</p>
+                            <h3>Выберите диалог</h3>
+                            <p>Выберите собеседника из списка слева или откройте профиль пользователя и нажмите «💬 Сообщение».</p>
                         </div>
 
                         <!-- Активная область беседы -->
@@ -866,7 +809,18 @@
                                 <!-- Сообщения переписки -->
                             </div>
 
+                            <!-- Превью прикрепленного файла в чате -->
+                            <div id="chatUploadPreview" class="chat-upload-preview" style="display: none;">
+                                <div class="chat-preview-card">
+                                    <span id="chatPreviewName">image.png</span>
+                                    <button type="button" onclick="clearChatFile()">✕</button>
+                                </div>
+                            </div>
+
                             <form class="chat-input-bar" id="chatInputForm" onsubmit="handleSendMessage(event)">
+                                <button type="button" class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()" title="Прикрепить файл или фото с диска">📎</button>
+                                <input type="file" id="chatFileInput" style="display:none;" accept="image/*,.pdf,.doc,.docx,.txt,.zip" onchange="handleChatFileUpload(event)">
+                                
                                 <input type="text" id="chatMessageInput" class="chat-text-input" placeholder="Напишите сообщение... (Enter для отправки)" autocomplete="off">
                                 <button type="submit" class="btn btn-primary btn-chat-send" id="chatSendBtn">
                                     <span>Отправить</span>
@@ -889,7 +843,7 @@
     window.CURRENT_SEARCH = "{{.SearchQuery}}";
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
-<script src="/static/js/app.js?v=7.0"></script>
+<script src="/static/js/app.js?v=cyber_2077_v10"></script>
 
 </body>
 </html>

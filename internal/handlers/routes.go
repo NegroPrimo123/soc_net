@@ -5,9 +5,12 @@ import (
 )
 
 func RegisterRoutes(mux *http.ServeMux, h *Handler) {
-	// Static assets
+	// Static assets & Local file uploads with no-cache headers
 	fs := http.FileServer(http.Dir("web/static"))
-	mux.Handle("GET /static/", http.StripPrefix("/static/", fs))
+	mux.Handle("GET /static/", http.StripPrefix("/static/", noCacheFileServer(fs)))
+
+	uploadsFs := http.FileServer(http.Dir("web/uploads"))
+	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", noCacheFileServer(uploadsFs)))
 
 	// Web pages
 	mux.HandleFunc("GET /", h.Index)
@@ -35,9 +38,10 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("PUT /api/users/profile", h.UpdateProfile)
 	mux.HandleFunc("POST /api/users/follow", h.ToggleFollow)
 
-	// Gifts API
+	// Gifts API («Цветные карандаши» + сокрытие подарков)
 	mux.HandleFunc("POST /api/gifts", h.SendGift)
 	mux.HandleFunc("GET /api/gifts/showcase", h.GetShowcaseGifts)
+	mux.HandleFunc("POST /api/gifts/{id}/toggle-hide", h.ToggleHideGift)
 
 	// Direct Messages (Личные сообщения) API
 	mux.HandleFunc("GET /api/messages/conversations", h.GetConversations)
@@ -45,6 +49,24 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/messages/{userId}", h.GetMessages)
 	mux.HandleFunc("POST /api/messages", h.SendMessage)
 
+	// Notifications API (Умная группировка)
+	mux.HandleFunc("GET /api/notifications", h.GetNotifications)
+	mux.HandleFunc("POST /api/notifications/read", h.MarkNotificationsAsRead)
+	mux.HandleFunc("POST /api/notifications/read-all", h.MarkAllNotificationsAsRead)
+	mux.HandleFunc("GET /api/notifications/unread", h.GetUnreadNotificationsCount)
+
+	// File Upload API (Загрузка фотографий и файлов с диска)
+	mux.HandleFunc("POST /api/upload", h.UploadFile)
+
 	// Real-time Server-Sent Events (SSE) Hub
 	mux.HandleFunc("GET /api/events", h.SSEHandler)
+}
+
+func noCacheFileServer(fs http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		fs.ServeHTTP(w, r)
+	})
 }

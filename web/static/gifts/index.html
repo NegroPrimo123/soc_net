@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ CYBERPUNK 2077 GIFTS — Коллекция неоновых подарков</title>
+    <style>
+        :root {
+            --bg: #090b10;
+            --card-bg: #111420;
+            --neon-cyan: #00f0ff;
+            --neon-pink: #ff0055;
+            --neon-yellow: #ffea00;
+            --neon-green: #00ff66;
+            --text-main: #e2e8f0;
+            --text-dim: #718096;
+            --border-glow: rgba(0, 240, 255, 0.4);
+        }
+        * { box-sizing: border-box; }
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            font-family: 'Courier New', Consolas, monospace, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            background-image: 
+                linear-gradient(rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            position: relative;
+        }
+        .cyber-badge {
+            display: inline-block;
+            background: rgba(255, 0, 85, 0.15);
+            color: var(--neon-pink);
+            border: 1px solid var(--neon-pink);
+            padding: 6px 16px;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            box-shadow: 0 0 15px rgba(255, 0, 85, 0.4);
+        }
+        h1 {
+            font-size: 2.8rem;
+            margin: 0 0 10px 0;
+            color: #ffffff;
+            text-shadow: 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-cyan);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+        .subtitle {
+            color: var(--neon-cyan);
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            max-width: 700px;
+            margin: 0 auto;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+        }
+        .card:hover {
+            transform: translateY(-8px);
+            border-color: var(--neon-cyan);
+            box-shadow: 0 16px 40px rgba(0, 240, 255, 0.25);
+        }
+        .card-media {
+            background: #05070c;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+        }
+        .card-media img {
+            width: 100%;
+            max-width: 290px;
+            height: auto;
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.9);
+        }
+        .card-body {
+            padding: 24px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-title {
+            font-size: 1.4rem;
+            margin: 0 0 10px 0;
+            color: #ffffff;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        .card-desc {
+            font-size: 0.92rem;
+            color: #a0aec0;
+            line-height: 1.6;
+            margin-bottom: 16px;
+            flex: 1;
+        }
+        .tech-info {
+            background: rgba(0, 0, 0, 0.4);
+            border-left: 3px solid var(--neon-pink);
+            padding: 10px 14px;
+            font-size: 0.82rem;
+            color: var(--neon-cyan);
+            margin-bottom: 20px;
+        }
+        .downloads {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            flex: 1;
+            text-align: center;
+            padding: 10px 12px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+        }
+        .btn-gif {
+            background: transparent;
+            color: var(--neon-cyan);
+            border: 1px solid var(--neon-cyan);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+        }
+        .btn-gif:hover {
+            background: var(--neon-cyan);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-cyan);
+        }
+        .btn-webp {
+            background: transparent;
+            color: var(--neon-pink);
+            border: 1px solid var(--neon-pink);
+            box-shadow: 0 0 10px rgba(255, 0, 85, 0.2);
+        }
+        .btn-webp:hover {
+            background: var(--neon-pink);
+            color: #fff;
+            box-shadow: 0 0 20px var(--neon-pink);
+        }
+        .btn-png {
+            background: transparent;
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.2);
+        }
+        .btn-png:hover {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-green);
+        }
+        footer {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            padding: 20px 0;
+            border-top: 1px solid rgba(0, 240, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="cyber-badge">// NIGHT CITY NEURAL GIFTS //</div>
+            <h1>⚡ CYBERPUNK COLLECTION</h1>
+            <p class="subtitle">&gt; Пакет подарков высшего военного грейда. Неоновый блум, плазменные ядра, титановые импланты и цифровой глитч.</p>
+        </header>
+
+        <div class="grid">
+            <!-- Gift 1 -->
+            <div class="card">
+                <div class="card-media">
+                    <img src="01_Кибер_Сердце.gif" alt="Кибер-Сердце">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-title">⚡ 01. Кибер-Сердце</h3>
+                    <p class="card-desc">Бионический термоядерный реактор из тёмного титана с пульсирующей плазменной камерой, искрящимися артериями и телеметрией ЭКГ.</p>
+                    <div class="tech-info">
+                        <strong>ANIMATION:</strong> Двойной такт сердечного пульса, электрические дуги, анимация кардиограммы и вспышка ядра.
+                    </div>
+                    <div class="downloads">
+                        <a href="01_Кибер_Сердце.gif" download class="btn btn-gif">GIF</a>
+                        <a href="01_Кибер_Сердце.webp" download class="btn btn-webp">WebP</a>
+                        <a href="01_Кибер_Сердце.png" download class="btn btn-png">PNG</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gift 2 -->
+            <div class="card">
+                <div class="card-media">
+                    <img src="02_Кибер_Череп.gif" alt="Кибер-Череп">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-title">💀 02. Кибер-Череп Oni</h3>
+                    <p class="card-desc">Угловатый титановый шлем-маска они с горящим неоновым визором, вращающимися голографическими прицельными кольцами и хроматическим глитчем.</p>
+                    <div class="tech-info">
+                        <strong>ANIMATION:</strong> Лазерное сканирование визора, вращение HUD-колец захвата цели и цифровые искажения.
+                    </div>
+                    <div class="downloads">
+                        <a href="02_Кибер_Череп.gif" download class="btn btn-gif">GIF</a>
+                        <a href="02_Кибер_Череп.webp" download class="btn btn-webp">WebP</a>
+                        <a href="02_Кибер_Череп.png" download class="btn btn-png">PNG</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gift 3 -->
+            <div class="card">
+                <div class="card-media">
+                    <img src="03_Чип_Black_ICE.gif" alt="Чип Black ICE">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-title">💾 03. Чип Black ICE</h3>
+                    <p class="card-desc">Военный зашифрованный нейрочип из обсидианового кремния с золотыми контактами, потоком кода матрицы и сканирующим световым лучом.</p>
+                    <div class="tech-info">
+                        <strong>ANIMATION:</strong> Вертикальное лазерное сканирование, водопад hex-кодов матрицы и пульсация логотипа процессора.
+                    </div>
+                    <div class="downloads">
+                        <a href="03_Чип_Black_ICE.gif" download class="btn btn-gif">GIF</a>
+                        <a href="03_Чип_Black_ICE.webp" download class="btn btn-webp">WebP</a>
+                        <a href="03_Чип_Black_ICE.png" download class="btn btn-png">PNG</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gift 4 -->
+            <div class="card">
+                <div class="card-media">
+                    <img src="04_Кибер_Дрон.gif" alt="Кибер-Дрон">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-title">🛸 04. Кибер-Дрон Сентри</h3>
+                    <p class="card-desc">Тактический разведывательный стелс-дрон с двухвекторными плазменными маневровыми двигателями и круговым лазерным радаром.</p>
+                    <div class="tech-info">
+                        <strong>ANIMATION:</strong> Физика парения в воздухе, факелы плазменных двигателей, сканирующий световой конус и радарные волны.
+                    </div>
+                    <div class="downloads">
+                        <a href="04_Кибер_Дрон.gif" download class="btn btn-gif">GIF</a>
+                        <a href="04_Кибер_Дрон.webp" download class="btn btn-webp">WebP</a>
+                        <a href="04_Кибер_Дрон.png" download class="btn btn-png">PNG</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gift 5 -->
+            <div class="card">
+                <div class="card-media">
+                    <img src="05_Неоновый_Стимулятор.gif" alt="Неоновый Стимулятор">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-title">⚡ 05. Нейро-Стимулятор</h3>
+                    <p class="card-desc">Боевой инжектор с биолюминесцентной неоновой плазмой, поднимающимися нанопузырьками, индикатором заряда и высоковольтными молниями.</p>
+                    <div class="tech-info">
+                        <strong>ANIMATION:</strong> Искрящиеся электрические разряды между иглами, кипение сыворотки и бегущие светодиодные индикаторы.
+                    </div>
+                    <div class="downloads">
+                        <a href="05_Неоновый_Стимулятор.gif" download class="btn btn-gif">GIF</a>
+                        <a href="05_Неоновый_Стимулятор.webp" download class="btn btn-webp">WebP</a>
+                        <a href="05_Неоновый_Стимулятор.png" download class="btn btn-png">PNG</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>&gt; STATUS: ALL ASSETS SYNCHRONIZED // NIGHT CITY NETWORKS // 512x512 RES</p>
+        </footer>
+    </div>
+</body>
+</html>

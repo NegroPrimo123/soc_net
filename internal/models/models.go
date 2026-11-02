@@ -24,6 +24,7 @@ type Gift struct {
 	GiftType    string    `json:"gift_type"`
 	Message     string    `json:"message"`
 	IsAnonymous bool      `json:"is_anonymous"`
+	IsHidden    bool      `json:"is_hidden"`
 	CreatedAt   time.Time `json:"created_at"`
 	Sender      *User     `json:"sender,omitempty"`
 }
@@ -130,4 +131,35 @@ type LoginRequest struct {
 type AuthResponse struct {
 	User  User   `json:"user"`
 	Token string `json:"token"`
+}
+
+// Notification represents a single notification record
+type Notification struct {
+	ID         int       `json:"id"`
+	UserID     int       `json:"user_id"`
+	ActorID    int       `json:"actor_id"`
+	ActionType string    `json:"action_type"` // 'like', 'comment', 'follow', 'message', 'gift'
+	TargetID   int       `json:"target_id"`
+	Content    string    `json:"content"`
+	IsRead     bool      `json:"is_read"`
+	CreatedAt  time.Time `json:"created_at"`
+	Actor      *User     `json:"actor,omitempty"`
+}
+
+// GroupedNotification aggregates multiple notifications to eliminate noise
+type GroupedNotification struct {
+	GroupKey   string    `json:"group_key"`
+	ActionType string    `json:"action_type"`
+	TargetID   int       `json:"target_id"`
+	Title      string    `json:"title"`
+	Snippet    string    `json:"snippet"`
+	TotalCount int       `json:"total_count"`
+	Actors     []User    `json:"actors"`
+	IsRead     bool      `json:"is_read"`
+	LatestAt   time.Time `json:"latest_at"`
+	IDs        []int     `json:"ids"`
+}
+
+type MarkNotificationsReadRequest struct {
+	IDs []int `json:"ids"`
 }

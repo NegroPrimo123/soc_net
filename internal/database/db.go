@@ -106,7 +106,7 @@ func migrate(db *sql.DB) error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 
-	-- Таблица интерактивных цифровых подарков
+	-- Таблица интерактивных цифровых подарков («Цветные карандаши»)
 	CREATE TABLE IF NOT EXISTS gifts (
 		id SERIAL PRIMARY KEY,
 		sender_id INT REFERENCES users(id) ON DELETE SET NULL,
@@ -114,10 +114,13 @@ func migrate(db *sql.DB) error {
 		gift_type VARCHAR(50) NOT NULL,
 		message TEXT DEFAULT '',
 		is_anonymous BOOLEAN DEFAULT FALSE,
+		is_hidden BOOLEAN DEFAULT FALSE,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 	);
+	ALTER TABLE gifts ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE;
 	CREATE INDEX IF NOT EXISTS idx_gifts_receiver_id ON gifts(receiver_id);
 	CREATE INDEX IF NOT EXISTS idx_gifts_sender_id ON gifts(sender_id);
+	CREATE INDEX IF NOT EXISTS idx_gifts_hidden ON gifts(receiver_id, is_hidden);
 	CREATE INDEX IF NOT EXISTS idx_follows_following_id ON follows(following_id);
 
 	-- Таблица личных сообщений между пользователями (Direct Messages)
@@ -134,7 +137,28 @@ func migrate(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, receiver_id, created_at ASC);
 	CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
 
+	-- Таблица системы уведомлений с поддержкой группировки событий
+	CREATE TABLE IF NOT EXISTS notifications (
+		id SERIAL PRIMARY KEY,
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		actor_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		action_type VARCHAR(50) NOT NULL,
+		target_id INT DEFAULT 0,
+		content TEXT DEFAULT '',
+		is_read BOOLEAN DEFAULT FALSE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read);
+
 	UPDATE users SET password_hash = '$2b$10$VjKN/Wou1MxkZTTqqCfI9u1fx13uG6DbuQkSY1L6Emy2ZwpazYsE6' WHERE password_hash = '' OR password_hash IS NULL;
+
+	-- Миграция подарков на новую коллекцию Cyberpunk 2077
+	UPDATE gifts SET gift_type = 'cyber_heart' WHERE gift_type IN ('festive_box', 'supernova');
+	UPDATE gifts SET gift_type = 'cyber_skull' WHERE gift_type IN ('bear_heart', 'quantum_crown');
+	UPDATE gifts SET gift_type = 'black_ice' WHERE gift_type IN ('cute_kitten', 'cyber_unicorn');
+	UPDATE gifts SET gift_type = 'cyber_drone' WHERE gift_type IN ('gentle_bouquet', 'quantum_diamond');
+	UPDATE gifts SET gift_type = 'neuro_stimulator' WHERE gift_type IN ('cozy_cup', 'moon_rocket', 'infinite_coffee');
 
 	-- Полнотекстовый поиск с морфологией и триграммами (FTS + pg_trgm)
 	CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -174,12 +198,11 @@ func seed(db *sql.DB) error {
 	if err == nil && giftsCount == 0 {
 		giftsSQL := `
 		INSERT INTO gifts (sender_id, receiver_id, gift_type, message, is_anonymous, created_at) VALUES
-		(2, 1, 'supernova', 'Спасибо за шикарную архитектуру и FTS! Космос 🚀', false, NOW() - INTERVAL '2 hours'),
-		(3, 1, 'quantum_crown', 'Корона архитектора за чистейший код платформы!', false, NOW() - INTERVAL '1 hour'),
-		(2, 1, 'cyber_unicorn', 'Секретный подарок от тайного фаната твоего кода 🦄✨', true, NOW() - INTERVAL '30 minutes'),
-		(1, 2, 'moon_rocket', 'За молниеносный деплой и PostgreSQL 18! 🚀', false, NOW() - INTERVAL '40 minutes'),
-		(1, 3, 'quantum_diamond', 'За непревзойденный дизайн и эстетику интерфейса! 💎', false, NOW() - INTERVAL '25 minutes'),
-		(2, 3, 'infinite_coffee', 'Бесконечный эликсир кофе для новых шедевров ☕', false, NOW() - INTERVAL '15 minutes')
+		(2, 1, 'festive_box', 'С праздником! Спасибо за шикарную платформу 🎁✨', false, NOW() - INTERVAL '2 hours'),
+		(3, 1, 'bear_heart', 'Тёплый мишка в знак благодарности за чистейший код платформы! 🧸❤️', false, NOW() - INTERVAL '1 hour'),
+		(2, 1, 'cute_kitten', 'Мурлыкающий пушистик для хорошего настроения 🐱🐾', true, NOW() - INTERVAL '30 minutes'),
+		(1, 2, 'cozy_cup', 'За молниеносный деплой и горячий кофе в команде! ☕', false, NOW() - INTERVAL '40 minutes'),
+		(1, 3, 'gentle_bouquet', 'За непревзойденный дизайн и эстетику интерфейса! 💐🌸', false, NOW() - INTERVAL '25 minutes')
 		ON CONFLICT DO NOTHING;
 		`
 		_, _ = db.Exec(giftsSQL)
@@ -190,15 +213,30 @@ func seed(db *sql.DB) error {
 	if err == nil && messagesCount == 0 {
 		messagesSQL := `
 		INSERT INTO messages (sender_id, receiver_id, content, is_read, created_at) VALUES
-		(2, 1, 'Привет, Олег! Посмотрел твои последние коммиты по FTS, поиск летает!', true, NOW() - INTERVAL '3 hours'),
-		(1, 2, 'Привет, Алексей! Спасибо, GIN-индексы творят чудеса. Как там деплой?', true, NOW() - INTERVAL '2 hours 50 minutes'),
+		(2, 1, 'Привет, Олег! Посмотрел твои последние коммиты, всё работает отлично!', true, NOW() - INTERVAL '3 hours'),
+		(1, 2, 'Привет, Алексей! Спасибо! База данных отвечает за считанные миллисекунды.', true, NOW() - INTERVAL '2 hours 50 minutes'),
 		(2, 1, 'Деплой готов, PostgreSQL запущен в контейнере, все миграции накатились без ошибок.', true, NOW() - INTERVAL '2 hours 40 minutes'),
-		(3, 1, 'Олег, привет! Я закончила новый дизайн для диалогов и личных сообщений. Выглядит отлично!', false, NOW() - INTERVAL '45 minutes'),
-		(1, 3, 'Привет, София! Здорово, сейчас протестирую отправку сообщений в реальном времени.', true, NOW() - INTERVAL '30 minutes'),
-		(3, 1, 'Супер, жду обратной связи! Не забудь проверить анимации диалогов 🚀', false, NOW() - INTERVAL '10 minutes')
+		(3, 1, 'Олег, привет! Я подготовила новую цветовую гамму и коллекцию подарков. Выглядит очень уютно!', false, NOW() - INTERVAL '45 minutes'),
+		(1, 3, 'Привет, София! Здорово, сейчас протестирую отправку подарков и уведомления.', true, NOW() - INTERVAL '30 minutes'),
+		(3, 1, 'Супер, жду обратной связи! Не забудь оценить новые анимации 🎨', false, NOW() - INTERVAL '10 minutes')
 		ON CONFLICT DO NOTHING;
 		`
 		_, _ = db.Exec(messagesSQL)
+	}
+
+	var notificationsCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM notifications").Scan(&notificationsCount)
+	if err == nil && notificationsCount == 0 {
+		notifSQL := `
+		INSERT INTO notifications (user_id, actor_id, action_type, target_id, content, is_read, created_at) VALUES
+		(1, 2, 'like', 1, '', false, NOW() - INTERVAL '25 minutes'),
+		(1, 3, 'like', 1, '', false, NOW() - INTERVAL '20 minutes'),
+		(1, 3, 'comment', 1, 'Поздравляю с релизом платформы! 🎉', false, NOW() - INTERVAL '18 minutes'),
+		(1, 2, 'follow', 1, '', false, NOW() - INTERVAL '15 minutes'),
+		(1, 3, 'gift', 1, 'bear_heart', false, NOW() - INTERVAL '10 minutes')
+		ON CONFLICT DO NOTHING;
+		`
+		_, _ = db.Exec(notifSQL)
 	}
 
 	if count > 0 {
@@ -209,14 +247,14 @@ func seed(db *sql.DB) error {
 	INSERT INTO users (username, display_name, password_hash, avatar_url, bio) VALUES
 	('oleg', 'Олег Смирнов', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', '/static/avatars/oleg.svg', 'Разработчик Go & Архитектор систем. Строю соцсеть с нуля! 🚀'),
 	('alex', 'Алексей Ковалев', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', '/static/avatars/alex.svg', 'DevOps & Cloud инженер. Люблю микросервисы и чистый код.'),
-	('sophia', 'София Романова', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', '/static/avatars/sophia.svg', 'UI/UX дизайнер и фронтенд-энтузиаст. Делаю интерфейсы удобными.')
+	('sophia', 'София Романова', '$2a$10$QO0YI/9wR.PfvP6u7.7H2.dZ/3X1n705bC11E2hQW615RzGk2iK6u', '/static/avatars/sophia.svg', 'UI/UX дизайнер и фронтенд-энтузиаст. Делаю интерфейсы уютными и удобными.')
 	ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 
 	INSERT INTO posts (user_id, content, created_at) VALUES
-	(1, 'Привет всем! Это первый пост в нашей новой социальной сети на Go + PostgreSQL! ⚡🚀', NOW() - INTERVAL '3 hours'),
-	(2, 'PostgreSQL 18 в связке с Go работает молниеносно. Задержка запросов менее 2 миллисекунд!', NOW() - INTERVAL '2 hours'),
-	(3, 'Интерфейс выглядит лаконично и адаптивно. Давайте проверим добавление постов и лайков!', NOW() - INTERVAL '1 hour');
+	(1, 'Привет всем! Это первый пост в нашей обновленной социальной сети на Go + PostgreSQL! ⚡🚀', NOW() - INTERVAL '3 hours'),
+	(2, 'PostgreSQL 15 в связке с Go работает молниеносно. Задержка запросов менее 2 миллисекунд!', NOW() - INTERVAL '2 hours'),
+	(3, 'Интерфейс выглядит очень тепло и современно. Давайте протестируем новую коллекцию подарков!', NOW() - INTERVAL '1 hour');
 
 	INSERT INTO follows (follower_id, following_id) VALUES
 	(1, 2),

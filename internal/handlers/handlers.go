@@ -20,11 +20,19 @@ type Handler struct {
 	postRepo    *repository.PostRepository
 	giftRepo    *repository.GiftRepository
 	messageRepo *repository.MessageRepository
+	notifRepo   *repository.NotificationRepository
 	hub         *events.Hub
 	tmpl        *template.Template
 }
 
-func NewHandler(userRepo *repository.UserRepository, postRepo *repository.PostRepository, giftRepo *repository.GiftRepository, messageRepo *repository.MessageRepository, hub *events.Hub) (*Handler, error) {
+func NewHandler(
+	userRepo *repository.UserRepository,
+	postRepo *repository.PostRepository,
+	giftRepo *repository.GiftRepository,
+	messageRepo *repository.MessageRepository,
+	notifRepo *repository.NotificationRepository,
+	hub *events.Hub,
+) (*Handler, error) {
 	tmplPath := filepath.Join("web", "templates", "index.html")
 	if _, err := os.Stat(tmplPath); os.IsNotExist(err) {
 		tmplPath = filepath.Join("..", "..", "web", "templates", "index.html")
@@ -39,6 +47,7 @@ func NewHandler(userRepo *repository.UserRepository, postRepo *repository.PostRe
 		postRepo:    postRepo,
 		giftRepo:    giftRepo,
 		messageRepo: messageRepo,
+		notifRepo:   notifRepo,
 		hub:         hub,
 		tmpl:        tmpl,
 	}, nil
@@ -129,7 +138,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Первичная загрузка страницы: отдаем первые 10 постов для мгновенного рендера
+	// Первичная загрузка страницы: первые 10 постов
 	posts, err := h.postRepo.GetFeed(currentUserID, feedType, searchQuery, tagQuery, 10, 0)
 	if err != nil {
 		http.Error(w, "Failed to load feed: "+err.Error(), http.StatusInternalServerError)
@@ -141,6 +150,11 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		unreadMessagesCount, _ = h.messageRepo.GetUnreadCount(currentUser.ID)
 	}
 
+	unreadNotifsCount := 0
+	if h.notifRepo != nil && currentUser != nil {
+		unreadNotifsCount, _ = h.notifRepo.GetUnreadCount(currentUser.ID)
+	}
+
 	data := map[string]interface{}{
 		"CurrentUser":         currentUser,
 		"IsAuthenticated":     isAuthenticated,
@@ -150,6 +164,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		"SearchQuery":         searchQuery,
 		"TagQuery":            tagQuery,
 		"UnreadMessagesCount": unreadMessagesCount,
+		"UnreadNotifsCount":   unreadNotifsCount,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
