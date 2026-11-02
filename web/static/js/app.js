@@ -1245,11 +1245,53 @@ function renderUserProfile(data) {
     document.getElementById('heroBio').textContent = user.bio || 'Информация о пользователе пока не заполнена.';
     document.getElementById('heroAvatar').src = user.avatar_url;
 
+    // Применение персональной неоновой ауры профиля
+    const heroCard = document.getElementById('profileHeroCard');
+    const userAccent = user.accent_color || '#00f0ff';
+    if (heroCard) {
+        heroCard.style.setProperty('--profile-accent', userAccent);
+        heroCard.classList.add('has-custom-accent');
+    }
+
+    // Применение голографической рамки аватарки
+    const avatarFrameBox = document.getElementById('heroAvatarFrameBox');
+    if (avatarFrameBox) {
+        avatarFrameBox.className = 'avatar-frame-box avatar-frame-' + (user.avatar_frame || 'default');
+    }
+
+    // Применение фоновой текстуры на обложку
     const banner = document.getElementById('heroBanner');
     if (user.banner_url) {
         banner.style.backgroundImage = `url('${user.banner_url}')`;
     } else {
-        banner.style.backgroundImage = 'linear-gradient(135deg, #2d3748 0%, #1a202c 50%, #4a5568 100%)';
+        banner.style.backgroundImage = 'linear-gradient(135deg, #111827 0%, #0b0f19 50%, #1e293b 100%)';
+    }
+    const bannerOverlay = document.getElementById('heroBannerOverlay');
+    if (bannerOverlay) {
+        bannerOverlay.className = 'hero-banner-overlay bg-effect-' + (user.profile_bg_effect || 'none');
+    }
+
+    // Кибер-Ранг / Титул в профиле
+    const rankBadge = document.getElementById('heroRankBadge');
+    if (rankBadge) {
+        if (user.custom_rank && user.custom_rank.trim()) {
+            rankBadge.textContent = user.custom_rank.trim();
+            rankBadge.style.display = 'inline-flex';
+        } else {
+            rankBadge.style.display = 'none';
+        }
+    }
+
+    // Статус и эмодзи-настроение
+    const statusContainer = document.getElementById('heroStatusContainer');
+    if (statusContainer) {
+        if (user.status_text && user.status_text.trim()) {
+            document.getElementById('heroStatusEmoji').textContent = user.status_emoji || '⚡';
+            document.getElementById('heroStatusText').textContent = user.status_text.trim();
+            statusContainer.style.display = 'block';
+        } else {
+            statusContainer.style.display = 'none';
+        }
     }
 
     document.getElementById('heroStatPosts').textContent = data.posts ? data.posts.length : 0;
@@ -1724,13 +1766,32 @@ function closeGiftDetailModal() {
     if (modal) modal.style.display = 'none';
 }
 
-// Edit Profile Modal
+// ==========================================
+// CYBERPUNK CUSTOM STUDIO & EDIT PROFILE MODAL
+// ==========================================
 function openEditProfileModal() {
     if (!currentProfileUserData) return;
-    document.getElementById('editDisplayName').value = currentProfileUserData.display_name;
-    document.getElementById('editBio').value = currentProfileUserData.bio || '';
-    document.getElementById('editAvatar').value = currentProfileUserData.avatar_url;
-    document.getElementById('editBanner').value = currentProfileUserData.banner_url || '';
+    const u = currentProfileUserData;
+
+    document.getElementById('editDisplayName').value = u.display_name || '';
+    document.getElementById('editBio').value = u.bio || '';
+    document.getElementById('editAvatar').value = u.avatar_url || '';
+    document.getElementById('editBanner').value = u.banner_url || '';
+    document.getElementById('editCustomRank').value = u.custom_rank || '';
+    document.getElementById('editStatusEmoji').value = u.status_emoji || '⚡';
+    document.getElementById('editStatusText').value = u.status_text || '';
+    document.getElementById('editAccentColor').value = u.accent_color || '#00f0ff';
+    document.getElementById('editAccentColorCustom').value = u.accent_color || '#00f0ff';
+    document.getElementById('editAvatarFrame').value = u.avatar_frame || 'default';
+    document.getElementById('editProfileBgEffect').value = u.profile_bg_effect || 'none';
+
+    // Подсветка активных чипов
+    setAvatarFrame(u.avatar_frame || 'default', false);
+    setProfileBgEffect(u.profile_bg_effect || 'none', false);
+    setAccentColorPreset(u.accent_color || '#00f0ff', false);
+
+    switchCustomTab('profile');
+    updateModalLivePreview();
 
     const modal = document.getElementById('editProfileModal');
     if (modal) modal.style.display = 'flex';
@@ -1741,12 +1802,190 @@ function closeEditProfileModal() {
     if (modal) modal.style.display = 'none';
 }
 
+function switchCustomTab(tabKey) {
+    const tabs = ['profile', 'status', 'avatar', 'theme'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`tabCustom${capitalize(t)}`);
+        const pane = document.getElementById(`customPane${capitalize(t)}`);
+        if (btn) btn.classList.toggle('active', t === tabKey);
+        if (pane) pane.style.display = (t === tabKey) ? 'block' : 'none';
+    });
+}
+
+function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function setRankPreset(rank) {
+    document.getElementById('editCustomRank').value = rank;
+    updateModalLivePreview();
+}
+
+function setStatusEmojiPreset(emoji) {
+    document.getElementById('editStatusEmoji').value = emoji;
+    updateModalLivePreview();
+}
+
+function setAvatarFrame(frameKey, updatePreview = true) {
+    document.getElementById('editAvatarFrame').value = frameKey;
+    ['default', 'pulse', 'hex', 'glitch', 'gold'].forEach(k => {
+        const chip = document.getElementById(`chipFrame-${k}`);
+        if (chip) chip.classList.toggle('active', k === frameKey);
+    });
+    if (updatePreview) updateModalLivePreview();
+}
+
+function setAccentColorPreset(colorHex, updatePreview = true) {
+    document.getElementById('editAccentColor').value = colorHex;
+    document.getElementById('editAccentColorCustom').value = colorHex;
+
+    document.querySelectorAll('.aura-color-swatch').forEach(sw => {
+        const isMatch = (sw.style.backgroundColor === colorHex || sw.getAttribute('data-color') === colorHex);
+        sw.classList.toggle('active', isMatch);
+    });
+
+    if (updatePreview) updateModalLivePreview();
+}
+
+function setProfileBgEffect(effectKey, updatePreview = true) {
+    document.getElementById('editProfileBgEffect').value = effectKey;
+    ['none', 'scanlines', 'hex_grid', 'cyber_dots'].forEach(k => {
+        const chip = document.getElementById(`chipEffect-${k}`);
+        if (chip) chip.classList.toggle('active', k === effectKey);
+    });
+    if (updatePreview) updateModalLivePreview();
+}
+
+function setBannerPreset(url) {
+    document.getElementById('editBanner').value = url;
+    document.querySelectorAll('.banner-preset-thumb').forEach(thumb => {
+        thumb.classList.toggle('active', thumb.style.backgroundImage.includes(url));
+    });
+    showToast('Обложка выбрана из киберпанк-коллекции! 🌆', 'success');
+    updateModalLivePreview();
+}
+
+function triggerAvatarUpload() {
+    const input = document.getElementById('modalAvatarFileInput');
+    if (input) input.click();
+}
+
+async function handleModalAvatarFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        showToast('Загрузка аватарки на сервер...', 'info');
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) throw new Error('Ошибка загрузки аватарки');
+        const data = await res.json();
+        document.getElementById('editAvatar').value = data.url;
+        updateModalLivePreview();
+        showToast('Аватарка успешно загружена с диска! 🖼️✨', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function triggerBannerUpload() {
+    const input = document.getElementById('modalBannerFileInput');
+    if (input) input.click();
+}
+
+async function handleModalBannerFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        showToast('Загрузка обложки на сервер...', 'info');
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) throw new Error('Ошибка загрузки обложки');
+        const data = await res.json();
+        document.getElementById('editBanner').value = data.url;
+        updateModalLivePreview();
+        showToast('Обложка успешно загружена с диска! 🌌✨', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function updateModalLivePreview() {
+    const name = document.getElementById('editDisplayName').value.trim() || 'Пользователь';
+    const rank = document.getElementById('editCustomRank').value.trim();
+    const avatarUrl = document.getElementById('editAvatar').value.trim() || '/static/avatars/default.svg';
+    const frame = document.getElementById('editAvatarFrame').value || 'default';
+    const color = document.getElementById('editAccentColor').value || '#00f0ff';
+    const emoji = document.getElementById('editStatusEmoji').value || '⚡';
+    const statusText = document.getElementById('editStatusText').value.trim();
+
+    document.getElementById('previewDisplayName').textContent = name;
+    if (currentProfileUserData) {
+        document.getElementById('previewUsername').textContent = `@${currentProfileUserData.username}`;
+    }
+
+    const previewAvatar = document.getElementById('previewAvatarImg');
+    if (previewAvatar) previewAvatar.src = avatarUrl;
+
+    const previewFrame = document.getElementById('previewAvatarFrameBox');
+    if (previewFrame) {
+        previewFrame.className = `avatar-frame-box avatar-frame-${frame}`;
+        previewFrame.style.setProperty('--profile-accent', color);
+    }
+
+    const rankBadge = document.getElementById('previewRankBadge');
+    if (rankBadge) {
+        if (rank) {
+            rankBadge.textContent = rank;
+            rankBadge.style.color = color;
+            rankBadge.style.borderColor = color;
+            rankBadge.style.display = 'inline-flex';
+        } else {
+            rankBadge.style.display = 'none';
+        }
+    }
+
+    const previewBox = document.getElementById('modalLivePreviewBox');
+    if (previewBox) {
+        previewBox.style.borderColor = color;
+        previewBox.style.boxShadow = `0 0 20px ${color}25`;
+    }
+
+    const statusWrap = document.getElementById('previewStatusCapsuleWrap');
+    if (statusWrap) {
+        if (statusText) {
+            document.getElementById('previewStatusEmoji').textContent = emoji;
+            document.getElementById('previewStatusText').textContent = statusText;
+            statusWrap.style.display = 'block';
+        } else {
+            statusWrap.style.display = 'none';
+        }
+    }
+}
+
 async function handleProfileUpdate(e) {
     e.preventDefault();
     const displayName = document.getElementById('editDisplayName').value.trim();
     const bio = document.getElementById('editBio').value.trim();
     const avatarUrl = document.getElementById('editAvatar').value.trim();
     const bannerUrl = document.getElementById('editBanner').value.trim();
+    const customRank = document.getElementById('editCustomRank').value.trim();
+    const statusEmoji = document.getElementById('editStatusEmoji').value.trim() || '⚡';
+    const statusText = document.getElementById('editStatusText').value.trim();
+    const accentColor = document.getElementById('editAccentColor').value.trim() || '#00f0ff';
+    const avatarFrame = document.getElementById('editAvatarFrame').value.trim() || 'default';
+    const profileBgEffect = document.getElementById('editProfileBgEffect').value.trim() || 'none';
 
     try {
         const res = await fetch('/api/users/profile', {
@@ -1756,14 +1995,20 @@ async function handleProfileUpdate(e) {
                 display_name: displayName,
                 bio: bio,
                 avatar_url: avatarUrl,
-                banner_url: bannerUrl
+                banner_url: bannerUrl,
+                custom_rank: customRank,
+                status_emoji: statusEmoji,
+                status_text: statusText,
+                accent_color: accentColor,
+                avatar_frame: avatarFrame,
+                profile_bg_effect: profileBgEffect
             })
         });
 
         if (!res.ok) throw new Error('Ошибка обновления профиля');
 
         closeEditProfileModal();
-        showToast('Профиль успешно обновлен! ✨', 'success');
+        showToast('Профиль и кибер-стиль успешно обновлены! 🎨⚡', 'success');
         if (currentProfileUserId) loadUserProfile(currentProfileUserId);
     } catch (err) {
         showToast(err.message, 'error');

@@ -3,18 +3,24 @@ package models
 import "time"
 
 type User struct {
-	ID          int       `json:"id"`
-	Username    string    `json:"username"`
-	DisplayName string    `json:"display_name"`
-	AvatarURL   string    `json:"avatar_url"`
-	BannerURL   string    `json:"banner_url,omitempty"`
-	Bio         string    `json:"bio"`
-	CreatedAt   time.Time `json:"created_at"`
-	PostsCount  int       `json:"posts_count"`
-	Followers   int       `json:"followers_count"`
-	Following   int       `json:"following_count"`
-	GiftsCount  int       `json:"gifts_count"`
-	IsFollowing bool      `json:"is_following,omitempty"`
+	ID              int       `json:"id"`
+	Username        string    `json:"username"`
+	DisplayName     string    `json:"display_name"`
+	AvatarURL       string    `json:"avatar_url"`
+	BannerURL       string    `json:"banner_url,omitempty"`
+	Bio             string    `json:"bio"`
+	StatusText      string    `json:"status_text"`
+	StatusEmoji     string    `json:"status_emoji"`
+	CustomRank      string    `json:"custom_rank"`
+	AccentColor     string    `json:"accent_color"`
+	AvatarFrame     string    `json:"avatar_frame"`
+	ProfileBgEffect string    `json:"profile_bg_effect"`
+	CreatedAt       time.Time `json:"created_at"`
+	PostsCount      int       `json:"posts_count"`
+	Followers       int       `json:"followers_count"`
+	Following       int       `json:"following_count"`
+	GiftsCount      int       `json:"gifts_count"`
+	IsFollowing     bool      `json:"is_following,omitempty"`
 }
 
 type Gift struct {
@@ -60,10 +66,16 @@ type SendMessageRequest struct {
 }
 
 type UpdateProfileRequest struct {
-	DisplayName string `json:"display_name"`
-	Bio         string `json:"bio"`
-	AvatarURL   string `json:"avatar_url"`
-	BannerURL   string `json:"banner_url"`
+	DisplayName     string `json:"display_name"`
+	Bio             string `json:"bio"`
+	AvatarURL       string `json:"avatar_url"`
+	BannerURL       string `json:"banner_url"`
+	StatusText      string `json:"status_text"`
+	StatusEmoji     string `json:"status_emoji"`
+	CustomRank      string `json:"custom_rank"`
+	AccentColor     string `json:"accent_color"`
+	AvatarFrame     string `json:"avatar_frame"`
+	ProfileBgEffect string `json:"profile_bg_effect"`
 }
 
 type Comment struct {

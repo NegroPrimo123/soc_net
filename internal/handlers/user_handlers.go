@@ -179,7 +179,17 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		req.AvatarURL = currentUser.AvatarURL
 	}
 
-	updated, err := h.userRepo.UpdateProfile(currentUser.ID, req.DisplayName, req.Bio, req.AvatarURL, req.BannerURL)
+	if strings.TrimSpace(req.AccentColor) == "" {
+		req.AccentColor = "#00f0ff"
+	}
+	if strings.TrimSpace(req.AvatarFrame) == "" {
+		req.AvatarFrame = "default"
+	}
+	if strings.TrimSpace(req.ProfileBgEffect) == "" {
+		req.ProfileBgEffect = "none"
+	}
+
+	updated, err := h.userRepo.UpdateProfile(currentUser.ID, req)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

@@ -23,7 +23,10 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 	query := `
 	SELECT 
-		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
+		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
+		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
@@ -43,7 +46,10 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 	for rows.Next() {
 		var u models.User
 		if err := rows.Scan(
-			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
+			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
+			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
@@ -56,7 +62,10 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error) {
 	query := `
 	SELECT 
-		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
+		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
+		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
@@ -67,7 +76,10 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 	`
 	var u models.User
 	err := r.db.QueryRow(query, currentUserID, id).Scan(
-		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
+		&u.StatusText, &u.StatusEmoji, &u.CustomRank,
+		&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+		&u.CreatedAt,
 		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 	)
 	if err == sql.ErrNoRows {
@@ -79,13 +91,30 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 	return &u, nil
 }
 
-func (r *UserRepository) UpdateProfile(userID int, displayName, bio, avatarURL, bannerURL string) (*models.User, error) {
+func (r *UserRepository) UpdateProfile(userID int, req models.UpdateProfileRequest) (*models.User, error) {
+	if req.AccentColor == "" {
+		req.AccentColor = "#00f0ff"
+	}
+	if req.AvatarFrame == "" {
+		req.AvatarFrame = "default"
+	}
+	if req.ProfileBgEffect == "" {
+		req.ProfileBgEffect = "none"
+	}
+
 	query := `
 	UPDATE users
-	SET display_name = $1, bio = $2, avatar_url = $3, banner_url = $4
-	WHERE id = $5
+	SET display_name = $1, bio = $2, avatar_url = $3, banner_url = $4,
+	    status_text = $5, status_emoji = $6, custom_rank = $7,
+	    accent_color = $8, avatar_frame = $9, profile_bg_effect = $10
+	WHERE id = $11
 	`
-	_, err := r.db.Exec(query, displayName, bio, avatarURL, bannerURL, userID)
+	_, err := r.db.Exec(query,
+		req.DisplayName, req.Bio, req.AvatarURL, req.BannerURL,
+		req.StatusText, req.StatusEmoji, req.CustomRank,
+		req.AccentColor, req.AvatarFrame, req.ProfileBgEffect,
+		userID,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("update profile: %w", err)
 	}
@@ -95,7 +124,10 @@ func (r *UserRepository) UpdateProfile(userID int, displayName, bio, avatarURL, 
 func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User, error) {
 	query := `
 	SELECT 
-		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
+		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
+		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
@@ -116,7 +148,10 @@ func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User,
 	for rows.Next() {
 		var u models.User
 		if err := rows.Scan(
-			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
+			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
+			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
 			return nil, err
@@ -129,7 +164,10 @@ func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User,
 func (r *UserRepository) GetFollowing(userID, currentUserID int) ([]models.User, error) {
 	query := `
 	SELECT 
-		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
+		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
+		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
@@ -150,7 +188,10 @@ func (r *UserRepository) GetFollowing(userID, currentUserID int) ([]models.User,
 	for rows.Next() {
 		var u models.User
 		if err := rows.Scan(
-			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
+			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
+			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
 			return nil, err
@@ -264,7 +305,10 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 
 	query := `
 	SELECT 
-		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
+		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
+		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
@@ -275,7 +319,10 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 	`
 	var u models.User
 	err := r.db.QueryRow(query, token).Scan(
-		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.CreatedAt,
+		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
+		&u.StatusText, &u.StatusEmoji, &u.CustomRank,
+		&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+		&u.CreatedAt,
 		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount,
 	)
 	if err == sql.ErrNoRows {

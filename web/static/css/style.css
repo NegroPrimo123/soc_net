@@ -2384,3 +2384,369 @@ input:checked + .toggle-slider:before {
     max-width: 650px;
     line-height: 1.6;
 }
+
+/* ==========================================
+   ADVANCED PROFILE CUSTOMIZATION SUITE
+========================================== */
+
+/* Dynamic Custom Accent on Profile Hero */
+.profile-hero-card {
+    --profile-accent: #00f0ff;
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.profile-hero-card.has-custom-accent {
+    border-color: var(--profile-accent);
+    box-shadow: 0 0 30px rgba(0, 240, 255, 0.15);
+}
+
+.profile-hero-banner {
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-banner-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Background Effects */
+.bg-effect-none { display: none; }
+
+.bg-effect-scanlines {
+    display: block;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.35) 0px,
+        rgba(0, 0, 0, 0.35) 2px,
+        transparent 2px,
+        transparent 4px
+    );
+}
+
+.bg-effect-hex_grid {
+    display: block;
+    background-image: 
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 20px 20px, 20px 20px, 20px 20px;
+}
+
+.bg-effect-cyber_dots {
+    display: block;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.22) 1.5px, transparent 1.5px);
+    background-size: 16px 16px;
+}
+
+/* Avatar Frame Wrapper */
+.avatar-frame-box {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    padding: 3px;
+    transition: all 0.3s ease;
+}
+
+/* 1. Default Frame */
+.avatar-frame-box.avatar-frame-default {
+    background: transparent;
+}
+.avatar-frame-box.avatar-frame-default .hero-avatar {
+    border: 3px solid var(--profile-accent, #00f0ff);
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+}
+
+/* 2. Pulse Neon Frame */
+.avatar-frame-box.avatar-frame-pulse {
+    background: transparent;
+    animation: pulseAura 2.2s infinite ease-in-out;
+}
+.avatar-frame-box.avatar-frame-pulse .hero-avatar {
+    border: 3px solid var(--profile-accent, #00f0ff);
+}
+@keyframes pulseAura {
+    0%, 100% {
+        box-shadow: 0 0 10px var(--profile-accent, #00f0ff);
+    }
+    50% {
+        box-shadow: 0 0 28px var(--profile-accent, #00f0ff), 0 0 50px rgba(0, 240, 255, 0.35);
+    }
+}
+
+/* 3. Hexagon Cyber Frame */
+.avatar-frame-box.avatar-frame-hex {
+    border-radius: 18px;
+    padding: 4px;
+    background: linear-gradient(135deg, var(--profile-accent, #00f0ff), #ff0055);
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+}
+.avatar-frame-box.avatar-frame-hex .hero-avatar {
+    border-radius: 14px;
+    border: 2px solid #080b11;
+}
+
+/* 4. Glitch Dual-Holo Frame */
+.avatar-frame-box.avatar-frame-glitch {
+    background: transparent;
+    position: relative;
+}
+.avatar-frame-box.avatar-frame-glitch::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #00f0ff, #ff0055, #00ff66, #00f0ff);
+    background-size: 300% 300%;
+    animation: glitchGradient 4s linear infinite;
+    z-index: 0;
+}
+.avatar-frame-box.avatar-frame-glitch .hero-avatar {
+    position: relative;
+    z-index: 1;
+    border: 3px solid #080b11;
+}
+@keyframes glitchGradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* 5. Gold Relic Frame */
+.avatar-frame-box.avatar-frame-gold {
+    background: transparent;
+}
+.avatar-frame-box.avatar-frame-gold .hero-avatar {
+    border: 3px solid #fbbf24;
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.6), inset 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+/* Custom Cyber-Rank Badge */
+.hero-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    background: rgba(0, 240, 255, 0.12);
+    color: var(--profile-accent, #00f0ff);
+    border: 1px solid var(--profile-accent, #00f0ff);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+    margin-left: 0.6rem;
+    vertical-align: middle;
+}
+
+/* Status Mood Capsule */
+.hero-status-capsule {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.55rem;
+    padding: 5px 14px;
+    background: rgba(18, 22, 34, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-pill);
+    font-size: 0.85rem;
+    color: var(--text-pure);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.hero-status-capsule .status-emoji {
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.hero-status-capsule .status-text {
+    font-weight: 500;
+    color: #e2e8f0;
+}
+
+/* Edit Modal Customization Styling */
+.custom-tabs-nav {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 0.5rem;
+    overflow-x: auto;
+}
+
+.custom-tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.custom-tab-btn:hover {
+    color: var(--text-pure);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.custom-tab-btn.active {
+    background: rgba(0, 240, 255, 0.12);
+    color: var(--neon-cyan, #00f0ff);
+    border-color: var(--neon-cyan, #00f0ff);
+}
+
+/* Live Customization Preview HUD */
+.custom-live-preview-box {
+    background: rgba(10, 14, 22, 0.85);
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.preview-avatar-wrap {
+    flex-shrink: 0;
+}
+
+.preview-avatar-wrap .hero-avatar {
+    width: 68px;
+    height: 68px;
+}
+
+.preview-info-wrap {
+    flex: 1;
+    min-width: 0;
+}
+
+.preview-display-name {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.preview-subtext {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* Color Aura Picker Grid */
+.aura-color-grid {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+.aura-color-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 6px rgba(0,0,0,0.5);
+}
+
+.aura-color-swatch:hover, .aura-color-swatch.active {
+    transform: scale(1.15);
+    border-color: #fff;
+    box-shadow: 0 0 14px currentColor;
+}
+
+.custom-color-input {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    background: transparent;
+}
+
+/* Preset Chips */
+.chips-selector-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.choice-chip {
+    padding: 5px 11px;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.choice-chip:hover {
+    color: var(--text-pure);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.choice-chip.active {
+    background: rgba(0, 240, 255, 0.15);
+    color: var(--neon-cyan, #00f0ff);
+    border-color: var(--neon-cyan, #00f0ff);
+}
+
+/* Banner presets grid */
+.banner-presets-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.banner-preset-thumb {
+    height: 48px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-subtle);
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.banner-preset-thumb:hover {
+    border-color: var(--neon-cyan, #00f0ff);
+    transform: scale(1.03);
+}
+
+.banner-preset-thumb.active {
+    border-color: var(--neon-cyan, #00f0ff);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+}
+
+.input-with-upload-btn {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.input-with-upload-btn input {
+    flex: 1;
+}

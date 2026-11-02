@@ -299,34 +299,172 @@
     </div>
 </div>
 
-<!-- Модальное окно редактирования профиля -->
+<!-- Модальное окно расширенной кастомизации профиля -->
 <div id="editProfileModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeEditProfileModal()">
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 650px; max-height: 90vh; overflow-y: auto;">
         <button class="modal-close-btn" onclick="closeEditProfileModal()" title="Закрыть">✕</button>
-        <div class="modal-header">
-            <div class="modal-header-badge">НАСТРОЙКИ ПРОФИЛЯ</div>
-            <h3>Редактирование профиля</h3>
+        <div class="modal-header" style="margin-bottom: 1rem;">
+            <div class="modal-header-badge">CYBERPUNK CUSTOM STUDIO</div>
+            <h3>Кастомизация профиля</h3>
+            <p class="modal-subtext">Настройте свой индивидуальный стиль, неоновую ауру, голо-рамку и статус</p>
         </div>
+
+        <!-- Живое HUD-превью изменений -->
+        <div class="custom-live-preview-box" id="modalLivePreviewBox">
+            <div class="preview-avatar-wrap">
+                <div class="avatar-frame-box avatar-frame-default" id="previewAvatarFrameBox">
+                    <img src="/static/avatars/default.svg" id="previewAvatarImg" class="hero-avatar" alt="Preview">
+                </div>
+            </div>
+            <div class="preview-info-wrap">
+                <div class="preview-display-name">
+                    <span id="previewDisplayName">Имя Пользователя</span>
+                    <span class="hero-rank-badge" id="previewRankBadge" style="display: none;">Титул</span>
+                </div>
+                <div class="preview-subtext" id="previewUsername">@username</div>
+                <div id="previewStatusCapsuleWrap" style="display: none; margin-top: 4px;">
+                    <div class="hero-status-capsule" style="padding: 2px 10px; font-size: 0.78rem;">
+                        <span class="status-emoji" id="previewStatusEmoji">⚡</span>
+                        <span class="status-text" id="previewStatusText">В сети</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Навигация по вкладкам кастомизации -->
+        <div class="custom-tabs-nav">
+            <button type="button" class="custom-tab-btn active" id="tabCustomProfile" onclick="switchCustomTab('profile')">👤 Профиль</button>
+            <button type="button" class="custom-tab-btn" id="tabCustomStatus" onclick="switchCustomTab('status')">⚡ Статус и Вайб</button>
+            <button type="button" class="custom-tab-btn" id="tabCustomAvatar" onclick="switchCustomTab('avatar')">🖼️ Аватар и Рамка</button>
+            <button type="button" class="custom-tab-btn" id="tabCustomTheme" onclick="switchCustomTab('theme')">🎨 Обложка и Аура</button>
+        </div>
+
         <form id="editProfileForm" onsubmit="handleProfileUpdate(event)">
-            <div class="form-group">
-                <label for="editDisplayName">Отображаемое имя*</label>
-                <input type="text" id="editDisplayName" required>
+            <!-- ВКЛАДКА 1: Профиль и Кибер-Ранг -->
+            <div id="customPaneProfile" class="custom-pane">
+                <div class="form-group">
+                    <label for="editDisplayName">Отображаемое имя*</label>
+                    <input type="text" id="editDisplayName" required oninput="updateModalLivePreview()">
+                </div>
+
+                <div class="form-group">
+                    <label for="editCustomRank">Кибер-Ранг / Титул в Найт-Сити</label>
+                    <input type="text" id="editCustomRank" placeholder="Например: Элитный Нетраннер" maxlength="40" oninput="updateModalLivePreview()">
+                    <div class="chips-selector-row">
+                        <span class="choice-chip" onclick="setRankPreset('⚡ Архитектор Кода')">⚡ Архитектор Кода</span>
+                        <span class="choice-chip" onclick="setRankPreset('🗡️ Кибер-Самурай')">🗡️ Кибер-Самурай</span>
+                        <span class="choice-chip" onclick="setRankPreset('🤖 Элитный Нетраннер')">🤖 Элитный Нетраннер</span>
+                        <span class="choice-chip" onclick="setRankPreset('💾 Синтвейв Кодер')">💾 Синтвейв Кодер</span>
+                        <span class="choice-chip" onclick="setRankPreset('🔥 Багхантер')">🔥 Багхантер</span>
+                        <span class="choice-chip" onclick="setRankPreset('🛡️ Arasaka Solo')">🛡️ Arasaka Solo</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="editBio">О себе (био)</label>
+                    <textarea id="editBio" rows="3" placeholder="Расскажите о себе, ваших интересах, проектах и технологическом стеке..."></textarea>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="editBio">О себе (био)</label>
-                <textarea id="editBio" rows="3" placeholder="Расскажите о себе, ваших интересах и проектах..."></textarea>
+
+            <!-- ВКЛАДКА 2: Статус и Вайб -->
+            <div id="customPaneStatus" class="custom-pane" style="display: none;">
+                <div class="form-group">
+                    <label>Эмодзи настроения / статуса</label>
+                    <div class="chips-selector-row" style="font-size: 1.25rem;">
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('⚡')">⚡ В сети</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('☕')">☕ Кодинг</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('🎮')">🎮 AFK</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('🛡️')">🛡️ Скрытный</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('🔥')">🔥 На кураже</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('🚀')">🚀 Деплой</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('🎧')">🎧 Синтвейв</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('💡')">💡 Есть идея</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('💎')">💎 VIP</span>
+                    </div>
+                    <input type="hidden" id="editStatusEmoji" value="⚡">
+                </div>
+
+                <div class="form-group">
+                    <label for="editStatusText">Текст статуса (отображается в HUD профиля)</label>
+                    <input type="text" id="editStatusText" placeholder="Например: Рефакторю ядро на Go в Найт-Сити..." maxlength="60" oninput="updateModalLivePreview()">
+                </div>
             </div>
-            <div class="form-group">
-                <label for="editAvatar">URL аватарки</label>
-                <input type="url" id="editAvatar" placeholder="https://...">
+
+            <!-- ВКЛАДКА 3: Аватарка и Голо-Рамка -->
+            <div id="customPaneAvatar" class="custom-pane" style="display: none;">
+                <div class="form-group">
+                    <label for="editAvatar">URL аватарки или прямая загрузка с диска</label>
+                    <div class="input-with-upload-btn">
+                        <input type="url" id="editAvatar" placeholder="https://..." oninput="updateModalLivePreview()">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="triggerAvatarUpload()">📁 Загрузить файл</button>
+                    </div>
+                    <input type="file" id="modalAvatarFileInput" accept="image/*" style="display: none;" onchange="handleModalAvatarFile(event)">
+                </div>
+
+                <div class="form-group">
+                    <label>Стиль голографической рамки аватарки</label>
+                    <div class="chips-selector-row">
+                        <span class="choice-chip active" id="chipFrame-default" onclick="setAvatarFrame('default')">⭕ Classic Glow</span>
+                        <span class="choice-chip" id="chipFrame-pulse" onclick="setAvatarFrame('pulse')">💫 Pulse Energy</span>
+                        <span class="choice-chip" id="chipFrame-hex" onclick="setAvatarFrame('hex')">🛡️ Hex Cyber-Shield</span>
+                        <span class="choice-chip" id="chipFrame-glitch" onclick="setAvatarFrame('glitch')">👾 Dual Glitch Holo</span>
+                        <span class="choice-chip" id="chipFrame-gold" onclick="setAvatarFrame('gold')">👑 Relic Gold Aura</span>
+                    </div>
+                    <input type="hidden" id="editAvatarFrame" value="default">
+                </div>
             </div>
-            <div class="form-group">
-                <label for="editBanner">URL обложки профиля (баннер)</label>
-                <input type="url" id="editBanner" placeholder="https://images.unsplash.com/...">
+
+            <!-- ВКЛАДКА 4: Обложка, Неоновая Аура и Эффекты -->
+            <div id="customPaneTheme" class="custom-pane" style="display: none;">
+                <div class="form-group">
+                    <label for="editBanner">Обложка профиля (URL или файл с диска)</label>
+                    <div class="input-with-upload-btn">
+                        <input type="url" id="editBanner" placeholder="https://..." oninput="updateModalLivePreview()">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="triggerBannerUpload()">🖼️ Загрузить с диска</button>
+                    </div>
+                    <input type="file" id="modalBannerFileInput" accept="image/*" style="display: none;" onchange="handleModalBannerFile(event)">
+
+                    <label style="margin-top: 0.6rem; display: block; font-size: 0.82rem; color: var(--text-dim);">Готовые киберпанк-пресеты обложки в 1 клик:</label>
+                    <div class="banner-presets-grid">
+                        <div class="banner-preset-thumb" style="background-image: url('https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80');" title="Киберпанк Найт-Сити" onclick="setBannerPreset('https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80')"></div>
+                        <div class="banner-preset-thumb" style="background-image: url('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&q=80');" title="Неоновая сетка Matrix" onclick="setBannerPreset('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&q=80')"></div>
+                        <div class="banner-preset-thumb" style="background-image: url('https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80');" title="Микрочипы и квантовое ядро" onclick="setBannerPreset('https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80')"></div>
+                        <div class="banner-preset-thumb" style="background-image: url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80');" title="Ретро Синтвейв 80s" onclick="setBannerPreset('https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80')"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Неоновая Аура профиля (акцентный цвет интерфейса)</label>
+                    <div class="aura-color-grid">
+                        <div class="aura-color-swatch active" style="background: #00f0ff; color: #00f0ff;" title="Cyan Pulse" onclick="setAccentColorPreset('#00f0ff')"></div>
+                        <div class="aura-color-swatch" style="background: #ff0055; color: #ff0055;" title="Neon Crimson" onclick="setAccentColorPreset('#ff0055')"></div>
+                        <div class="aura-color-swatch" style="background: #00ff66; color: #00ff66;" title="Matrix Cyber" onclick="setAccentColorPreset('#00ff66')"></div>
+                        <div class="aura-color-swatch" style="background: #fbbf24; color: #fbbf24;" title="Electric Amber" onclick="setAccentColorPreset('#fbbf24')"></div>
+                        <div class="aura-color-swatch" style="background: #c084fc; color: #c084fc;" title="Synthwave Violet" onclick="setAccentColorPreset('#c084fc')"></div>
+                        <div class="aura-color-swatch" style="background: #f97316; color: #f97316;" title="Arasaka Flare" onclick="setAccentColorPreset('#f97316')"></div>
+                        <input type="color" id="editAccentColorCustom" value="#00f0ff" class="custom-color-input" title="Свой цвет" onchange="setAccentColorPreset(this.value)">
+                    </div>
+                    <input type="hidden" id="editAccentColor" value="#00f0ff">
+                </div>
+
+                <div class="form-group">
+                    <label>Фоновая кибер-текстура обложки</label>
+                    <div class="chips-selector-row">
+                        <span class="choice-chip active" id="chipEffect-none" onclick="setProfileBgEffect('none')">Чистая обложка</span>
+                        <span class="choice-chip" id="chipEffect-scanlines" onclick="setProfileBgEffect('scanlines')">📺 CRT Scanlines</span>
+                        <span class="choice-chip" id="chipEffect-hex_grid" onclick="setProfileBgEffect('hex_grid')">🕸️ Hex VR Grid</span>
+                        <span class="choice-chip" id="chipEffect-cyber_dots" onclick="setProfileBgEffect('cyber_dots')">✨ Cyber Matrix Dots</span>
+                    </div>
+                    <input type="hidden" id="editProfileBgEffect" value="none">
+                </div>
             </div>
-            <div class="modal-actions-row">
+
+            <div class="modal-actions-row" style="margin-top: 1.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
                 <button type="button" class="btn btn-secondary" onclick="closeEditProfileModal()">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                <button type="submit" class="btn btn-primary">
+                    <span>Сохранить в профиль</span>
+                    <span class="btn-arrow">✨</span>
+                </button>
             </div>
         </form>
     </div>
@@ -660,19 +798,34 @@
                         <div class="profile-breadcrumb-tag"><span id="profileBreadcrumbUser">@user</span></div>
                     </div>
 
-                    <!-- Карточка профиля -->
-                    <div class="profile-hero-card">
-                        <div class="profile-hero-banner" id="heroBanner"></div>
+                    <!-- Карточка профиля с поддержкой кастомизации -->
+                    <div class="profile-hero-card" id="profileHeroCard">
+                        <div class="profile-hero-banner" id="heroBanner">
+                            <div class="hero-banner-overlay" id="heroBannerOverlay"></div>
+                        </div>
                         <div class="profile-hero-body">
                             <div class="hero-avatar-row">
-                                <img src="/static/avatars/default.svg" alt="avatar" id="heroAvatar" class="hero-avatar">
+                                <div class="avatar-frame-box avatar-frame-default" id="heroAvatarFrameBox">
+                                    <img src="/static/avatars/default.svg" alt="avatar" id="heroAvatar" class="hero-avatar">
+                                </div>
                                 <div class="hero-actions" id="heroActionsContainer"></div>
                             </div>
 
                             <div class="hero-info-section">
-                                <h2 class="hero-display-name" id="heroDisplayName">Имя Фамилия</h2>
+                                <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.2rem;">
+                                    <h2 class="hero-display-name" id="heroDisplayName" style="margin: 0;">Имя Фамилия</h2>
+                                    <span class="hero-rank-badge" id="heroRankBadge" style="display: none;">Ранг</span>
+                                </div>
                                 <span class="hero-username" id="heroUsername">@username</span>
-                                <p class="hero-bio" id="heroBio">Биография пользователя...</p>
+
+                                <div id="heroStatusContainer" style="display: none; margin-top: 0.4rem;">
+                                    <div class="hero-status-capsule">
+                                        <span class="status-emoji" id="heroStatusEmoji">⚡</span>
+                                        <span class="status-text" id="heroStatusText">Статус</span>
+                                    </div>
+                                </div>
+
+                                <p class="hero-bio" id="heroBio" style="margin-top: 0.8rem;">Биография пользователя...</p>
                             </div>
 
                             <div class="profile-stats-row">
