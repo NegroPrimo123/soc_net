@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoSocial — Киберпанк Социальная Сеть</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=cyber_2077_v10">
+    <link rel="stylesheet" href="/static/css/style.css?v=cyber_extreme_v11">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -37,14 +37,14 @@
         <!-- Форма Входа -->
         <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)">
             <div class="form-group">
-                <label for="loginUsername">Логин (username)</label>
+                <label for="loginUsername">// 01 ЛОГИН (USERNAME)</label>
                 <div class="input-with-icon">
                     <span class="input-icon">@</span>
                     <input type="text" id="loginUsername" placeholder="например: oleg" required autofocus autocomplete="username">
                 </div>
             </div>
             <div class="form-group">
-                <label for="loginPassword">Пароль</label>
+                <label for="loginPassword">// 02 КЛЮЧ ДОСТУПА (ПАРОЛЬ)</label>
                 <div class="input-with-icon">
                     <span class="input-icon">🔒</span>
                     <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
@@ -53,7 +53,7 @@
 
             <!-- Быстрый демо-вход в 1 клик -->
             <div class="demo-auth-box">
-                <span class="demo-auth-title">Быстрый вход для тестирования:</span>
+                <span class="demo-auth-title">БЫСТРАЯ АУТЕНТИФИКАЦИЯ В ОДИН КЛИК:</span>
                 <div class="demo-user-pills">
                     <button type="button" class="demo-pill" onclick="fillAndLogin('oleg', 'password123')">
                         <img src="/static/avatars/oleg.svg" alt="Oleg">
@@ -71,7 +71,7 @@
             </div>
 
             <button type="submit" class="btn btn-primary btn-block btn-lg">
-                <span>Войти в аккаунт</span>
+                <span>[ ВОЙТИ В СЕТЬ ⚡ ]</span>
                 <span class="btn-arrow">→</span>
             </button>
         </form>
@@ -80,29 +80,29 @@
         <form id="registerForm" class="auth-form" style="display: none;" onsubmit="handleRegister(event)">
             <div class="form-row">
                 <div class="form-group">
-                    <label for="regUsername">Логин*</label>
+                    <label for="regUsername">// 01 ЛОГИН (USERNAME)*</label>
                     <input type="text" id="regUsername" placeholder="ivan_dev" required pattern="^[a-zA-Z0-9_]{3,30}$">
                 </div>
                 <div class="form-group">
-                    <label for="regDisplayName">Отображаемое имя*</label>
+                    <label for="regDisplayName">// 02 ИМЯ ОТОБРАЖЕНИЯ*</label>
                     <input type="text" id="regDisplayName" placeholder="Иван Петров" required>
                 </div>
             </div>
             <div class="form-group">
-                <label for="regPassword">Пароль (от 6 символов)*</label>
-                <input type="password" id="regPassword" placeholder="Придумайте пароль" required minlength="6">
+                <label for="regPassword">// 03 ПАРОЛЬ (ОТ 6 СИМВОЛОВ)*</label>
+                <input type="password" id="regPassword" placeholder="Придумайте надежный пароль" required minlength="6">
             </div>
             <div class="form-group">
-                <label for="regBio">О себе</label>
-                <input type="text" id="regBio" placeholder="Стек, интересы, проекты...">
+                <label for="regBio">// 04 НЕЙРО-БИО / О СЕБЕ</label>
+                <input type="text" id="regBio" placeholder="Стек, интересы, проекты, специализация...">
             </div>
             <div class="form-group">
-                <label for="regAvatar">URL Аватарки (опционально)</label>
+                <label for="regAvatar">// 05 URL АВАТАРА (ОПЦИОНАЛЬНО)</label>
                 <input type="url" id="regAvatar" placeholder="https://...">
             </div>
 
             <button type="submit" class="btn btn-primary btn-block btn-lg">
-                <span>Создать аккаунт</span>
+                <span>[ ЗАРЕГИСТРИРОВАТЬ АККАУНТ ⚡ ]</span>
                 <span class="btn-arrow">→</span>
             </button>
         </form>
@@ -228,10 +228,9 @@
             </div>
 
             <div class="modal-actions-row">
-                <button type="button" class="btn btn-secondary" onclick="closeSendGiftModal()">Отмена</button>
+                <button type="button" class="btn btn-secondary" onclick="closeSendGiftModal()">[ ОТМЕНА ]</button>
                 <button type="submit" class="btn btn-primary" id="btnSubmitGift">
-                    <span>Отправить подарок</span>
-                    <span class="btn-arrow">🎁</span>
+                    <span>[ ВРУЧИТЬ АРТЕФАКТ 🎁 ]</span>
                 </button>
             </div>
         </form>
@@ -293,8 +292,8 @@
                 <input type="url" id="editBanner" placeholder="https://images.unsplash.com/...">
             </div>
             <div class="modal-actions-row">
-                <button type="button" class="btn btn-secondary" onclick="closeEditProfileModal()">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditProfileModal()">[ ОТМЕНА ]</button>
+                <button type="submit" class="btn btn-primary">[ СОХРАНИТЬ ПРОФИЛЬ 💾 ]</button>
             </div>
         </form>
     </div>
@@ -475,8 +474,7 @@
                                 <div class="composer-right-actions">
                                     <span class="char-count" id="charCount">0 / 500</span>
                                     <button class="btn btn-primary btn-sm" id="btnPublishPost" onclick="createPost()">
-                                        <span>Опубликовать</span>
-                                        <span class="btn-arrow">⚡</span>
+                                        <span>[ ОПУБЛИКОВАТЬ ⚡ ]</span>
                                     </button>
                                 </div>
                             </div>
@@ -823,7 +821,7 @@
                                 
                                 <input type="text" id="chatMessageInput" class="chat-text-input" placeholder="Напишите сообщение... (Enter для отправки)" autocomplete="off">
                                 <button type="submit" class="btn btn-primary btn-chat-send" id="chatSendBtn">
-                                    <span>Отправить</span>
+                                    <span>[ ОТПРАВИТЬ ⚡ ]</span>
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                                 </button>
                             </form>
@@ -843,7 +841,7 @@
     window.CURRENT_SEARCH = "{{.SearchQuery}}";
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
-<script src="/static/js/app.js?v=cyber_2077_v10"></script>
+<script src="/static/js/app.js?v=cyber_extreme_v11"></script>
 
 </body>
 </html>
