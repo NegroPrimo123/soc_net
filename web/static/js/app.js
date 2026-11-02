@@ -1196,6 +1196,11 @@ function navigateTo(view, userId = null) {
         loadUserProfile(uid);
         window.history.pushState({}, '', `/?view=profile&user=${uid}`);
     } else if (view === 'my-profile') {
+        if (!window.IS_AUTHENTICATED || !window.CURRENT_USER_ID) {
+            openAuthModal('login');
+            showToast('Войдите в аккаунт для доступа к личному профилю 👤', 'error');
+            return;
+        }
         currentProfileUserId = window.CURRENT_USER_ID;
         loadUserProfile(window.CURRENT_USER_ID);
         window.history.pushState({}, '', `/?view=profile&user=${window.CURRENT_USER_ID}`);
@@ -1291,6 +1296,118 @@ function renderUserProfile(data) {
             statusContainer.style.display = 'block';
         } else {
             statusContainer.style.display = 'none';
+        }
+    }
+
+    // Главный кибер-экспонат профиля (Pinned Trophy)
+    const trophyWrap = document.getElementById('heroPinnedTrophyWrap');
+    if (trophyWrap) {
+        const pinnedId = user.pinned_gift_id || 0;
+        const giftKeys = Object.keys(GIFT_SPECS);
+        const pinnedType = (pinnedId > 0 && pinnedId <= giftKeys.length) ? giftKeys[pinnedId - 1] : null;
+        if (pinnedType && GIFT_SPECS[pinnedType]) {
+            const spec = GIFT_SPECS[pinnedType];
+            const imgEl = document.getElementById('heroPinnedTrophyImg');
+            const titleEl = document.getElementById('heroPinnedTrophyTitle');
+            const rarityEl = document.getElementById('heroPinnedTrophyRarity');
+            if (imgEl) imgEl.src = spec.png;
+            if (titleEl) titleEl.textContent = spec.title;
+            if (rarityEl) {
+                rarityEl.textContent = spec.rarity;
+                rarityEl.className = 'artifact-rarity-pill ' + (spec.badgeClass || '');
+            }
+            trophyWrap.style.display = 'inline-flex';
+        } else {
+            trophyWrap.style.display = 'none';
+        }
+    }
+
+    // Стек технологий и тегов (Skills Tags)
+    const skillsContainer = document.getElementById('heroSkillsContainer');
+    if (skillsContainer) {
+        skillsContainer.innerHTML = '';
+        const tags = (user.skills_tags || '').split(',').map(t => t.trim()).filter(Boolean);
+        if (tags.length > 0) {
+            tags.forEach(tag => {
+                const chip = document.createElement('span');
+                chip.className = 'skill-tag-chip';
+                chip.innerHTML = `<span>#${escapeHtml(tag)}</span>`;
+                chip.onclick = () => {
+                    const searchInput = document.getElementById('searchInput');
+                    if (searchInput) searchInput.value = `#${tag}`;
+                    executeSearch();
+                };
+                skillsContainer.appendChild(chip);
+            });
+            skillsContainer.style.display = 'flex';
+        } else {
+            skillsContainer.style.display = 'none';
+        }
+    }
+
+    // Контакты и социальные сети (Social Links)
+    const socialContainer = document.getElementById('heroSocialContainer');
+    if (socialContainer) {
+        socialContainer.innerHTML = '';
+        let links = {};
+        try {
+            if (user.social_links) links = JSON.parse(user.social_links);
+        } catch (e) {}
+
+        const socialDefs = [
+            { key: 'tg', icon: '✈️ Telegram', prefix: 'https://t.me/' },
+            { key: 'gh', icon: '🐙 GitHub', prefix: 'https://github.com/' },
+            { key: 'discord', icon: '💬 Discord', isCopy: true },
+            { key: 'steam', icon: '🎮 Steam', prefix: 'https://steamcommunity.com/id/' },
+            { key: 'vk', icon: '🟦 ВКонтакте', prefix: 'https://vk.com/' },
+            { key: 'web', icon: '🌐 Вебсайт', prefix: '' }
+        ];
+
+        let hasLinks = false;
+        socialDefs.forEach(def => {
+            const val = links[def.key];
+            if (val && val.trim()) {
+                hasLinks = true;
+                const badge = document.createElement('a');
+                badge.className = `social-link-badge ${def.key}`;
+                badge.innerHTML = `<span>${def.icon}</span>`;
+                if (def.isCopy) {
+                    badge.href = '#';
+                    badge.onclick = (e) => {
+                        e.preventDefault();
+                        navigator.clipboard.writeText(val.trim());
+                        showToast(`Discord: ${val.trim()} скопирован!`, 'success');
+                    };
+                } else {
+                    let url = val.trim();
+                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                        if (def.key === 'tg' && url.startsWith('@')) {
+                            url = def.prefix + url.substring(1);
+                        } else if (def.prefix) {
+                            url = def.prefix + url;
+                        } else {
+                            url = 'https://' + url;
+                        }
+                    }
+                    badge.href = url;
+                    badge.target = '_blank';
+                    badge.rel = 'noopener noreferrer';
+                }
+                socialContainer.appendChild(badge);
+            }
+        });
+        socialContainer.style.display = hasLinks ? 'flex' : 'none';
+    }
+
+    // Адаптация кнопки отправки подарка на вкладке подарков
+    const btnHeroSendGift = document.getElementById('btnHeroSendGift');
+    if (btnHeroSendGift) {
+        if (data.is_owner) {
+            btnHeroSendGift.innerHTML = '<span>🎁 Подарить другу</span>';
+            btnHeroSendGift.onclick = () => navigateTo('showcase');
+        } else {
+            btnHeroSendGift.innerHTML = '<span>🎁 Отправить подарок</span>';
+            btnHeroSendGift.onclick = () => openCurrentProfileGiftModal();
         }
     }
 
@@ -1398,8 +1515,8 @@ function renderProfileGifts(gifts) {
                 <span class="empty-glyph">🎁</span>
                 <h3>Коллекция подарков пуста</h3>
                 <p>Станьте первым, кто подарит этому пользователю подарок из коллекции «Цветные карандаши»!</p>
-                <button class="btn btn-primary btn-sm" style="margin-top: 0.8rem;" onclick="openCurrentProfileGiftModal()">
-                    <span>🎁 Отправить первый подарок</span>
+                <button class="btn btn-primary btn-sm" style="margin-top: 0.8rem;" onclick="if(currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID){ navigateTo('showcase'); }else{ openCurrentProfileGiftModal(); }">
+                    <span>${(currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID) ? '🎁 Выбрать подарок в каталоге' : '🎁 Отправить первый подарок'}</span>
                 </button>
             </div>
         `;
@@ -1429,6 +1546,7 @@ function renderProfileNetwork(followers, following) {
 function createRunnerRow(u) {
     const row = document.createElement('div');
     row.className = 'runner-row';
+    row.id = `user-row-${u.id}`;
     row.innerHTML = `
         <img src="${escapeHtml(u.avatar_url)}" alt="avatar" class="mini-avatar cursor-pointer" onclick="openUserProfile(${u.id})">
         <div class="runner-info cursor-pointer" onclick="openUserProfile(${u.id})">
@@ -1769,6 +1887,9 @@ function closeGiftDetailModal() {
 // ==========================================
 // CYBERPUNK CUSTOM STUDIO & EDIT PROFILE MODAL
 // ==========================================
+let currentSelectedSkills = [];
+let currentPinnedTrophyId = 0;
+
 function openEditProfileModal() {
     if (!currentProfileUserData) return;
     const u = currentProfileUserData;
@@ -1790,6 +1911,25 @@ function openEditProfileModal() {
     setProfileBgEffect(u.profile_bg_effect || 'none', false);
     setAccentColorPreset(u.accent_color || '#00f0ff', false);
 
+    // Стек и навыки
+    currentSelectedSkills = (u.skills_tags || '').split(',').map(s => s.trim()).filter(Boolean);
+    updateSkillsUI();
+
+    // Социальные сети
+    let social = {};
+    try {
+        if (u.social_links) social = JSON.parse(u.social_links);
+    } catch(e) {}
+    document.getElementById('editSocialTg').value = social.tg || '';
+    document.getElementById('editSocialGh').value = social.gh || '';
+    document.getElementById('editSocialDiscord').value = social.discord || '';
+    document.getElementById('editSocialSteam').value = social.steam || '';
+    document.getElementById('editSocialVk').value = social.vk || '';
+    document.getElementById('editSocialWeb').value = social.web || '';
+
+    // Главный экспонат
+    initTrophyGrid(u.pinned_gift_id || 0);
+
     switchCustomTab('profile');
     updateModalLivePreview();
 
@@ -1803,12 +1943,124 @@ function closeEditProfileModal() {
 }
 
 function switchCustomTab(tabKey) {
-    const tabs = ['profile', 'status', 'avatar', 'theme'];
+    const tabs = ['profile', 'status', 'avatar', 'theme', 'skills', 'social', 'trophy'];
     tabs.forEach(t => {
         const btn = document.getElementById(`tabCustom${capitalize(t)}`);
         const pane = document.getElementById(`customPane${capitalize(t)}`);
         if (btn) btn.classList.toggle('active', t === tabKey);
         if (pane) pane.style.display = (t === tabKey) ? 'block' : 'none';
+    });
+}
+
+function toggleSkillTag(skill) {
+    const idx = currentSelectedSkills.indexOf(skill);
+    if (idx >= 0) {
+        currentSelectedSkills.splice(idx, 1);
+    } else {
+        if (currentSelectedSkills.length >= 10) {
+            showToast('Максимум 10 навыков в профиле', 'info');
+            return;
+        }
+        currentSelectedSkills.push(skill);
+    }
+    updateSkillsUI();
+    updateModalLivePreview();
+}
+
+function addCustomSkillTag() {
+    const input = document.getElementById('customSkillInput');
+    if (!input) return;
+    const val = input.value.trim().replace(/^[#@]/, '');
+    if (!val) return;
+    if (currentSelectedSkills.includes(val)) {
+        showToast('Этот навык уже добавлен', 'info');
+        input.value = '';
+        return;
+    }
+    if (currentSelectedSkills.length >= 10) {
+        showToast('Максимум 10 навыков в профиле', 'info');
+        return;
+    }
+    currentSelectedSkills.push(val);
+    input.value = '';
+    updateSkillsUI();
+    updateModalLivePreview();
+}
+
+function removeSkillTag(skill) {
+    const idx = currentSelectedSkills.indexOf(skill);
+    if (idx >= 0) {
+        currentSelectedSkills.splice(idx, 1);
+        updateSkillsUI();
+        updateModalLivePreview();
+    }
+}
+
+function updateSkillsUI() {
+    const hidden = document.getElementById('editSkillsTags');
+    if (hidden) hidden.value = currentSelectedSkills.join(',');
+
+    document.querySelectorAll('#skillsPresetChips .choice-chip').forEach(chip => {
+        const sk = chip.getAttribute('data-skill');
+        chip.classList.toggle('selected', currentSelectedSkills.includes(sk));
+    });
+
+    const box = document.getElementById('selectedSkillsBadges');
+    if (box) {
+        if (currentSelectedSkills.length === 0) {
+            box.innerHTML = '<span class="text-muted" style="font-size: 0.8rem;">Теги пока не выбраны</span>';
+        } else {
+            box.innerHTML = '';
+            currentSelectedSkills.forEach(sk => {
+                const b = document.createElement('span');
+                b.className = 'selected-skill-badge';
+                b.innerHTML = `<span>#${escapeHtml(sk)}</span> <span class="remove-tag" onclick="removeSkillTag('${escapeHtml(sk)}')">✕</span>`;
+                box.appendChild(b);
+            });
+        }
+    }
+}
+
+function initTrophyGrid(selectedId = 0) {
+    currentPinnedTrophyId = selectedId;
+    const grid = document.getElementById('trophySelectGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const card0 = document.createElement('div');
+    card0.className = `trophy-select-card ${selectedId === 0 ? 'active' : ''}`;
+    card0.innerHTML = `
+        <div style="font-size: 1.8rem; margin-bottom: 0.2rem;">🚫</div>
+        <span class="trophy-select-name">Без экспоната</span>
+    `;
+    card0.onclick = () => selectPinnedTrophy(0);
+    grid.appendChild(card0);
+
+    const giftKeys = Object.keys(GIFT_SPECS);
+    giftKeys.forEach((key, idx) => {
+        const spec = GIFT_SPECS[key];
+        const giftId = idx + 1;
+        const card = document.createElement('div');
+        card.className = `trophy-select-card ${selectedId === giftId ? 'active' : ''}`;
+        card.innerHTML = `
+            <img src="${spec.png}" alt="${spec.title}" class="trophy-select-img">
+            <span class="trophy-select-name">${spec.title}</span>
+        `;
+        card.onclick = () => selectPinnedTrophy(giftId);
+        grid.appendChild(card);
+    });
+
+    const hidden = document.getElementById('editPinnedGiftId');
+    if (hidden) hidden.value = selectedId;
+}
+
+function selectPinnedTrophy(giftId) {
+    currentPinnedTrophyId = giftId;
+    const hidden = document.getElementById('editPinnedGiftId');
+    if (hidden) hidden.value = giftId;
+
+    document.querySelectorAll('#trophySelectGrid .trophy-select-card').forEach((c, idx) => {
+        c.classList.toggle('active', idx === giftId);
     });
 }
 
@@ -1972,6 +2224,16 @@ function updateModalLivePreview() {
             statusWrap.style.display = 'none';
         }
     }
+
+    const prevSkills = document.getElementById('previewSkillsWrap');
+    if (prevSkills) {
+        if (currentSelectedSkills && currentSelectedSkills.length > 0) {
+            prevSkills.innerHTML = currentSelectedSkills.slice(0, 3).map(s => `<span class="skill-tag-chip" style="font-size: 0.68rem; padding: 1px 6px;">#${escapeHtml(s)}</span>`).join(' ');
+            prevSkills.style.display = 'flex';
+        } else {
+            prevSkills.style.display = 'none';
+        }
+    }
 }
 
 async function handleProfileUpdate(e) {
@@ -1987,6 +2249,17 @@ async function handleProfileUpdate(e) {
     const avatarFrame = document.getElementById('editAvatarFrame').value.trim() || 'default';
     const profileBgEffect = document.getElementById('editProfileBgEffect').value.trim() || 'none';
 
+    const skillsTags = currentSelectedSkills.join(',');
+    const socialLinksObj = {
+        tg: document.getElementById('editSocialTg').value.trim(),
+        gh: document.getElementById('editSocialGh').value.trim(),
+        discord: document.getElementById('editSocialDiscord').value.trim(),
+        steam: document.getElementById('editSocialSteam').value.trim(),
+        vk: document.getElementById('editSocialVk').value.trim(),
+        web: document.getElementById('editSocialWeb').value.trim()
+    };
+    const pinnedGiftId = parseInt(document.getElementById('editPinnedGiftId').value, 10) || 0;
+
     try {
         const res = await fetch('/api/users/profile', {
             method: 'PUT',
@@ -2001,7 +2274,10 @@ async function handleProfileUpdate(e) {
                 status_text: statusText,
                 accent_color: accentColor,
                 avatar_frame: avatarFrame,
-                profile_bg_effect: profileBgEffect
+                profile_bg_effect: profileBgEffect,
+                skills_tags: skillsTags,
+                social_links: JSON.stringify(socialLinksObj),
+                pinned_gift_id: pinnedGiftId
             })
         });
 
@@ -2515,7 +2791,10 @@ async function handleSendMessage(e) {
     const input = document.getElementById('chatMessageInput');
     if (!input) return;
 
-    const content = input.value.trim();
+    let content = input.value.trim();
+    if (currentChatAttachmentUrl) {
+        content = content ? `${content}\n${currentChatAttachmentUrl}` : currentChatAttachmentUrl;
+    }
     if (!content) return;
 
     const sendBtn = document.getElementById('chatSendBtn');
@@ -2539,6 +2818,7 @@ async function handleSendMessage(e) {
 
         const msg = await res.json();
         input.value = '';
+        clearChatFile();
 
         playAudioChime(600, 800, 0.08);
 
@@ -2556,6 +2836,16 @@ async function handleSendMessage(e) {
     }
 }
 
+let currentChatAttachmentUrl = '';
+
+function clearChatFile() {
+    currentChatAttachmentUrl = '';
+    const fileInput = document.getElementById('chatFileInput');
+    if (fileInput) fileInput.value = '';
+    const preview = document.getElementById('chatUploadPreview');
+    if (preview) preview.style.display = 'none';
+}
+
 // Загрузка фото/файла в чат
 async function handleChatFileUpload(e) {
     const file = e.target.files && e.target.files[0];
@@ -2564,7 +2854,7 @@ async function handleChatFileUpload(e) {
     const formData = new FormData();
     formData.append('file', file);
 
-    showToast('Загрузка в чат...', 'success');
+    showToast('Загрузка файла...', 'success');
 
     try {
         const res = await fetch('/api/upload', {
@@ -2575,12 +2865,14 @@ async function handleChatFileUpload(e) {
         if (!res.ok) throw new Error('Ошибка при загрузке файла');
         const data = await res.json();
 
-        // Автоматически отправляем в чат ссылку на файл
-        const input = document.getElementById('chatMessageInput');
-        if (input) {
-            input.value = data.url;
-            handleSendMessage();
+        currentChatAttachmentUrl = data.url;
+        const preview = document.getElementById('chatUploadPreview');
+        const previewName = document.getElementById('chatPreviewName');
+        if (preview && previewName) {
+            previewName.textContent = file.name;
+            preview.style.display = 'block';
         }
+        showToast('Файл прикреплен! Нажмите «Отправить»', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
@@ -2735,4 +3027,107 @@ function playAudioChime(freq1 = 520, freq2 = 780, duration = 0.1) {
         osc.start();
         osc.stop(ctx.currentTime + duration);
     } catch (e) {}
+}
+
+// ==========================================
+// CYBER AUDIO SUITE: SYNTHWAVE AMBIENT & SOUND FX
+// ==========================================
+let cyberAudioCtx = null;
+let cyberAudioPlaying = false;
+let cyberOsc1 = null;
+let cyberOsc2 = null;
+let cyberGain = null;
+let cyberFilter = null;
+let cyberInterval = null;
+
+function toggleCyberAudio() {
+    const btn = document.getElementById('cyberAudioBtn');
+    if (!cyberAudioPlaying) {
+        startCyberAudio();
+        cyberAudioPlaying = true;
+        if (btn) btn.classList.add('playing');
+        showToast('🎵 Киберпанк радио включено: Synthwave Chill', 'success');
+    } else {
+        stopCyberAudio();
+        cyberAudioPlaying = false;
+        if (btn) btn.classList.remove('playing');
+        showToast('Радио выключено 🔇', 'info');
+    }
+}
+
+function startCyberAudio() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!cyberAudioCtx) cyberAudioCtx = new AudioCtx();
+        if (cyberAudioCtx.state === 'suspended') cyberAudioCtx.resume();
+
+        // Warm analog drone + resonant filter
+        const osc1 = cyberAudioCtx.createOscillator();
+        const osc2 = cyberAudioCtx.createOscillator();
+        const filter = cyberAudioCtx.createBiquadFilter();
+        const gain = cyberAudioCtx.createGain();
+
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(65.41, cyberAudioCtx.currentTime); // C2
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(98.00, cyberAudioCtx.currentTime); // G2
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(450, cyberAudioCtx.currentTime);
+        filter.Q.setValueAtTime(4.0, cyberAudioCtx.currentTime);
+
+        gain.gain.setValueAtTime(0.035, cyberAudioCtx.currentTime);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(cyberAudioCtx.destination);
+
+        osc1.start();
+        osc2.start();
+
+        cyberOsc1 = osc1;
+        cyberOsc2 = osc2;
+        cyberFilter = filter;
+        cyberGain = gain;
+
+        // Subtle ambient chord pulse
+        const notes = [130.81, 164.81, 196.00, 246.94];
+        let noteIdx = 0;
+        cyberInterval = setInterval(() => {
+            if (!cyberAudioPlaying || !cyberAudioCtx) return;
+            try {
+                const arpOsc = cyberAudioCtx.createOscillator();
+                const arpGain = cyberAudioCtx.createGain();
+                arpOsc.type = 'sine';
+                arpOsc.frequency.setValueAtTime(notes[noteIdx % notes.length], cyberAudioCtx.currentTime);
+                arpGain.gain.setValueAtTime(0.025, cyberAudioCtx.currentTime);
+                arpGain.gain.exponentialRampToValueAtTime(0.0001, cyberAudioCtx.currentTime + 1.2);
+                arpOsc.connect(arpGain);
+                arpGain.connect(cyberAudioCtx.destination);
+                arpOsc.start();
+                arpOsc.stop(cyberAudioCtx.currentTime + 1.2);
+                noteIdx++;
+            } catch (e) {}
+        }, 1600);
+
+    } catch (e) {
+        console.warn('Web Audio error:', e);
+    }
+}
+
+function stopCyberAudio() {
+    if (cyberInterval) {
+        clearInterval(cyberInterval);
+        cyberInterval = null;
+    }
+    if (cyberOsc1) {
+        try { cyberOsc1.stop(); cyberOsc1.disconnect(); } catch (e) {}
+        cyberOsc1 = null;
+    }
+    if (cyberOsc2) {
+        try { cyberOsc2.stop(); cyberOsc2.disconnect(); } catch (e) {}
+        cyberOsc2 = null;
+    }
 }

@@ -328,15 +328,19 @@
                         <span class="status-text" id="previewStatusText">В сети</span>
                     </div>
                 </div>
+                <div id="previewSkillsWrap" class="preview-skills-row" style="display: none; margin-top: 6px;"></div>
             </div>
         </div>
 
         <!-- Навигация по вкладкам кастомизации -->
         <div class="custom-tabs-nav">
             <button type="button" class="custom-tab-btn active" id="tabCustomProfile" onclick="switchCustomTab('profile')">👤 Профиль</button>
-            <button type="button" class="custom-tab-btn" id="tabCustomStatus" onclick="switchCustomTab('status')">⚡ Статус и Вайб</button>
-            <button type="button" class="custom-tab-btn" id="tabCustomAvatar" onclick="switchCustomTab('avatar')">🖼️ Аватар и Рамка</button>
-            <button type="button" class="custom-tab-btn" id="tabCustomTheme" onclick="switchCustomTab('theme')">🎨 Обложка и Аура</button>
+            <button type="button" class="custom-tab-btn" id="tabCustomStatus" onclick="switchCustomTab('status')">⚡ Статус</button>
+            <button type="button" class="custom-tab-btn" id="tabCustomAvatar" onclick="switchCustomTab('avatar')">🖼️ Аватар</button>
+            <button type="button" class="custom-tab-btn" id="tabCustomTheme" onclick="switchCustomTab('theme')">🎨 Аура</button>
+            <button type="button" class="custom-tab-btn" id="tabCustomSkills" onclick="switchCustomTab('skills')">🛠️ Стек</button>
+            <button type="button" class="custom-tab-btn" id="tabCustomSocial" onclick="switchCustomTab('social')">🌐 Сети</button>
+            <button type="button" class="custom-tab-btn" id="tabCustomTrophy" onclick="switchCustomTab('trophy')">🏆 Экспонат</button>
         </div>
 
         <form id="editProfileForm" onsubmit="handleProfileUpdate(event)">
@@ -459,6 +463,87 @@
                 </div>
             </div>
 
+            <!-- ВКЛАДКА 5: Стек технологий и интересов -->
+            <div id="customPaneSkills" class="custom-pane" style="display: none;">
+                <div class="form-group">
+                    <label>Кликните по тегам для добавления в стек профиля:</label>
+                    <div class="chips-selector-row" id="skillsPresetChips">
+                        <span class="choice-chip" data-skill="Go" onclick="toggleSkillTag('Go')">⚡ Go (Golang)</span>
+                        <span class="choice-chip" data-skill="PostgreSQL" onclick="toggleSkillTag('PostgreSQL')">🐘 PostgreSQL</span>
+                        <span class="choice-chip" data-skill="Docker" onclick="toggleSkillTag('Docker')">🐳 Docker</span>
+                        <span class="choice-chip" data-skill="Kubernetes" onclick="toggleSkillTag('Kubernetes')">☸️ Kubernetes</span>
+                        <span class="choice-chip" data-skill="Cyberpunk 2077" onclick="toggleSkillTag('Cyberpunk 2077')">🗡️ Cyberpunk 2077</span>
+                        <span class="choice-chip" data-skill="Reverse Engineering" onclick="toggleSkillTag('Reverse Engineering')">🔍 Reverse Eng</span>
+                        <span class="choice-chip" data-skill="Frontend Magic" onclick="toggleSkillTag('Frontend Magic')">✨ Frontend Magic</span>
+                        <span class="choice-chip" data-skill="HighLoad" onclick="toggleSkillTag('HighLoad')">🔥 HighLoad</span>
+                        <span class="choice-chip" data-skill="WebSockets" onclick="toggleSkillTag('WebSockets')">🔌 WebSockets</span>
+                        <span class="choice-chip" data-skill="Rust" onclick="toggleSkillTag('Rust')">🦀 Rust</span>
+                        <span class="choice-chip" data-skill="Python" onclick="toggleSkillTag('Python')">🐍 Python</span>
+                        <span class="choice-chip" data-skill="gRPC" onclick="toggleSkillTag('gRPC')">📡 gRPC</span>
+                        <span class="choice-chip" data-skill="AI & Neural" onclick="toggleSkillTag('AI & Neural')">🤖 AI & Neural</span>
+                        <span class="choice-chip" data-skill="Linux Core" onclick="toggleSkillTag('Linux Core')">🐧 Linux Core</span>
+                        <span class="choice-chip" data-skill="Bug Bounty" onclick="toggleSkillTag('Bug Bounty')">🎯 Bug Bounty</span>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="customSkillInput">Добавить свой произвольный тег / навык:</label>
+                    <div class="input-with-upload-btn">
+                        <input type="text" id="customSkillInput" placeholder="Например: Microservices, SRE, NeoVim..." maxlength="25" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomSkillTag();}">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="addCustomSkillTag()">+ Добавить</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="font-size: 0.82rem; color: var(--text-dim);">Выбранные навыки (отображаются в профиле):</label>
+                    <div id="selectedSkillsBadges" class="selected-skills-box">
+                        <span class="text-muted" style="font-size: 0.8rem;">Теги пока не выбраны</span>
+                    </div>
+                    <input type="hidden" id="editSkillsTags" value="">
+                </div>
+            </div>
+
+            <!-- ВКЛАДКА 6: Социальные сети и контакты -->
+            <div id="customPaneSocial" class="custom-pane" style="display: none;">
+                <div class="form-group">
+                    <label for="editSocialTg">✈️ Telegram</label>
+                    <input type="text" id="editSocialTg" placeholder="@username или https://t.me/username">
+                </div>
+                <div class="form-group">
+                    <label for="editSocialGh">🐙 GitHub</label>
+                    <input type="text" id="editSocialGh" placeholder="username или https://github.com/username">
+                </div>
+                <div class="form-group">
+                    <label for="editSocialDiscord">💬 Discord</label>
+                    <input type="text" id="editSocialDiscord" placeholder="username или username#0000">
+                </div>
+                <div class="form-group">
+                    <label for="editSocialSteam">🎮 Steam</label>
+                    <input type="text" id="editSocialSteam" placeholder="id/customURL или ссылка на профиль Steam">
+                </div>
+                <div class="form-group">
+                    <label for="editSocialVk">🟦 ВКонтакте</label>
+                    <input type="text" id="editSocialVk" placeholder="vk.com/username">
+                </div>
+                <div class="form-group">
+                    <label for="editSocialWeb">🌐 Личный сайт / Портфолио</label>
+                    <input type="url" id="editSocialWeb" placeholder="https://mywebsite.dev">
+                </div>
+                <input type="hidden" id="editSocialLinks" value="">
+            </div>
+
+            <!-- ВКЛАДКА 7: Главный Экспонат (Featured Trophy) -->
+            <div id="customPaneTrophy" class="custom-pane" style="display: none;">
+                <div class="form-group">
+                    <label>Выберите артефакт для установки на почетный пьедестал профиля:</label>
+                    <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.8rem;">Этот экспонат будет демонстрироваться под вашим аватаром с трехмерной голографической аурой.</p>
+                    <div class="trophy-select-grid" id="trophySelectGrid">
+                        <!-- Элементы генерируются динамически -->
+                    </div>
+                    <input type="hidden" id="editPinnedGiftId" value="0">
+                </div>
+            </div>
+
             <div class="modal-actions-row" style="margin-top: 1.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
                 <button type="button" class="btn btn-secondary" onclick="closeEditProfileModal()">Отмена</button>
                 <button type="submit" class="btn btn-primary">
@@ -547,7 +632,7 @@
         <!-- ВЕРХНЯЯ СТРОКА НАВИГАЦИИ И ПОИСКА -->
         <header class="top-sensor-bar">
             <div class="sensor-search-wrapper">
-                <span class="search-symbol">🔍</span>
+                <span class="search-symbol" onclick="executeSearch()" style="cursor: pointer;" title="Искать">🔍</span>
                 <input type="text" id="searchInput" placeholder="Поиск записей, #тегов, авторов..." value="{{if .TagQuery}}{{.TagQuery}}{{else}}{{.SearchQuery}}{{end}}" onkeydown="if(event.key==='Enter') executeSearch()" autocomplete="off">
                 {{if or .SearchQuery .TagQuery}}
                 <button class="search-clear-btn" onclick="clearSearch()" title="Сбросить">✕</button>
@@ -572,6 +657,16 @@
                 <button class="header-icon-btn" onclick="navigateTo('messages')" title="Сообщения">
                     <span class="header-icon">💬</span>
                     <span class="header-badge" id="headerMessagesBadge" style="{{if gt .UnreadMessagesCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadMessagesCount}}</span>
+                </button>
+
+                <button class="header-icon-btn cyber-audio-btn" id="cyberAudioBtn" onclick="toggleCyberAudio()" title="Киберпанк Радио / Фоновый Синтвейв">
+                    <span class="audio-wave-bars">
+                        <span class="bar bar-1"></span>
+                        <span class="bar bar-2"></span>
+                        <span class="bar bar-3"></span>
+                        <span class="bar bar-4"></span>
+                    </span>
+                    <span class="header-audio-label">Radio</span>
                 </button>
 
                 <div class="telemetry-clock" id="telemetryClock">GoSocial</div>
@@ -825,7 +920,26 @@
                                     </div>
                                 </div>
 
+                                <!-- Главный кибер-экспонат профиля -->
+                                <div id="heroPinnedTrophyWrap" style="display: none; margin-top: 0.75rem;">
+                                    <div class="hero-pinned-trophy-card" id="heroPinnedTrophyCard">
+                                        <div class="trophy-pedestal-glow"></div>
+                                        <img id="heroPinnedTrophyImg" src="" alt="Featured Trophy" class="trophy-img">
+                                        <div class="trophy-meta">
+                                            <span class="trophy-badge-label">🏆 ГЛАВНЫЙ ЭКСПОНАТ</span>
+                                            <span class="trophy-title" id="heroPinnedTrophyTitle">Кибер-Катана</span>
+                                        </div>
+                                        <span class="artifact-rarity-pill" id="heroPinnedTrophyRarity">Реликтовый</span>
+                                    </div>
+                                </div>
+
                                 <p class="hero-bio" id="heroBio" style="margin-top: 0.8rem;">Биография пользователя...</p>
+
+                                <!-- Стек технологий и тегов -->
+                                <div id="heroSkillsContainer" class="hero-skills-row" style="display: none; margin-top: 0.75rem;"></div>
+
+                                <!-- Контакты и социальные сети -->
+                                <div id="heroSocialContainer" class="hero-social-row" style="display: none; margin-top: 0.75rem;"></div>
                             </div>
 
                             <div class="profile-stats-row">

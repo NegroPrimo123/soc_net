@@ -26,6 +26,7 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -49,6 +50,7 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
@@ -65,6 +67,7 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -79,6 +82,7 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 		&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 		&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+		&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
 		&u.CreatedAt,
 		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 	)
@@ -106,13 +110,15 @@ func (r *UserRepository) UpdateProfile(userID int, req models.UpdateProfileReque
 	UPDATE users
 	SET display_name = $1, bio = $2, avatar_url = $3, banner_url = $4,
 	    status_text = $5, status_emoji = $6, custom_rank = $7,
-	    accent_color = $8, avatar_frame = $9, profile_bg_effect = $10
-	WHERE id = $11
+	    accent_color = $8, avatar_frame = $9, profile_bg_effect = $10,
+	    skills_tags = $11, social_links = $12, pinned_gift_id = $13
+	WHERE id = $14
 	`
 	_, err := r.db.Exec(query,
 		req.DisplayName, req.Bio, req.AvatarURL, req.BannerURL,
 		req.StatusText, req.StatusEmoji, req.CustomRank,
 		req.AccentColor, req.AvatarFrame, req.ProfileBgEffect,
+		req.SkillsTags, req.SocialLinks, req.PinnedGiftID,
 		userID,
 	)
 	if err != nil {
@@ -127,6 +133,7 @@ func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User,
 		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -151,6 +158,7 @@ func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User,
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
@@ -167,6 +175,7 @@ func (r *UserRepository) GetFollowing(userID, currentUserID int) ([]models.User,
 		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -191,6 +200,7 @@ func (r *UserRepository) GetFollowing(userID, currentUserID int) ([]models.User,
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
@@ -308,6 +318,7 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -322,6 +333,7 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 		&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 		&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+		&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
 		&u.CreatedAt,
 		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount,
 	)

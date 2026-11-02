@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	connStr := "host=localhost port=5432 user=postgres password=12345 dbname=gosocial sslmode=disable"
+	connStr := "host=localhost port=1357 user=postgres password=root111 dbname=gosocial sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatalf("Error connecting: %v", err)

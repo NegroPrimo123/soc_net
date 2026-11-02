@@ -15,6 +15,9 @@ type User struct {
 	AccentColor     string    `json:"accent_color"`
 	AvatarFrame     string    `json:"avatar_frame"`
 	ProfileBgEffect string    `json:"profile_bg_effect"`
+	SkillsTags      string    `json:"skills_tags"`
+	SocialLinks     string    `json:"social_links"`
+	PinnedGiftID    int       `json:"pinned_gift_id"`
 	CreatedAt       time.Time `json:"created_at"`
 	PostsCount      int       `json:"posts_count"`
 	Followers       int       `json:"followers_count"`
@@ -76,6 +79,9 @@ type UpdateProfileRequest struct {
 	AccentColor     string `json:"accent_color"`
 	AvatarFrame     string `json:"avatar_frame"`
 	ProfileBgEffect string `json:"profile_bg_effect"`
+	SkillsTags      string `json:"skills_tags"`
+	SocialLinks     string `json:"social_links"`
+	PinnedGiftID    int    `json:"pinned_gift_id"`
 }
 
 type Comment struct {
