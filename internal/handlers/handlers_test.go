@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"social-network/internal/config"
@@ -243,7 +244,7 @@ func TestAuthorizedOperations(t *testing.T) {
 
 // 4. Проверка API Личных сообщений (Direct Messages)
 func TestDirectMessagesAPI(t *testing.T) {
-	mux, _, _, _, _, tokenUser1, tokenUser2 := setupTestApp(t)
+	mux, userRepo, _, _, _, tokenUser1, tokenUser2 := setupTestApp(t)
 
 	t.Run("Отправка сообщения между пользователями -> 201 Created", func(t *testing.T) {
 		body, _ := json.Marshal(models.SendMessageRequest{
@@ -300,6 +301,60 @@ func TestDirectMessagesAPI(t *testing.T) {
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("Expected 200 OK, got %d. Body: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("Пользователь C не может прочитать чужую переписку A и B -> пустой ответ или 403 Forbidden", func(t *testing.T) {
+		tokenUser3, err := userRepo.CreateSession(3)
+		if err != nil {
+			t.Fatalf("Failed to create session for user 3: %v", err)
+		}
+
+		// 1. Пользователь 1 (A) отправляет секретное сообщение пользователю 2 (B)
+		secretContent := "Секретный ключ авторизации шлюза: X-SECRET-994"
+		sendPayload, _ := json.Marshal(models.SendMessageRequest{
+			ReceiverID: 2,
+			Content:    secretContent,
+		})
+		reqSend := httptest.NewRequest("POST", "/api/messages", bytes.NewReader(sendPayload))
+		reqSend.Header.Set("Content-Type", "application/json")
+		reqSend.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		wSend := httptest.NewRecorder()
+		mux.ServeHTTP(wSend, reqSend)
+		if wSend.Code != http.StatusCreated {
+			t.Fatalf("Failed to send message: %d", wSend.Code)
+		}
+
+		// 2. Пользователь C (tokenUser3) запрашивает переписку с пользователем 2 (B)
+		// Пользователь C не является участником переписки A и B, поэтому в ответе 0 сообщений
+		reqC := httptest.NewRequest("GET", "/api/messages/2", nil)
+		reqC.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser3})
+		wC := httptest.NewRecorder()
+		mux.ServeHTTP(wC, reqC)
+
+		if wC.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK for C's own conversation with B, got %d", wC.Code)
+		}
+
+		var msgsC []models.Message
+		if err := json.Unmarshal(wC.Body.Bytes(), &msgsC); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+		if len(msgsC) != 0 {
+			t.Errorf("User C received %d messages, expected 0 (conversation isolation violation)", len(msgsC))
+		}
+		if strings.Contains(wC.Body.String(), secretContent) {
+			t.Fatalf("CRITICAL SECURITY VIOLATION: Secret message between A and B leaked to user C!")
+		}
+
+		// 3. Пользователь C пытается явно запросить диалог между A и B через ?user1=1&user2=2 -> 403 Forbidden
+		reqForbidden := httptest.NewRequest("GET", "/api/messages/2?user1=1&user2=2", nil)
+		reqForbidden.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser3})
+		wForbidden := httptest.NewRecorder()
+		mux.ServeHTTP(wForbidden, reqForbidden)
+
+		if wForbidden.Code != http.StatusForbidden {
+			t.Errorf("Expected 403 Forbidden when C attempts to access conversation between A and B, got %d", wForbidden.Code)
 		}
 	})
 }
