@@ -32,7 +32,14 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	users, err := h.userRepo.GetAll(currentUserID)
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	var users []models.User
+	var err error
+	if search != "" {
+		users, err = h.userRepo.Search(currentUserID, search)
+	} else {
+		users, err = h.userRepo.GetAll(currentUserID)
+	}
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -187,6 +194,30 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(req.ProfileBgEffect) == "" {
 		req.ProfileBgEffect = "none"
+	}
+
+	if req.PinnedGiftID > 0 {
+		giftTypes := []string{
+			"cyber_katana", "neuro_visor", "quantum_heart",
+			"samurai_helmet", "synthwave_cassette", "mantis_blade",
+			"tactical_drone", "emp_grenade", "combat_stim",
+		}
+		if req.PinnedGiftID <= len(giftTypes) {
+			targetType := giftTypes[req.PinnedGiftID-1]
+			userGifts, _ := h.giftRepo.GetByReceiverID(currentUser.ID, true)
+			hasGift := false
+			for _, g := range userGifts {
+				if g.GiftType == targetType {
+					hasGift = true
+					break
+				}
+			}
+			if !hasGift {
+				req.PinnedGiftID = 0
+			}
+		} else {
+			req.PinnedGiftID = 0
+		}
 	}
 
 	updated, err := h.userRepo.UpdateProfile(currentUser.ID, req)

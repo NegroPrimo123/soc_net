@@ -61,6 +61,49 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 	return users, nil
 }
 
+
+func (r *UserRepository) Search(currentUserID int, search string) ([]models.User, error) {
+	query := `
+	SELECT 
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio,
+		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
+		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
+		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
+		u.created_at,
+		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
+		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
+		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
+		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
+	FROM users u
+	WHERE LOWER(u.username) LIKE LOWER($2) OR LOWER(u.display_name) LIKE LOWER($2)
+	ORDER BY u.id ASC
+	LIMIT 20
+	`
+	rows, err := r.db.Query(query, currentUserID, "%"+search+"%")
+	if err != nil {
+		return nil, fmt.Errorf("search users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(
+			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
+			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
+			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
+			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
+			&u.CreatedAt,
+			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
+		); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
 func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error) {
 	query := `
 	SELECT 

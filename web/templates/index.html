@@ -179,17 +179,22 @@
         <div class="modal-header">
             <div class="modal-header-badge">CYBERPUNK 2077 GIFTS</div>
             <h3>Отправить кибер-подарок</h3>
-            <p id="giftModalReceiverText" class="modal-subtext">Получатель: <strong id="giftReceiverName">...</strong></p>
+            <p class="modal-subtext">Подарите цифровой артефакт с личным посланием</p>
         </div>
 
         <form id="sendGiftForm" onsubmit="handleSendGiftSubmit(event)">
             <input type="hidden" id="giftReceiverId" value="">
 
-            <div id="giftReceiverSelectContainer" class="form-group" style="display: none; margin-bottom: 1rem;">
-                <label for="giftReceiverSelect" style="font-weight: 600; font-size: 0.85rem; color: var(--text-pure); margin-bottom: 0.4rem; display: block;">Выберите получателя подарка:*</label>
-                <select id="giftReceiverSelect" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-md); background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: var(--text-pure);" onchange="onGiftReceiverSelected(this.value)">
-                    <option value="">-- Выберите пользователя сети --</option>
-                </select>
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+                <label for="giftReceiverSearchInput" style="font-weight: 600; font-size: 0.85rem; color: var(--text-pure); margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center;">
+                    <span>Получатель подарка (введите @username):*</span>
+                    <small style="color: var(--text-dim); font-size: 0.78rem;">Например: @oleg или sophia</small>
+                </label>
+                <div style="position: relative;">
+                    <input type="text" id="giftReceiverSearchInput" class="form-control" placeholder="Введите @username получателя..." autocomplete="off" oninput="onGiftReceiverSearchInput(this.value)" style="width: 100%; padding: 10px 14px; border-radius: var(--radius-md); background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: var(--text-pure); font-size: 0.95rem;">
+                    <span id="giftReceiverSearchSpinner" style="display: none; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 0.82rem; color: var(--accent-neon);">⏳ Поиск...</span>
+                </div>
+                <div id="giftReceiverFoundBox" style="margin-top: 0.5rem; min-height: 28px;"></div>
             </div>
 
             <div class="form-label-row">
@@ -407,8 +412,15 @@
             <!-- ВКЛАДКА 2: Статус и Вайб -->
             <div id="customPaneStatus" class="custom-pane" style="display: none;">
                 <div class="form-group">
-                    <label>Эмодзи настроения / статуса</label>
-                    <div class="chips-selector-row" style="font-size: 1.25rem;">
+                    <label for="editStatusEmoji">Эмодзи настроения / статуса (любой свой эмодзи или выберите готовый):</label>
+                    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.75rem;">
+                        <input type="text" id="editStatusEmoji" class="form-control" style="font-size: 1.6rem; text-align: center; width: 68px; height: 50px; padding: 4px; border-radius: var(--radius-md); background: rgba(0,0,0,0.5); border: 1px solid var(--accent-neon); color: var(--text-pure);" placeholder="⚡" maxlength="10" oninput="updateModalLivePreview()">
+                        <div style="font-size: 0.82rem; color: var(--text-dim); line-height: 1.4;">
+                            <span style="color: var(--text-pure); font-weight: 600;">Придумайте свой эмодзи или символ статуса</span><br>
+                            <span>Либо нажмите на готовый вариант настроения ниже:</span>
+                        </div>
+                    </div>
+                    <div class="chips-selector-row" style="font-size: 1.15rem;">
                         <span class="choice-chip" onclick="setStatusEmojiPreset('⚡')">⚡ В сети</span>
                         <span class="choice-chip" onclick="setStatusEmojiPreset('☕')">☕ Кодинг</span>
                         <span class="choice-chip" onclick="setStatusEmojiPreset('🎮')">🎮 AFK</span>
@@ -418,8 +430,10 @@
                         <span class="choice-chip" onclick="setStatusEmojiPreset('🎧')">🎧 Синтвейв</span>
                         <span class="choice-chip" onclick="setStatusEmojiPreset('💡')">💡 Есть идея</span>
                         <span class="choice-chip" onclick="setStatusEmojiPreset('💎')">💎 VIP</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('🤖')">🤖 Киборг</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('❤️')">❤️ Влюблен</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('💤')">💤 Сплю</span>
                     </div>
-                    <input type="hidden" id="editStatusEmoji" value="⚡">
                 </div>
 
                 <div class="form-group">
@@ -440,7 +454,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Стиль голографической рамки аватарки</label>
+                    <label>Готовые варианты голо-рамки (в 1 клик):</label>
                     <div class="chips-selector-row">
                         <span class="choice-chip active" id="chipFrame-default" onclick="setAvatarFrame('default')">⭕ Classic Glow</span>
                         <span class="choice-chip" id="chipFrame-pulse" onclick="setAvatarFrame('pulse')">💫 Pulse Energy</span>
@@ -448,8 +462,75 @@
                         <span class="choice-chip" id="chipFrame-glitch" onclick="setAvatarFrame('glitch')">👾 Dual Glitch Holo</span>
                         <span class="choice-chip" id="chipFrame-gold" onclick="setAvatarFrame('gold')">👑 Relic Gold Aura</span>
                     </div>
-                    <input type="hidden" id="editAvatarFrame" value="default">
                 </div>
+
+                <div class="custom-frame-builder-box" style="margin-top: 1.1rem; padding: 1rem; background: rgba(0,0,0,0.35); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem;">
+                        <span style="font-weight: 700; font-size: 0.9rem; color: var(--accent-neon);">🎛️ Конструктор собственной рамки</span>
+                        <small style="color: var(--text-dim); font-size: 0.75rem;">Тонкая настройка формы, цвета и неона</small>
+                    </div>
+
+                    <!-- Форма -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <label style="font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.3rem; display: block;">Форма рамки:</label>
+                        <div class="chips-selector-row" id="cfShapeRow" style="font-size: 0.82rem;">
+                            <span class="choice-chip active" data-cf-shape="circle" onclick="setCustomFrameProp('shape', 'circle')">⭕ Круг</span>
+                            <span class="choice-chip" data-cf-shape="squircle" onclick="setCustomFrameProp('shape', 'squircle')">⏹️ Сквиркл</span>
+                            <span class="choice-chip" data-cf-shape="shield" onclick="setCustomFrameProp('shape', 'shield')">🛡️ Кибер-щит</span>
+                            <span class="choice-chip" data-cf-shape="diamond" onclick="setCustomFrameProp('shape', 'diamond')">💎 Кристалл</span>
+                        </div>
+                    </div>
+
+                    <!-- Толщина -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <label style="font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.3rem; display: block;">Толщина контура:</label>
+                        <div class="chips-selector-row" id="cfWidthRow" style="font-size: 0.82rem;">
+                            <span class="choice-chip" data-cf-width="2px" onclick="setCustomFrameProp('width', '2px')">2px Тонкая</span>
+                            <span class="choice-chip active" data-cf-width="3px" onclick="setCustomFrameProp('width', '3px')">3px Стандарт</span>
+                            <span class="choice-chip" data-cf-width="5px" onclick="setCustomFrameProp('width', '5px')">5px Мощная</span>
+                            <span class="choice-chip" data-cf-width="8px" onclick="setCustomFrameProp('width', '8px')">8px Броня</span>
+                        </div>
+                    </div>
+
+                    <!-- Свечение / Аура -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <label style="font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.3rem; display: block;">Неоновое свечение (аура):</label>
+                        <div class="chips-selector-row" id="cfGlowRow" style="font-size: 0.82rem;">
+                            <span class="choice-chip" data-cf-glow="soft" onclick="setCustomFrameProp('glow', 'soft')">Мягкое</span>
+                            <span class="choice-chip active" data-cf-glow="bright" onclick="setCustomFrameProp('glow', 'bright')">Яркий неон</span>
+                            <span class="choice-chip" data-cf-glow="overdrive" onclick="setCustomFrameProp('glow', 'overdrive')">⚡ Овердрайв</span>
+                            <span class="choice-chip" data-cf-glow="dual" onclick="setCustomFrameProp('glow', 'dual')">Двойной контур</span>
+                        </div>
+                    </div>
+
+                    <!-- Анимация -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <label style="font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.3rem; display: block;">Анимация эффекта:</label>
+                        <div class="chips-selector-row" id="cfAnimRow" style="font-size: 0.82rem;">
+                            <span class="choice-chip active" data-cf-anim="none" onclick="setCustomFrameProp('anim', 'none')">Статика</span>
+                            <span class="choice-chip" data-cf-anim="pulse" onclick="setCustomFrameProp('anim', 'pulse')">💫 Пульсация</span>
+                            <span class="choice-chip" data-cf-anim="spin" onclick="setCustomFrameProp('anim', 'spin')">🔄 Вращение</span>
+                            <span class="choice-chip" data-cf-anim="glitch" onclick="setCustomFrameProp('anim', 'glitch')">👾 Глитч</span>
+                            <span class="choice-chip" data-cf-anim="rainbow" onclick="setCustomFrameProp('anim', 'rainbow')">🌈 RGB Радуга</span>
+                        </div>
+                    </div>
+
+                    <!-- Цвет рамки -->
+                    <div>
+                        <label style="font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.3rem; display: block;">Цвет контура рамки:</label>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <span class="choice-chip active" data-cf-color="auto" onclick="setCustomFrameProp('color', 'auto')">🎨 Цвет профиля</span>
+                            <input type="color" id="cfCustomColorPicker" value="#00f0ff" style="width: 28px; height: 28px; padding: 0; border: none; background: none; cursor: pointer; border-radius: 4px;" oninput="setCustomFrameProp('color', this.value)" title="Выбрать свой цвет">
+                            <span class="color-dot-preset" style="background: #00f0ff;" title="Cyan" onclick="setCustomFrameProp('color', '#00f0ff')"></span>
+                            <span class="color-dot-preset" style="background: #b026ff;" title="Purple" onclick="setCustomFrameProp('color', '#b026ff')"></span>
+                            <span class="color-dot-preset" style="background: #ffe600;" title="Yellow" onclick="setCustomFrameProp('color', '#ffe600')"></span>
+                            <span class="color-dot-preset" style="background: #00ff66;" title="Lime" onclick="setCustomFrameProp('color', '#00ff66')"></span>
+                            <span class="color-dot-preset" style="background: #ff0055;" title="Crimson" onclick="setCustomFrameProp('color', '#ff0055')"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <input type="hidden" id="editAvatarFrame" value="default">
             </div>
 
             <!-- ВКЛАДКА 4: Обложка, Неоновая Аура и Эффекты -->
@@ -570,9 +651,17 @@
             <div id="customPaneTrophy" class="custom-pane" style="display: none;">
                 <div class="form-group">
                     <label>Выберите артефакт для установки на почетный пьедестал профиля:</label>
-                    <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.8rem;">Этот экспонат будет демонстрироваться под вашим аватаром с трехмерной голографической аурой.</p>
+                    <p style="font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.8rem;">Этот экспонат будет демонстрироваться под вашим аватаром с трехмерной голографической аурой. <strong>Выставить на показ можно только тот подарок, который есть у вас в коллекции.</strong></p>
                     <div class="trophy-select-grid" id="trophySelectGrid">
-                        <!-- Элементы генерируются динамически -->
+                        <!-- Элементы генерируются динамически только из полученных подарков -->
+                    </div>
+                    <div id="trophyEmptyMessage" style="display: none; padding: 1.2rem; background: rgba(0,0,0,0.3); border: 1px dashed var(--border-subtle); border-radius: var(--radius-md); text-align: center; margin-top: 0.8rem;">
+                        <div style="font-size: 1.8rem; margin-bottom: 0.4rem;">🔒</div>
+                        <div style="font-weight: 600; color: var(--text-pure); margin-bottom: 0.3rem;">У вас пока нет подаренных артефактов</div>
+                        <div style="font-size: 0.82rem; color: var(--text-dim); max-width: 420px; margin: 0 auto 0.8rem;">Экспонаты разблокируются, когда другие участники сети дарят вам подарки. Попросите друзей или отправьте подарок сами, чтобы начать коллекцию!</div>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="closeEditProfileModal(); openGiftCatalogModal();">
+                            <span>🎁 Открыть витрину подарков</span>
+                        </button>
                     </div>
                     <input type="hidden" id="editPinnedGiftId" value="0">
                 </div>

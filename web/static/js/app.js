@@ -1265,7 +1265,7 @@ function renderUserProfile(data) {
     // Применение голографической рамки аватарки
     const avatarFrameBox = document.getElementById('heroAvatarFrameBox');
     if (avatarFrameBox) {
-        avatarFrameBox.className = 'avatar-frame-box avatar-frame-' + (user.avatar_frame || 'default');
+        applyAvatarFrame(avatarFrameBox, user.avatar_frame || 'default', user.accent_color || '#00f0ff');
     }
 
     // Применение фоновой текстуры на обложку
@@ -1769,32 +1769,103 @@ function openCurrentProfileGiftModal() {
     }
 }
 
-function openSendGiftModal(receiverId = null, displayName = null, username = null, preselectedGiftType = 'cyber_katana') {
+let giftSearchTimer = null;
+function onGiftReceiverSearchInput(rawVal) {
+    clearTimeout(giftSearchTimer);
+    const receiverIdInput = document.getElementById('giftReceiverId');
+    const foundBox = document.getElementById('giftReceiverFoundBox');
+    const spinner = document.getElementById('giftReceiverSearchSpinner');
+
+    const val = (rawVal || '').replace(/^@/, '').trim().toLowerCase();
+    if (!val) {
+        if (receiverIdInput) receiverIdInput.value = '';
+        if (foundBox) foundBox.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">Введите юзернейм пользователя сети</span>';
+        return;
+    }
+
+    if (spinner) spinner.style.display = 'inline';
+
+    giftSearchTimer = setTimeout(async () => {
+        try {
+            const res = await fetch(`/api/users?search=${encodeURIComponent(val)}`);
+            if (spinner) spinner.style.display = 'none';
+            if (!res.ok) throw new Error('Ошибка поиска');
+            const users = await res.json();
+
+            const match = users.find(u => u.username.toLowerCase() === val) ||
+                          users.find(u => u.username.toLowerCase().startsWith(val)) ||
+                          (users.length === 1 ? users[0] : null);
+
+            if (match) {
+                if (match.id === window.CURRENT_USER_ID) {
+                    if (receiverIdInput) receiverIdInput.value = '';
+                    if (foundBox) foundBox.innerHTML = '<span style="color: #ff4d6d; font-size: 0.82rem;">⚠️ Нельзя отправить подарок самому себе</span>';
+                    return;
+                }
+                if (receiverIdInput) receiverIdInput.value = match.id;
+                renderFoundRecipientBadge(match);
+            } else {
+                if (receiverIdInput) receiverIdInput.value = '';
+                if (foundBox) foundBox.innerHTML = `<span style="color: #ff6b6b; font-size: 0.82rem;">❌ Пользователь "@${escapeHtml(val)}" не найден</span>`;
+            }
+        } catch (e) {
+            if (spinner) spinner.style.display = 'none';
+            if (receiverIdInput) receiverIdInput.value = '';
+            if (foundBox) foundBox.innerHTML = '<span style="color: #ff6b6b; font-size: 0.82rem;">Ошибка соединения при поиске</span>';
+        }
+    }, 250);
+}
+
+function renderFoundRecipientBadge(user) {
+    const foundBox = document.getElementById('giftReceiverFoundBox');
+    if (!foundBox) return;
+    const avatar = user.avatar_url || '/static/avatars/default.svg';
+    foundBox.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: rgba(0, 240, 255, 0.08); border: 1px solid var(--accent-neon); border-radius: var(--radius-md);">
+            <img src="${escapeHtml(avatar)}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid var(--accent-neon);">
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 600; color: #fff; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${escapeHtml(user.display_name)} <span style="color: var(--accent-neon); font-size: 0.8rem;">(@${escapeHtml(user.username)})</span>
+                </div>
+                <div style="font-size: 0.73rem; color: var(--text-dim);">${escapeHtml(user.custom_rank || 'Участник сети')}</div>
+            </div>
+            <span style="color: #00ff88; font-size: 0.95rem; font-weight: bold;" title="Пользователь найден">✓ Найден</span>
+        </div>
+    `;
+}
+
+async function openSendGiftModal(receiverId = null, displayName = null, username = null, preselectedGiftType = 'cyber_katana') {
     if (!window.IS_AUTHENTICATED) {
         showToast('Пожалуйста, войдите в аккаунт для отправки подарка 🎁', 'error');
         openAuthModal('login');
         return;
     }
 
-    const selectContainer = document.getElementById('giftReceiverSelectContainer');
-    const receiverText = document.getElementById('giftModalReceiverText');
+    const input = document.getElementById('giftReceiverSearchInput');
     const receiverIdInput = document.getElementById('giftReceiverId');
+    const foundBox = document.getElementById('giftReceiverFoundBox');
 
-    if (receiverId) {
+    if (receiverId && username) {
         if (receiverId === window.CURRENT_USER_ID) {
             showToast('Нельзя отправить подарок самому себе 🙂', 'error');
             return;
         }
-        receiverIdInput.value = receiverId;
-        document.getElementById('giftReceiverName').textContent = `${displayName} (@${username})`;
-        if (receiverText) receiverText.style.display = 'block';
-        if (selectContainer) selectContainer.style.display = 'none';
+        if (receiverIdInput) receiverIdInput.value = receiverId;
+        if (input) input.value = `@${username}`;
+        renderFoundRecipientBadge({
+            id: receiverId,
+            display_name: displayName || username,
+            username: username,
+            avatar_url: '/static/avatars/default.svg'
+        });
     } else {
-        receiverIdInput.value = '';
-        if (receiverText) receiverText.style.display = 'none';
-        if (selectContainer) {
-            selectContainer.style.display = 'block';
-            loadUsersIntoGiftSelect();
+        if (receiverIdInput) receiverIdInput.value = '';
+        if (input) {
+            input.value = '';
+            setTimeout(() => input.focus(), 150);
+        }
+        if (foundBox) {
+            foundBox.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">Введите юзернейм пользователя сети</span>';
         }
     }
 
@@ -1804,29 +1875,6 @@ function openSendGiftModal(receiverId = null, displayName = null, username = nul
 
     const modal = document.getElementById('sendGiftModal');
     if (modal) modal.style.display = 'flex';
-}
-
-async function loadUsersIntoGiftSelect() {
-    const select = document.getElementById('giftReceiverSelect');
-    if (!select) return;
-    try {
-        const res = await fetch('/api/users');
-        if (!res.ok) return;
-        const users = await res.json();
-        select.innerHTML = '<option value="">-- Выберите получателя артефакта --</option>';
-        users.forEach(u => {
-            if (u.id !== window.CURRENT_USER_ID) {
-                const opt = document.createElement('option');
-                opt.value = u.id;
-                opt.textContent = `${u.display_name} (@${u.username})`;
-                select.appendChild(opt);
-            }
-        });
-    } catch (e) {}
-}
-
-function onGiftReceiverSelected(val) {
-    document.getElementById('giftReceiverId').value = val;
 }
 
 function closeSendGiftModal() {
@@ -1856,7 +1904,8 @@ async function handleSendGiftSubmit(e) {
     e.preventDefault();
     const receiverId = parseInt(document.getElementById('giftReceiverId').value, 10);
     if (!receiverId || isNaN(receiverId)) {
-        showToast('Пожалуйста, выберите получателя подарка 👥', 'error');
+        showToast('Пожалуйста, найдите и выберите получателя подарка 👥', 'error');
+        document.getElementById('giftReceiverSearchInput')?.focus();
         return;
     }
     const giftType = document.getElementById('selectedGiftType').value;
@@ -2102,14 +2151,34 @@ function updateSkillsUI() {
     }
 }
 
-function initTrophyGrid(selectedId = 0) {
+async function initTrophyGrid(selectedId = 0) {
     currentPinnedTrophyId = selectedId;
     const grid = document.getElementById('trophySelectGrid');
+    const emptyNotice = document.getElementById('trophyEmptyMessage');
+    const hidden = document.getElementById('editPinnedGiftId');
+    if (hidden) hidden.value = selectedId;
     if (!grid) return;
+    grid.innerHTML = '<div style="color: var(--text-dim); font-size: 0.85rem; padding: 0.5rem;">Загрузка коллекции подарков...</div>';
+
+    let ownedGifts = [];
+    try {
+        const uid = (currentProfileUserData && currentProfileUserData.id) || window.CURRENT_USER_ID;
+        if (uid) {
+            const res = await fetch(`/api/users/${uid}/gifts`);
+            if (res.ok) {
+                ownedGifts = await res.json();
+            }
+        }
+    } catch (e) {
+        console.error('Error fetching owned gifts:', e);
+    }
+
     grid.innerHTML = '';
 
+    // Всегда доступен вариант: "Без экспоната"
     const card0 = document.createElement('div');
     card0.className = `trophy-select-card ${selectedId === 0 ? 'active' : ''}`;
+    card0.setAttribute('data-gift-id', '0');
     card0.innerHTML = `
         <div style="font-size: 1.8rem; margin-bottom: 0.2rem;">🚫</div>
         <span class="trophy-select-name">Без экспоната</span>
@@ -2118,21 +2187,47 @@ function initTrophyGrid(selectedId = 0) {
     grid.appendChild(card0);
 
     const giftKeys = Object.keys(GIFT_SPECS);
-    giftKeys.forEach((key, idx) => {
-        const spec = GIFT_SPECS[key];
-        const giftId = idx + 1;
-        const card = document.createElement('div');
-        card.className = `trophy-select-card ${selectedId === giftId ? 'active' : ''}`;
-        card.innerHTML = `
-            <img src="${spec.png}" alt="${spec.title}" class="trophy-select-img">
-            <span class="trophy-select-name">${spec.title}</span>
-        `;
-        card.onclick = () => selectPinnedTrophy(giftId);
-        grid.appendChild(card);
+    const ownedCounts = {};
+    ownedGifts.forEach(g => {
+        if (g.gift_type) {
+            ownedCounts[g.gift_type] = (ownedCounts[g.gift_type] || 0) + 1;
+        }
     });
 
-    const hidden = document.getElementById('editPinnedGiftId');
-    if (hidden) hidden.value = selectedId;
+    const ownedTypes = Object.keys(ownedCounts);
+    if (ownedTypes.length === 0) {
+        if (emptyNotice) emptyNotice.style.display = 'block';
+        selectPinnedTrophy(0);
+    } else {
+        if (emptyNotice) emptyNotice.style.display = 'none';
+
+        // Проверяем, есть ли ранее выбранный артефакт в коллекции
+        const selectedKey = (selectedId > 0 && selectedId <= giftKeys.length) ? giftKeys[selectedId - 1] : null;
+        if (selectedId > 0 && (!selectedKey || !ownedCounts[selectedKey])) {
+            selectPinnedTrophy(0);
+        }
+
+        // Рендерим ТОЛЬКО те подарки, которые реально есть у пользователя!
+        giftKeys.forEach((key, idx) => {
+            if (!ownedCounts[key]) return;
+            const spec = GIFT_SPECS[key];
+            const giftId = idx + 1;
+            const count = ownedCounts[key];
+            const card = document.createElement('div');
+            card.className = `trophy-select-card ${currentPinnedTrophyId === giftId ? 'active' : ''}`;
+            card.setAttribute('data-gift-id', giftId.toString());
+            card.innerHTML = `
+                <div style="position: relative; display: inline-block;">
+                    <img src="${spec.png}" alt="${spec.title}" class="trophy-select-img">
+                    <span style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.85); border: 1px solid var(--accent-neon); color: var(--accent-neon); font-size: 0.68rem; font-weight: bold; padding: 1px 5px; border-radius: 8px;">x${count}</span>
+                </div>
+                <span class="trophy-select-name">${spec.title}</span>
+                <span style="font-size: 0.68rem; color: var(--text-dim);">${spec.rarity}</span>
+            `;
+            card.onclick = () => selectPinnedTrophy(giftId);
+            grid.appendChild(card);
+        });
+    }
 }
 
 function selectPinnedTrophy(giftId) {
@@ -2140,8 +2235,9 @@ function selectPinnedTrophy(giftId) {
     const hidden = document.getElementById('editPinnedGiftId');
     if (hidden) hidden.value = giftId;
 
-    document.querySelectorAll('#trophySelectGrid .trophy-select-card').forEach((c, idx) => {
-        c.classList.toggle('active', idx === giftId);
+    document.querySelectorAll('#trophySelectGrid .trophy-select-card').forEach(c => {
+        const id = parseInt(c.getAttribute('data-gift-id'), 10);
+        c.classList.toggle('active', id === giftId);
     });
 }
 
@@ -2155,8 +2251,67 @@ function setRankPreset(rank) {
 }
 
 function setStatusEmojiPreset(emoji) {
-    document.getElementById('editStatusEmoji').value = emoji;
+    const el = document.getElementById('editStatusEmoji');
+    if (el) el.value = emoji;
     updateModalLivePreview();
+}
+
+// ==========================================
+// КОНСТРУКТОР ГОЛО-РАМКИ АВАТАРКИ
+// ==========================================
+let customFrameState = {
+    shape: 'circle',
+    width: '3px',
+    glow: 'bright',
+    anim: 'none',
+    color: 'auto'
+};
+
+function parseFrameString(frameVal) {
+    if (!frameVal || !frameVal.startsWith('custom:')) return null;
+    const parts = frameVal.split(':');
+    return {
+        shape: parts[1] || 'circle',
+        width: parts[2] || '3px',
+        glow: parts[3] || 'bright',
+        anim: parts[4] || 'none',
+        color: parts[5] || 'auto'
+    };
+}
+
+function setCustomFrameProp(prop, val) {
+    customFrameState[prop] = val;
+    const frameStr = `custom:${customFrameState.shape}:${customFrameState.width}:${customFrameState.glow}:${customFrameState.anim}:${customFrameState.color}`;
+    document.getElementById('editAvatarFrame').value = frameStr;
+
+    ['default', 'pulse', 'hex', 'glitch', 'gold'].forEach(k => {
+        const chip = document.getElementById(`chipFrame-${k}`);
+        if (chip) chip.classList.remove('active');
+    });
+
+    updateCustomFrameBuilderUI();
+    updateModalLivePreview();
+}
+
+function updateCustomFrameBuilderUI() {
+    document.querySelectorAll('#cfShapeRow .choice-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.getAttribute('data-cf-shape') === customFrameState.shape);
+    });
+    document.querySelectorAll('#cfWidthRow .choice-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.getAttribute('data-cf-width') === customFrameState.width);
+    });
+    document.querySelectorAll('#cfGlowRow .choice-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.getAttribute('data-cf-glow') === customFrameState.glow);
+    });
+    document.querySelectorAll('#cfAnimRow .choice-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.getAttribute('data-cf-anim') === customFrameState.anim);
+    });
+    const autoChip = document.querySelector('#customPaneAvatar [data-cf-color="auto"]');
+    if (autoChip) autoChip.classList.toggle('active', customFrameState.color === 'auto');
+    const colorPicker = document.getElementById('cfCustomColorPicker');
+    if (colorPicker && customFrameState.color !== 'auto') {
+        colorPicker.value = customFrameState.color;
+    }
 }
 
 function setAvatarFrame(frameKey, updatePreview = true) {
@@ -2165,7 +2320,77 @@ function setAvatarFrame(frameKey, updatePreview = true) {
         const chip = document.getElementById(`chipFrame-${k}`);
         if (chip) chip.classList.toggle('active', k === frameKey);
     });
+
+    if (frameKey.startsWith('custom:')) {
+        const parsed = parseFrameString(frameKey);
+        if (parsed) customFrameState = parsed;
+        updateCustomFrameBuilderUI();
+    } else {
+        document.querySelectorAll('.custom-frame-builder-box .choice-chip').forEach(c => c.classList.remove('active'));
+    }
+
     if (updatePreview) updateModalLivePreview();
+}
+
+function applyAvatarFrame(frameBox, frameVal, accentColor) {
+    if (!frameBox) return;
+    const img = frameBox.querySelector('.hero-avatar') || frameBox.querySelector('img');
+    if (!frameVal) frameVal = 'default';
+    const acc = accentColor || '#00f0ff';
+    frameBox.style.setProperty('--profile-accent', acc);
+
+    // Сброс инлайновых оверрайдов
+    frameBox.style.borderRadius = '';
+    frameBox.style.animation = '';
+    frameBox.style.boxShadow = '';
+    frameBox.style.outline = '';
+    frameBox.style.border = '';
+    frameBox.style.background = '';
+    if (img) {
+        img.style.borderRadius = '';
+        img.style.border = '';
+        img.style.boxShadow = '';
+    }
+
+    if (frameVal.startsWith('custom:')) {
+        frameBox.className = 'avatar-frame-box avatar-frame-custom';
+        const parts = frameVal.split(':');
+        const shape = parts[1] || 'circle';
+        const width = parts[2] || '3px';
+        const glow = parts[3] || 'bright';
+        const anim = parts[4] || 'none';
+        const color = (parts[5] && parts[5] !== 'auto') ? parts[5] : acc;
+
+        let radBox = '50%';
+        let radImg = '50%';
+        if (shape === 'squircle') { radBox = '26px'; radImg = '22px'; }
+        else if (shape === 'shield') { radBox = '35% 35% 50% 50%'; radImg = '35% 35% 50% 50%'; }
+        else if (shape === 'diamond') { radBox = '40% 10% 40% 10%'; radImg = '40% 10% 40% 10%'; }
+
+        frameBox.style.borderRadius = radBox;
+        if (img) {
+            img.style.borderRadius = radImg;
+            img.style.border = `${width} solid ${color}`;
+        }
+
+        if (glow === 'soft') {
+            frameBox.style.boxShadow = `0 0 14px ${color}66`;
+        } else if (glow === 'bright') {
+            frameBox.style.boxShadow = `0 0 24px ${color}, inset 0 0 10px ${color}55`;
+        } else if (glow === 'overdrive') {
+            frameBox.style.boxShadow = `0 0 35px ${color}, 0 0 55px ${color}88`;
+        } else if (glow === 'dual') {
+            frameBox.style.boxShadow = `0 0 0 3px rgba(8,11,17,0.9), 0 0 20px ${color}`;
+            frameBox.style.outline = `2px dashed ${color}`;
+        }
+
+        if (anim === 'pulse') frameBox.style.animation = 'pulseAura 2s infinite ease-in-out';
+        else if (anim === 'spin') frameBox.style.animation = 'spinAura 6s infinite linear';
+        else if (anim === 'glitch') frameBox.style.animation = 'glitchAura 2.5s infinite steps(2)';
+        else if (anim === 'rainbow') frameBox.style.animation = 'rainbowAura 4s infinite linear';
+    } else {
+        frameBox.className = `avatar-frame-box avatar-frame-${frameVal}`;
+    }
 }
 
 function setAccentColorPreset(colorHex, updatePreview = true) {
@@ -2277,8 +2502,7 @@ function updateModalLivePreview() {
 
     const previewFrame = document.getElementById('previewAvatarFrameBox');
     if (previewFrame) {
-        previewFrame.className = `avatar-frame-box avatar-frame-${frame}`;
-        previewFrame.style.setProperty('--profile-accent', color);
+        applyAvatarFrame(previewFrame, frame, color);
     }
 
     const rankBadge = document.getElementById('previewRankBadge');
