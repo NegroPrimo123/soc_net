@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoSocial — Киберпанк Социальная Сеть</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=cyber_2077_v10">
+    <link rel="stylesheet" href="/static/css/style.css?v=cyber_9gifts_v20">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -157,6 +157,13 @@
 
         <form id="sendGiftForm" onsubmit="handleSendGiftSubmit(event)">
             <input type="hidden" id="giftReceiverId" value="">
+
+            <div id="giftReceiverSelectContainer" class="form-group" style="display: none; margin-bottom: 1rem;">
+                <label for="giftReceiverSelect" style="font-weight: 600; font-size: 0.85rem; color: var(--text-pure); margin-bottom: 0.4rem; display: block;">Выберите получателя подарка:*</label>
+                <select id="giftReceiverSelect" class="form-control" style="width: 100%; padding: 8px 12px; border-radius: var(--radius-md); background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: var(--text-pure);" onchange="onGiftReceiverSelected(this.value)">
+                    <option value="">-- Выберите пользователя сети --</option>
+                </select>
+            </div>
 
             <div class="form-label-row">
                 <label class="form-label">Выберите подарок:</label>
@@ -1047,13 +1054,31 @@
             <div id="showcaseView" class="view-panel" style="display: none;">
                 <div class="vault-container">
                     <div class="vault-hero-card">
-                        <div class="modal-header-badge">CYBERPUNK 2077 ARTIFACTS</div>
+                        <div class="modal-header-badge">CYBERPUNK 2077 GIFTS</div>
                         <h2>Витрина кибер-подарков Найт-Сити</h2>
-                        <p>Премиальная 3D-коллекция из 9 киберпанк-подарков без фона: Кибер-Катана, Нейро-Визор HUD, Квантовое Кибер-Сердце, Боевой Шлем Самурая Oni, Синтвейв Нейро-Кассета, Клинок Богомола, Тактический Кибер-Дрон, Плазменная ЭМИ-Граната и Нейро-Инжектор «MaxDoc». Дарите артефакты друзьям и союзникам в сети!</p>
+                        <p>Премиальная 3D-коллекция из 9 киберпанк-подарков на 100% прозрачном фоне (Alpha=0) с мягким неоновым свечением: Кибер-Катана, Нейро-Визор HUD, Квантовое Кибер-Сердце, Боевой Шлем Самурая Oni, Синтвейв Нейро-Кассета, Клинок Богомола, Тактический Кибер-Дрон, Плазменная ЭМИ-Граната и Нейро-Инжектор «MaxDoc». Выбирайте артефакт и дарите союзникам в сети!</p>
                     </div>
 
-                    <div class="artifacts-grid" id="globalShowcaseGrid">
-                        <!-- Сетка артефактов -->
+                    <!-- Вкладки витрины: Каталог 9 артефактов / Врученные подарки -->
+                    <div class="feed-filter-bar" style="margin-bottom: 1.5rem;">
+                        <div class="segmented-control">
+                            <button class="seg-btn active" id="tabVaultCatalog" onclick="switchVaultTab('catalog')">
+                                <span>✦ Каталог всех 9 артефактов</span>
+                            </button>
+                            <button class="seg-btn" id="tabVaultHistory" onclick="switchVaultTab('history')">
+                                <span>🎁 Недавно подаренные</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Каталог всех 9 артефактов из Подарки_для_соцсети -->
+                    <div class="artifacts-grid" id="vaultCatalogGrid">
+                        <!-- 9 карточек артефактов генерируются через renderVaultCatalog() -->
+                    </div>
+
+                    <!-- Лента недавно полученных подарков -->
+                    <div class="artifacts-grid" id="globalShowcaseGrid" style="display: none;">
+                        <!-- Недавно подаренные -->
                     </div>
                 </div>
             </div>
@@ -1142,7 +1167,7 @@
     window.CURRENT_SEARCH = "{{.SearchQuery}}";
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
-<script src="/static/js/app.js?v=cyber_2077_v10"></script>
+<script src="/static/js/app.js?v=cyber_9gifts_v20"></script>
 
 </body>
 </html>
