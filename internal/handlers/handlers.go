@@ -122,6 +122,18 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		currentUser, _ = h.userRepo.GetByID(1, 1)
 		if currentUser != nil {
 			currentUserID = currentUser.ID
+			token, err := h.userRepo.CreateSession(currentUser.ID)
+			if err == nil {
+				http.SetCookie(w, &http.Cookie{
+					Name:     "session_token",
+					Value:    token,
+					Path:     "/",
+					Expires:  time.Now().Add(30 * 24 * time.Hour),
+					HttpOnly: true,
+					SameSite: http.SameSiteLaxMode,
+				})
+				isAuthenticated = true
+			}
 		}
 	}
 

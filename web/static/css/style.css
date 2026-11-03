@@ -1810,12 +1810,15 @@ input:focus, textarea:focus, select:focus {
 }
 
 .chat-input-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.85rem 1.25rem;
-    background-color: var(--bg-surface);
-    border-top: 1px solid var(--border-subtle);
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.6rem !important;
+    padding: 0.85rem 1.25rem !important;
+    background-color: var(--bg-surface) !important;
+    border-top: 1px solid var(--border-subtle) !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .chat-attach-btn {
@@ -3088,4 +3091,82 @@ input:checked + .toggle-slider:before {
 }
 .chat-preview-card button:hover {
     color: #ff0055;
+}
+
+
+/* ==========================================================================
+   FIX: NEW CHAT MODAL & CUSTOM STUDIO OVERLAYS
+   ========================================================================== */
+.modal-custom-studio-card {
+    max-width: 820px !important;
+    width: 95% !important;
+    max-height: 92vh !important;
+    overflow-y: auto !important;
+    border: 1px solid rgba(0, 240, 255, 0.3) !important;
+    box-shadow: 0 0 30px rgba(0, 240, 255, 0.15), var(--shadow-modal) !important;
+}
+
+.custom-tabs-nav, .custom-modal-tabs {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.4rem !important;
+    overflow-x: auto !important;
+    padding-bottom: 0.5rem !important;
+    margin-bottom: 1.25rem !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    scrollbar-width: thin !important;
+}
+
+.modal-new-chat-card {
+    max-width: 480px !important;
+    width: 95% !important;
+}
+
+.new-chat-user-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+}
+
+.new-chat-user-row:hover {
+    background: rgba(0, 240, 255, 0.08);
+    border-color: var(--neon-cyan, #00f0ff);
+}
+
+
+/* Custom Frame Builder Animations & Controls */
+@keyframes spinAura {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes glitchAura {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(-2px, 1px) scale(1.01); }
+    50% { transform: translate(2px, -1px); }
+    75% { transform: translate(-1px, -1px) scale(0.99); }
+}
+
+@keyframes rainbowAura {
+    0% { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+}
+
+.color-dot-preset {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    display: inline-block;
+    transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+.color-dot-preset:hover {
+    transform: scale(1.25);
+    border-color: #fff;
 }
