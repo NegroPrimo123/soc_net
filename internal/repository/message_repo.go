@@ -128,7 +128,7 @@ func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Co
 		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, m.created_at,
 		(SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = $1 AND is_read = FALSE) AS unread_count
 	FROM users u
-	LEFT JOIN LATERAL (
+	JOIN LATERAL (
 		SELECT id, sender_id, receiver_id, content, is_read, created_at
 		FROM messages
 		WHERE (sender_id = $1 AND receiver_id = u.id) OR (sender_id = u.id AND receiver_id = $1)
@@ -136,7 +136,7 @@ func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Co
 		LIMIT 1
 	) m ON TRUE
 	WHERE u.id != $1
-	ORDER BY (m.created_at IS NOT NULL) DESC, m.created_at DESC, u.id ASC
+	ORDER BY m.created_at DESC
 	`
 	rows, err := r.db.Query(query, currentUserID)
 	if err != nil {

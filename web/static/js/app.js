@@ -140,6 +140,10 @@ async function fillAndLogin(username, password) {
     await submitLogin(username, password);
 }
 
+async function quickLoginAs(username) {
+    await fillAndLogin(username, 'password123');
+}
+
 async function handleLogin(e) {
     e.preventDefault();
     const username = document.getElementById('loginUsername').value.trim();
@@ -1429,8 +1433,11 @@ function renderUserProfile(data) {
     if (data.is_owner) {
         if (profComposer) profComposer.style.display = 'block';
         actionsBox.innerHTML = `
+            <button class="btn btn-primary btn-sm" onclick="openEditProfileModal()">
+                <span>🎨 Оформление профиля</span>
+            </button>
             <button class="btn btn-secondary btn-sm" onclick="openEditProfileModal()">
-                <span>Редактировать</span>
+                <span>✏️ Редактировать</span>
             </button>
         `;
     } else {
@@ -1949,8 +1956,23 @@ function closeGiftDetailModal() {
 let currentSelectedSkills = [];
 let currentPinnedTrophyId = 0;
 
-function openEditProfileModal() {
-    if (!currentProfileUserData) return;
+async function openEditProfileModal() {
+    if (!currentProfileUserData) {
+        try {
+            const uid = window.CURRENT_USER_ID || 1;
+            const res = await fetch(`/api/users/${uid}/profile`);
+            if (res.ok) {
+                const data = await res.json();
+                currentProfileUserData = data.user;
+            }
+        } catch (e) {
+            console.error("Failed to load profile for edit modal:", e);
+        }
+    }
+    if (!currentProfileUserData) {
+        showToast('Пожалуйста, войдите в профиль', 'error');
+        return;
+    }
     const u = currentProfileUserData;
 
     document.getElementById('editDisplayName').value = u.display_name || '';
@@ -2151,8 +2173,12 @@ function setAccentColorPreset(colorHex, updatePreview = true) {
     document.getElementById('editAccentColorCustom').value = colorHex;
 
     document.querySelectorAll('.aura-color-swatch').forEach(sw => {
-        const isMatch = (sw.style.backgroundColor === colorHex || sw.getAttribute('data-color') === colorHex);
-        sw.classList.toggle('active', isMatch);
+        const dc = sw.getAttribute('data-color');
+        const bg = sw.style.backgroundColor;
+        const isMatch = (dc && dc.toLowerCase() === colorHex.toLowerCase()) || 
+                        (bg && bg.toLowerCase() === colorHex.toLowerCase()) ||
+                        (sw.getAttribute('title') && sw.getAttribute('title').toLowerCase().includes(colorHex.toLowerCase()));
+        sw.classList.toggle('active', !!isMatch);
     });
 
     if (updatePreview) updateModalLivePreview();
@@ -2687,7 +2713,18 @@ function renderConversationsList(convs) {
     if (!listEl) return;
 
     if (!convs || convs.length === 0) {
-        listEl.innerHTML = '<div class="chat-empty-hint">Пока нет диалогов. Начните общение с любым пользователем!</div>';
+        listEl.innerHTML = `
+            <div class="chat-empty-hint" style="padding: 1.5rem 1rem; text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.7;">💬</div>
+                <div style="font-weight: 700; color: #fff; margin-bottom: 0.3rem;">Нет активных диалогов</div>
+                <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+                    Диалог появится здесь, как только вы начнете общение с пользователем.
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="openNewChatModal()">
+                    <span>+ Начать диалог</span>
+                </button>
+            </div>
+        `;
         return;
     }
 
@@ -3241,4 +3278,74 @@ function stopCyberAudio() {
         try { cyberOsc2.stop(); cyberOsc2.disconnect(); } catch (e) {}
         cyberOsc2 = null;
     }
+}
+
+
+// ==========================================
+// NEW CHAT MODAL LOGIC
+// ==========================================
+window.allUsersForChat = [];
+
+async function openNewChatModal() {
+    const modal = document.getElementById('newChatModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    const list = document.getElementById('newChatUsersList');
+    if (list) list.innerHTML = '<div class="chat-empty-hint">Загрузка пользователей...</div>';
+    try {
+        const res = await fetch('/api/users');
+        if (!res.ok) throw new Error('Ошибка загрузки пользователей');
+        const users = await res.json();
+        window.allUsersForChat = users || [];
+        renderNewChatUsersList(window.allUsersForChat);
+    } catch (e) {
+        if (list) list.innerHTML = `<div class="chat-empty-hint">${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function closeNewChatModal() {
+    const modal = document.getElementById('newChatModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function filterNewChatUsers() {
+    const q = (document.getElementById('newChatSearchInput')?.value || '').toLowerCase().trim();
+    if (!q) {
+        renderNewChatUsersList(window.allUsersForChat);
+        return;
+    }
+    const filtered = (window.allUsersForChat || []).filter(u => 
+        (u.display_name && u.display_name.toLowerCase().includes(q)) || 
+        (u.username && u.username.toLowerCase().includes(q)) ||
+        (u.custom_rank && u.custom_rank.toLowerCase().includes(q))
+    );
+    renderNewChatUsersList(filtered);
+}
+
+function renderNewChatUsersList(users) {
+    const list = document.getElementById('newChatUsersList');
+    if (!list) return;
+    const others = (users || []).filter(u => u.id !== window.CURRENT_USER_ID);
+    if (others.length === 0) {
+        list.innerHTML = '<div class="chat-empty-hint">Пользователи не найдены</div>';
+        return;
+    }
+    list.innerHTML = '';
+    others.forEach(u => {
+        const item = document.createElement('div');
+        item.className = 'new-chat-user-row';
+        item.innerHTML = `
+            <div style="position: relative; width: 40px; height: 40px; flex-shrink: 0;">
+                <img src="${escapeHtml(u.avatar_url || '/static/avatars/default.svg')}" alt="avatar" class="conv-avatar" style="width: 40px; height: 40px; border-radius: 50%;">
+            </div>
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 700; color: #fff; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(u.display_name)}</div>
+                <div style="font-size: 0.78rem; color: var(--accent-primary);">@${escapeHtml(u.username)} ${u.custom_rank ? '• ' + escapeHtml(u.custom_rank) : ''}</div>
+            </div>
+            <button type="button" class="btn btn-primary btn-xs" onclick="closeNewChatModal(); openChatWithUser(${u.id}, '${escapeHtml(u.display_name)}', '${escapeHtml(u.username)}', '${escapeHtml(u.avatar_url || '')}');" style="padding: 4px 10px; font-size: 0.75rem;">
+                <span>Написать 💬</span>
+            </button>
+        `;
+        list.appendChild(item);
+    });
 }

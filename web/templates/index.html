@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoSocial — Киберпанк Социальная Сеть</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=cyber_9gifts_v20">
+    <link rel="stylesheet" href="/static/css/style.css?v=cyber_fix_v22">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -19,6 +19,24 @@
      МОДАЛЬНЫЕ ОКНА
 ========================================== -->
 
+<!-- Модальное окно: Новый диалог -->
+<div id="newChatModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeNewChatModal()">
+    <div class="modal-card modal-new-chat-card" style="max-width: 480px; width: 100%;">
+        <button type="button" class="modal-close-btn" onclick="closeNewChatModal()" title="Закрыть">✕</button>
+        <div class="modal-header">
+            <div class="modal-header-badge">💬 Сообщения</div>
+            <h3>Новый диалог</h3>
+            <p class="modal-subtext">Выберите собеседника из списка пользователей сети</p>
+        </div>
+        <div class="new-chat-search-bar" style="margin-bottom: 1rem;">
+            <input type="text" id="newChatSearchInput" placeholder="Поиск по имени или @логину..." oninput="filterNewChatUsers()" style="width: 100%;">
+        </div>
+        <div class="new-chat-users-list" id="newChatUsersList" style="max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.6rem;">
+            <!-- Список пользователей генерируется в JS -->
+        </div>
+    </div>
+</div>
+
 <!-- Модальное окно авторизации (Вход / Регистрация) -->
 <div id="authModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeAuthModal()">
     <div class="modal-card modal-auth-card">
@@ -32,6 +50,15 @@
         <div class="auth-tabs">
             <button class="auth-tab active" id="tabLoginBtn" onclick="switchAuthTab('login')">Вход</button>
             <button class="auth-tab" id="tabRegisterBtn" onclick="switchAuthTab('register')">Регистрация</button>
+        </div>
+
+        <div class="demo-quick-auth" style="margin-bottom: 1.25rem; padding: 0.6rem 0.8rem; background: rgba(0, 240, 255, 0.06); border: 1px dashed rgba(0, 240, 255, 0.25); border-radius: var(--radius-md);">
+            <div style="font-size: 0.72rem; color: var(--accent-primary); font-weight: 700; text-transform: uppercase; margin-bottom: 0.4rem; letter-spacing: 0.5px;">⚡ Быстрый демо-вход (1 клик):</div>
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary btn-xs" onclick="quickLoginAs('oleg')" style="font-size: 0.72rem; padding: 3px 8px;">⚡ Олег</button>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="quickLoginAs('alex')" style="font-size: 0.72rem; padding: 3px 8px;">🚀 Алексей</button>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="quickLoginAs('sophia')" style="font-size: 0.72rem; padding: 3px 8px;">🌸 София</button>
+            </div>
         </div>
 
         <!-- Форма Входа -->
@@ -308,7 +335,7 @@
 
 <!-- Модальное окно расширенной кастомизации профиля -->
 <div id="editProfileModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeEditProfileModal()">
-    <div class="modal-card" style="max-width: 650px; max-height: 90vh; overflow-y: auto;">
+    <div class="modal-card modal-custom-studio-card" style="max-width: 820px; width: 95%; max-height: 92vh; overflow-y: auto;">
         <button class="modal-close-btn" onclick="closeEditProfileModal()" title="Закрыть">✕</button>
         <div class="modal-header" style="margin-bottom: 1rem;">
             <div class="modal-header-badge">CYBERPUNK CUSTOM STUDIO</div>
@@ -447,12 +474,12 @@
                 <div class="form-group">
                     <label>Неоновая Аура профиля (акцентный цвет интерфейса)</label>
                     <div class="aura-color-grid">
-                        <div class="aura-color-swatch active" style="background: #00f0ff; color: #00f0ff;" title="Cyan Pulse" onclick="setAccentColorPreset('#00f0ff')"></div>
-                        <div class="aura-color-swatch" style="background: #ff0055; color: #ff0055;" title="Neon Crimson" onclick="setAccentColorPreset('#ff0055')"></div>
-                        <div class="aura-color-swatch" style="background: #00ff66; color: #00ff66;" title="Matrix Cyber" onclick="setAccentColorPreset('#00ff66')"></div>
-                        <div class="aura-color-swatch" style="background: #fbbf24; color: #fbbf24;" title="Electric Amber" onclick="setAccentColorPreset('#fbbf24')"></div>
-                        <div class="aura-color-swatch" style="background: #c084fc; color: #c084fc;" title="Synthwave Violet" onclick="setAccentColorPreset('#c084fc')"></div>
-                        <div class="aura-color-swatch" style="background: #f97316; color: #f97316;" title="Arasaka Flare" onclick="setAccentColorPreset('#f97316')"></div>
+                        <div class="aura-color-swatch active" data-color="#00f0ff" style="background: #00f0ff; color: #00f0ff;" title="Cyan Pulse" onclick="setAccentColorPreset('#00f0ff')"></div>
+                        <div class="aura-color-swatch" data-color="#ff0055" style="background: #ff0055; color: #ff0055;" title="Neon Crimson" onclick="setAccentColorPreset('#ff0055')"></div>
+                        <div class="aura-color-swatch" data-color="#00ff66" style="background: #00ff66; color: #00ff66;" title="Matrix Cyber" onclick="setAccentColorPreset('#00ff66')"></div>
+                        <div class="aura-color-swatch" data-color="#fbbf24" style="background: #fbbf24; color: #fbbf24;" title="Electric Amber" onclick="setAccentColorPreset('#fbbf24')"></div>
+                        <div class="aura-color-swatch" data-color="#c084fc" style="background: #c084fc; color: #c084fc;" title="Synthwave Violet" onclick="setAccentColorPreset('#c084fc')"></div>
+                        <div class="aura-color-swatch" data-color="#f97316" style="background: #f97316; color: #f97316;" title="Arasaka Flare" onclick="setAccentColorPreset('#f97316')"></div>
                         <input type="color" id="editAccentColorCustom" value="#00f0ff" class="custom-color-input" title="Свой цвет" onchange="setAccentColorPreset(this.value)">
                     </div>
                     <input type="hidden" id="editAccentColor" value="#00f0ff">
@@ -601,6 +628,10 @@
             <button class="hud-nav-item" id="tabNavProfile" onclick="navigateTo('my-profile')">
                 <span class="hud-nav-icon">👤</span>
                 <span class="hud-nav-label">Профиль</span>
+            </button>
+            <button class="hud-nav-item" id="tabNavCustomize" onclick="openEditProfileModal()">
+                <span class="hud-nav-icon">🎨</span>
+                <span class="hud-nav-label">Оформление</span>
             </button>
         </nav>
 
@@ -1090,8 +1121,11 @@
                 <div class="chat-layout-card">
                     <!-- Левая колонка: список собеседников -->
                     <div class="chat-sidebar">
-                        <div class="chat-search-bar">
-                            <input type="text" id="chatSearchInput" placeholder="Поиск по диалогам..." oninput="filterConversations()">
+                        <div class="chat-search-bar" style="display: flex; gap: 0.5rem; align-items: center; padding: 0.75rem;">
+                            <input type="text" id="chatSearchInput" placeholder="Поиск по диалогам..." oninput="filterConversations()" style="flex: 1;">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="openNewChatModal()" title="Начать новый диалог" style="white-space: nowrap; padding: 6px 12px; font-size: 0.8rem; font-weight: 700;">
+                                <span>+ Новый чат</span>
+                            </button>
                         </div>
 
                         <div class="conversations-list" id="conversationsList">
@@ -1167,7 +1201,7 @@
     window.CURRENT_SEARCH = "{{.SearchQuery}}";
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
-<script src="/static/js/app.js?v=cyber_9gifts_v20"></script>
+<script src="/static/js/app.js?v=cyber_fix_v22"></script>
 
 </body>
 </html>
