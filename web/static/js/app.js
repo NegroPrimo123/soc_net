@@ -2322,28 +2322,45 @@ function updateModalLivePreview() {
 }
 
 async function handleProfileUpdate(e) {
-    e.preventDefault();
-    const displayName = document.getElementById('editDisplayName').value.trim();
-    const bio = document.getElementById('editBio').value.trim();
-    const avatarUrl = document.getElementById('editAvatar').value.trim();
-    const bannerUrl = document.getElementById('editBanner').value.trim();
-    const customRank = document.getElementById('editCustomRank').value.trim();
-    const statusEmoji = document.getElementById('editStatusEmoji').value.trim() || '⚡';
-    const statusText = document.getElementById('editStatusText').value.trim();
-    const accentColor = document.getElementById('editAccentColor').value.trim() || '#00f0ff';
-    const avatarFrame = document.getElementById('editAvatarFrame').value.trim() || 'default';
-    const profileBgEffect = document.getElementById('editProfileBgEffect').value.trim() || 'none';
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    const nameInput = document.getElementById('editDisplayName');
+    const displayName = nameInput ? nameInput.value.trim() : '';
+    if (!displayName) {
+        showToast('Пожалуйста, введите имя профиля', 'error');
+        switchCustomTab('profile');
+        if (nameInput) nameInput.focus();
+        return;
+    }
 
-    const skillsTags = currentSelectedSkills.join(',');
+    const bio = (document.getElementById('editBio')?.value || '').trim();
+    const avatarUrl = (document.getElementById('editAvatar')?.value || '').trim();
+    const bannerUrl = (document.getElementById('editBanner')?.value || '').trim();
+    const customRank = (document.getElementById('editCustomRank')?.value || '').trim();
+    const statusEmoji = (document.getElementById('editStatusEmoji')?.value || '⚡').trim();
+    const statusText = (document.getElementById('editStatusText')?.value || '').trim();
+    const accentColor = (document.getElementById('editAccentColor')?.value || '#00f0ff').trim();
+    const avatarFrame = (document.getElementById('editAvatarFrame')?.value || 'default').trim();
+    const profileBgEffect = (document.getElementById('editProfileBgEffect')?.value || 'none').trim();
+
+    const skillsTags = (currentSelectedSkills || []).join(',');
     const socialLinksObj = {
-        tg: document.getElementById('editSocialTg').value.trim(),
-        gh: document.getElementById('editSocialGh').value.trim(),
-        discord: document.getElementById('editSocialDiscord').value.trim(),
-        steam: document.getElementById('editSocialSteam').value.trim(),
-        vk: document.getElementById('editSocialVk').value.trim(),
-        web: document.getElementById('editSocialWeb').value.trim()
+        tg: (document.getElementById('editSocialTg')?.value || '').trim(),
+        gh: (document.getElementById('editSocialGh')?.value || '').trim(),
+        discord: (document.getElementById('editSocialDiscord')?.value || '').trim(),
+        steam: (document.getElementById('editSocialSteam')?.value || '').trim(),
+        vk: (document.getElementById('editSocialVk')?.value || '').trim(),
+        web: (document.getElementById('editSocialWeb')?.value || '').trim()
     };
-    const pinnedGiftId = parseInt(document.getElementById('editPinnedGiftId').value, 10) || 0;
+    const pinnedGiftId = parseInt(document.getElementById('editPinnedGiftId')?.value || '0', 10) || 0;
+
+    const saveBtn = document.getElementById('btnSaveProfile');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span>Сохранение...</span>';
+    }
 
     try {
         const res = await fetch('/api/users/profile', {
@@ -2366,13 +2383,25 @@ async function handleProfileUpdate(e) {
             })
         });
 
-        if (!res.ok) throw new Error('Ошибка обновления профиля');
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || 'Ошибка обновления профиля');
+        }
 
+        const updated = await res.json();
+        currentProfileUserData = updated;
         closeEditProfileModal();
-        showToast('Профиль и кибер-стиль успешно обновлены! 🎨⚡', 'success');
-        if (currentProfileUserId) loadUserProfile(currentProfileUserId);
+        showToast('Профиль и кибер-стиль успешно сохранены! 🎨⚡', 'success');
+
+        const uid = currentProfileUserId || window.CURRENT_USER_ID || 1;
+        loadUserProfile(uid);
     } catch (err) {
         showToast(err.message, 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<span>Сохранить в профиль</span><span class="btn-arrow">✨</span>';
+        }
     }
 }
 

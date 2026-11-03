@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoSocial — Киберпанк Социальная Сеть</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=cyber_fix_v22">
+    <link rel="stylesheet" href="/static/css/style.css?v=cyber_fix_v23">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -104,7 +104,7 @@
         </form>
 
         <!-- Форма Регистрации -->
-        <form id="registerForm" class="auth-form" style="display: none;" onsubmit="handleRegister(event)">
+        <form id="registerForm" class="auth-form" novalidate style="display: none;" onsubmit="handleRegister(event)">
             <div class="form-row">
                 <div class="form-group">
                     <label for="regUsername">Логин*</label>
@@ -125,7 +125,7 @@
             </div>
             <div class="form-group">
                 <label for="regAvatar">URL Аватарки (опционально)</label>
-                <input type="url" id="regAvatar" placeholder="https://...">
+                <input type="text" id="regAvatar" placeholder="https://... (необязательно)">
             </div>
 
             <button type="submit" class="btn btn-primary btn-block btn-lg">
@@ -377,7 +377,7 @@
             <button type="button" class="custom-tab-btn" id="tabCustomTrophy" onclick="switchCustomTab('trophy')">🏆 Экспонат</button>
         </div>
 
-        <form id="editProfileForm" onsubmit="handleProfileUpdate(event)">
+        <form id="editProfileForm" novalidate onsubmit="handleProfileUpdate(event)">
             <!-- ВКЛАДКА 1: Профиль и Кибер-Ранг -->
             <div id="customPaneProfile" class="custom-pane">
                 <div class="form-group">
@@ -433,7 +433,7 @@
                 <div class="form-group">
                     <label for="editAvatar">URL аватарки или прямая загрузка с диска</label>
                     <div class="input-with-upload-btn">
-                        <input type="url" id="editAvatar" placeholder="https://..." oninput="updateModalLivePreview()">
+                        <input type="text" id="editAvatar" placeholder="https://... или выберите файл" oninput="updateModalLivePreview()">
                         <button type="button" class="btn btn-outline btn-sm" onclick="triggerAvatarUpload()">📁 Загрузить файл</button>
                     </div>
                     <input type="file" id="modalAvatarFileInput" accept="image/*" style="display: none;" onchange="handleModalAvatarFile(event)">
@@ -457,7 +457,7 @@
                 <div class="form-group">
                     <label for="editBanner">Обложка профиля (URL или файл с диска)</label>
                     <div class="input-with-upload-btn">
-                        <input type="url" id="editBanner" placeholder="https://..." oninput="updateModalLivePreview()">
+                        <input type="text" id="editBanner" placeholder="https://... или выберите файл" oninput="updateModalLivePreview()">
                         <button type="button" class="btn btn-outline btn-sm" onclick="triggerBannerUpload()">🖼️ Загрузить с диска</button>
                     </div>
                     <input type="file" id="modalBannerFileInput" accept="image/*" style="display: none;" onchange="handleModalBannerFile(event)">
@@ -561,7 +561,7 @@
                 </div>
                 <div class="form-group">
                     <label for="editSocialWeb">🌐 Личный сайт / Портфолио</label>
-                    <input type="url" id="editSocialWeb" placeholder="https://mywebsite.dev">
+                    <input type="text" id="editSocialWeb" placeholder="https://mywebsite.dev или mywebsite.dev">
                 </div>
                 <input type="hidden" id="editSocialLinks" value="">
             </div>
@@ -580,7 +580,7 @@
 
             <div class="modal-actions-row" style="margin-top: 1.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
                 <button type="button" class="btn btn-secondary" onclick="closeEditProfileModal()">Отмена</button>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" id="btnSaveProfile" onclick="handleProfileUpdate(event)">
                     <span>Сохранить в профиль</span>
                     <span class="btn-arrow">✨</span>
                 </button>
@@ -1201,7 +1201,7 @@
     window.CURRENT_SEARCH = "{{.SearchQuery}}";
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
-<script src="/static/js/app.js?v=cyber_fix_v22"></script>
+<script src="/static/js/app.js?v=cyber_fix_v23"></script>
 
 </body>
 </html>
