@@ -1,7 +1,4 @@
-# ⚡ GoSocial — Социальная сеть на Go и PostgreSQL (Ветка `test_index`)
-
-> 🔗 **Ссылка на репозиторий проекта:** [https://github.com/NegroPrimo123/soc_net](https://github.com/NegroPrimo123/soc_net)  
-> 🌿 **Текущая ветка:** [`test_index`](https://github.com/NegroPrimo123/soc_net/tree/test_index)
+# ⚡ GoSocial — Социальная сеть на Go и PostgreSQL 
 
 Полнофункциональная социальная сеть, разработанная на **Go (Golang)** и СУБД **PostgreSQL 15** с футуристическим интерфейсом в эстетике Cyberpunk 2077, системой безопасной аутентификации (bcrypt + Sessions), адаптивными лентами, интерактивными цифровыми артефактами и **модулем личных сообщений (Direct Messages)** с доставкой в реальном времени через **Server-Sent Events (SSE)**.
 
