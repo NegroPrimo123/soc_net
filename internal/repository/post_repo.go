@@ -33,8 +33,8 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 	SELECT 
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
-		(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
-		(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
+		COALESCE(p.likes_count, 0) as likes_count,
+		COALESCE(p.comments_count, 0) as comments_count,
 		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
@@ -133,8 +133,8 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 	SELECT 
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
-		(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
-		(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
+		COALESCE(p.likes_count, 0) as likes_count,
+		COALESCE(p.comments_count, 0) as comments_count,
 		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
@@ -212,8 +212,8 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 	SELECT 
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
-		(SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
-		(SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count,
+		COALESCE(p.likes_count, 0) as likes_count,
+		COALESCE(p.comments_count, 0) as comments_count,
 		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
@@ -256,12 +256,13 @@ func (r *PostRepository) ToggleLike(userID, postID int) (bool, int, error) {
 		isLiked = true
 	}
 
-	// 2. Получаем обновленный счетчик
+	// 2. Получаем обновленный счетчик и синхронизируем колонку likes_count
 	var count int
 	err = r.db.QueryRow("SELECT COUNT(*) FROM likes WHERE post_id = $1", postID).Scan(&count)
 	if err != nil {
 		return false, 0, err
 	}
+	_, _ = r.db.Exec("UPDATE posts SET likes_count = $1 WHERE id = $2", count, postID)
 
 	return isLiked, count, nil
 }
@@ -356,6 +357,8 @@ func (r *PostRepository) CreateComment(postID, userID int, content string) (*mod
 	if err != nil {
 		return nil, err
 	}
+
+	_, _ = r.db.Exec("UPDATE posts SET comments_count = comments_count + 1 WHERE id = $1", postID)
 
 	return &c, nil
 }

@@ -37,6 +37,19 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Защита прав доступа: пользователь не может запрашивать чужую переписку (403 Forbidden)
+	q := r.URL.Query()
+	u1Str := q.Get("user1")
+	u2Str := q.Get("user2")
+	if u1Str != "" && u2Str != "" {
+		u1, _ := strconv.Atoi(u1Str)
+		u2, _ := strconv.Atoi(u2Str)
+		if currentUser.ID != u1 && currentUser.ID != u2 {
+			respondJSON(w, http.StatusForbidden, map[string]string{"error": "доступ запрещен: вы не являетесь участником этой переписки"})
+			return
+		}
+	}
+
 	targetIDStr := r.PathValue("userId")
 	if targetIDStr == "" {
 		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
