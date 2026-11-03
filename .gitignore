@@ -1,0 +1,13 @@
+# Windows
+Thumbs.db
+desktop.ini
+
+# Скомпилированные бинарники
+*.exe
+server.exe
+
+# Загруженные пользователями файлы
+web/uploads/
+
+# Логи
+*.log
