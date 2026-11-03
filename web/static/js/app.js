@@ -1196,6 +1196,11 @@ function navigateTo(view, userId = null) {
         loadUserProfile(uid);
         window.history.pushState({}, '', `/?view=profile&user=${uid}`);
     } else if (view === 'my-profile') {
+        if (!window.IS_AUTHENTICATED || !window.CURRENT_USER_ID) {
+            openAuthModal('login');
+            showToast('Войдите в аккаунт для доступа к личному профилю 👤', 'error');
+            return;
+        }
         currentProfileUserId = window.CURRENT_USER_ID;
         loadUserProfile(window.CURRENT_USER_ID);
         window.history.pushState({}, '', `/?view=profile&user=${window.CURRENT_USER_ID}`);
@@ -1245,11 +1250,165 @@ function renderUserProfile(data) {
     document.getElementById('heroBio').textContent = user.bio || 'Информация о пользователе пока не заполнена.';
     document.getElementById('heroAvatar').src = user.avatar_url;
 
+    // Применение персональной неоновой ауры профиля
+    const heroCard = document.getElementById('profileHeroCard');
+    const userAccent = user.accent_color || '#00f0ff';
+    if (heroCard) {
+        heroCard.style.setProperty('--profile-accent', userAccent);
+        heroCard.classList.add('has-custom-accent');
+    }
+
+    // Применение голографической рамки аватарки
+    const avatarFrameBox = document.getElementById('heroAvatarFrameBox');
+    if (avatarFrameBox) {
+        avatarFrameBox.className = 'avatar-frame-box avatar-frame-' + (user.avatar_frame || 'default');
+    }
+
+    // Применение фоновой текстуры на обложку
     const banner = document.getElementById('heroBanner');
     if (user.banner_url) {
         banner.style.backgroundImage = `url('${user.banner_url}')`;
     } else {
-        banner.style.backgroundImage = 'linear-gradient(135deg, #2d3748 0%, #1a202c 50%, #4a5568 100%)';
+        banner.style.backgroundImage = 'linear-gradient(135deg, #111827 0%, #0b0f19 50%, #1e293b 100%)';
+    }
+    const bannerOverlay = document.getElementById('heroBannerOverlay');
+    if (bannerOverlay) {
+        bannerOverlay.className = 'hero-banner-overlay bg-effect-' + (user.profile_bg_effect || 'none');
+    }
+
+    // Кибер-Ранг / Титул в профиле
+    const rankBadge = document.getElementById('heroRankBadge');
+    if (rankBadge) {
+        if (user.custom_rank && user.custom_rank.trim()) {
+            rankBadge.textContent = user.custom_rank.trim();
+            rankBadge.style.display = 'inline-flex';
+        } else {
+            rankBadge.style.display = 'none';
+        }
+    }
+
+    // Статус и эмодзи-настроение
+    const statusContainer = document.getElementById('heroStatusContainer');
+    if (statusContainer) {
+        if (user.status_text && user.status_text.trim()) {
+            document.getElementById('heroStatusEmoji').textContent = user.status_emoji || '⚡';
+            document.getElementById('heroStatusText').textContent = user.status_text.trim();
+            statusContainer.style.display = 'block';
+        } else {
+            statusContainer.style.display = 'none';
+        }
+    }
+
+    // Главный кибер-экспонат профиля (Pinned Trophy)
+    const trophyWrap = document.getElementById('heroPinnedTrophyWrap');
+    if (trophyWrap) {
+        const pinnedId = user.pinned_gift_id || 0;
+        const giftKeys = Object.keys(GIFT_SPECS);
+        const pinnedType = (pinnedId > 0 && pinnedId <= giftKeys.length) ? giftKeys[pinnedId - 1] : null;
+        if (pinnedType && GIFT_SPECS[pinnedType]) {
+            const spec = GIFT_SPECS[pinnedType];
+            const imgEl = document.getElementById('heroPinnedTrophyImg');
+            const titleEl = document.getElementById('heroPinnedTrophyTitle');
+            const rarityEl = document.getElementById('heroPinnedTrophyRarity');
+            if (imgEl) imgEl.src = spec.png;
+            if (titleEl) titleEl.textContent = spec.title;
+            if (rarityEl) {
+                rarityEl.textContent = spec.rarity;
+                rarityEl.className = 'artifact-rarity-pill ' + (spec.badgeClass || '');
+            }
+            trophyWrap.style.display = 'inline-flex';
+        } else {
+            trophyWrap.style.display = 'none';
+        }
+    }
+
+    // Стек технологий и тегов (Skills Tags)
+    const skillsContainer = document.getElementById('heroSkillsContainer');
+    if (skillsContainer) {
+        skillsContainer.innerHTML = '';
+        const tags = (user.skills_tags || '').split(',').map(t => t.trim()).filter(Boolean);
+        if (tags.length > 0) {
+            tags.forEach(tag => {
+                const chip = document.createElement('span');
+                chip.className = 'skill-tag-chip';
+                chip.innerHTML = `<span>#${escapeHtml(tag)}</span>`;
+                chip.onclick = () => {
+                    const searchInput = document.getElementById('searchInput');
+                    if (searchInput) searchInput.value = `#${tag}`;
+                    executeSearch();
+                };
+                skillsContainer.appendChild(chip);
+            });
+            skillsContainer.style.display = 'flex';
+        } else {
+            skillsContainer.style.display = 'none';
+        }
+    }
+
+    // Контакты и социальные сети (Social Links)
+    const socialContainer = document.getElementById('heroSocialContainer');
+    if (socialContainer) {
+        socialContainer.innerHTML = '';
+        let links = {};
+        try {
+            if (user.social_links) links = JSON.parse(user.social_links);
+        } catch (e) {}
+
+        const socialDefs = [
+            { key: 'tg', icon: '✈️ Telegram', prefix: 'https://t.me/' },
+            { key: 'gh', icon: '🐙 GitHub', prefix: 'https://github.com/' },
+            { key: 'discord', icon: '💬 Discord', isCopy: true },
+            { key: 'steam', icon: '🎮 Steam', prefix: 'https://steamcommunity.com/id/' },
+            { key: 'vk', icon: '🟦 ВКонтакте', prefix: 'https://vk.com/' },
+            { key: 'web', icon: '🌐 Вебсайт', prefix: '' }
+        ];
+
+        let hasLinks = false;
+        socialDefs.forEach(def => {
+            const val = links[def.key];
+            if (val && val.trim()) {
+                hasLinks = true;
+                const badge = document.createElement('a');
+                badge.className = `social-link-badge ${def.key}`;
+                badge.innerHTML = `<span>${def.icon}</span>`;
+                if (def.isCopy) {
+                    badge.href = '#';
+                    badge.onclick = (e) => {
+                        e.preventDefault();
+                        navigator.clipboard.writeText(val.trim());
+                        showToast(`Discord: ${val.trim()} скопирован!`, 'success');
+                    };
+                } else {
+                    let url = val.trim();
+                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                        if (def.key === 'tg' && url.startsWith('@')) {
+                            url = def.prefix + url.substring(1);
+                        } else if (def.prefix) {
+                            url = def.prefix + url;
+                        } else {
+                            url = 'https://' + url;
+                        }
+                    }
+                    badge.href = url;
+                    badge.target = '_blank';
+                    badge.rel = 'noopener noreferrer';
+                }
+                socialContainer.appendChild(badge);
+            }
+        });
+        socialContainer.style.display = hasLinks ? 'flex' : 'none';
+    }
+
+    // Адаптация кнопки отправки подарка на вкладке подарков
+    const btnHeroSendGift = document.getElementById('btnHeroSendGift');
+    if (btnHeroSendGift) {
+        if (data.is_owner) {
+            btnHeroSendGift.innerHTML = '<span>🎁 Подарить другу</span>';
+            btnHeroSendGift.onclick = () => navigateTo('showcase');
+        } else {
+            btnHeroSendGift.innerHTML = '<span>🎁 Отправить подарок</span>';
+            btnHeroSendGift.onclick = () => openCurrentProfileGiftModal();
+        }
     }
 
     document.getElementById('heroStatPosts').textContent = data.posts ? data.posts.length : 0;
@@ -1356,8 +1515,8 @@ function renderProfileGifts(gifts) {
                 <span class="empty-glyph">🎁</span>
                 <h3>Коллекция подарков пуста</h3>
                 <p>Станьте первым, кто подарит этому пользователю подарок из коллекции «Цветные карандаши»!</p>
-                <button class="btn btn-primary btn-sm" style="margin-top: 0.8rem;" onclick="openCurrentProfileGiftModal()">
-                    <span>🎁 Отправить первый подарок</span>
+                <button class="btn btn-primary btn-sm" style="margin-top: 0.8rem;" onclick="if(currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID){ navigateTo('showcase'); }else{ openCurrentProfileGiftModal(); }">
+                    <span>${(currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID) ? '🎁 Выбрать подарок в каталоге' : '🎁 Отправить первый подарок'}</span>
                 </button>
             </div>
         `;
@@ -1387,6 +1546,7 @@ function renderProfileNetwork(followers, following) {
 function createRunnerRow(u) {
     const row = document.createElement('div');
     row.className = 'runner-row';
+    row.id = `user-row-${u.id}`;
     row.innerHTML = `
         <img src="${escapeHtml(u.avatar_url)}" alt="avatar" class="mini-avatar cursor-pointer" onclick="openUserProfile(${u.id})">
         <div class="runner-info cursor-pointer" onclick="openUserProfile(${u.id})">
@@ -1404,12 +1564,14 @@ function createRunnerRow(u) {
 // DIGITAL GIFTS (CYBERPUNK 2077 GIFTS + СОКРЫТИЕ ПОДАРКОВ)
 // ==========================================
 const GIFT_SPECS = {
-    // 9 новых Cyberpunk 3D-подарков (без фона, Alpha=0)
+    // 9 официальных 3D-подарков коллекции Cyberpunk 2077 (Desktop\Подарки_для_соцсети)
     cyber_katana: {
         id: 'cyber_katana',
         title: 'Кибер-Катана',
         rarity: 'Реликтовый',
         badgeClass: 'badge-cyber-katana',
+        desc: 'Высокотехнологичный клинок с лазерным неоновым лезвием, карбоновой рукоятью и голографическими кольцами энергии.',
+        feature: 'Бегущий световой импульс по лезвию, кольца энергии и электрические искры.',
         gif: '/static/gifts/01_Кибер_Катана.gif',
         png: '/static/gifts/01_Кибер_Катана.png',
         webp: '/static/gifts/01_Кибер_Катана.webp'
@@ -1419,6 +1581,8 @@ const GIFT_SPECS = {
         title: 'Нейро-Визор HUD',
         rarity: 'Тактический',
         badgeClass: 'badge-neuro-visor',
+        desc: 'Смарт-очки дополненной реальности из полированного хрома со светящимися линзами и цифровой телеметрией.',
+        feature: 'Лазерный луч сканирования данных, пульсирующие прицельные метки и блики.',
         gif: '/static/gifts/02_Нейро_Визор.gif',
         png: '/static/gifts/02_Нейро_Визор.png',
         webp: '/static/gifts/02_Нейро_Визор.webp'
@@ -1428,6 +1592,8 @@ const GIFT_SPECS = {
         title: 'Квантовое Кибер-Сердце',
         rarity: 'Реликтовый',
         badgeClass: 'badge-quantum-heart',
+        desc: 'Термоядерный силовой реактор из тёмного титана с магнитной ловушкой и бушующей внутри плазмой.',
+        feature: 'Ритмичная пульсация квантового ядра (двойной такт), вспышки плазмы и искры.',
         gif: '/static/gifts/03_Квантовое_Сердце.gif',
         png: '/static/gifts/03_Квантовое_Сердце.png',
         webp: '/static/gifts/03_Квантовое_Сердце.webp'
@@ -1437,6 +1603,8 @@ const GIFT_SPECS = {
         title: 'Боевой Шлем Самурая Oni',
         rarity: 'Легендарный',
         badgeClass: 'badge-samurai-helmet',
+        desc: 'Титановый шлем кибер-самурая с горящими неоновыми рогами-радиаторами и лазерным визором захвата цели.',
+        feature: 'Горизонтальное сканирование LED-визора, пульсация рогов и голо-прицел.',
         gif: '/static/gifts/04_Шлем_Самурая.gif',
         png: '/static/gifts/04_Шлем_Самурая.png',
         webp: '/static/gifts/04_Шлем_Самурая.webp'
@@ -1446,6 +1614,8 @@ const GIFT_SPECS = {
         title: 'Синтвейв Нейро-Кассета',
         rarity: 'Ретро-Вейв',
         badgeClass: 'badge-synthwave-cassette',
+        desc: 'Ретро-футуристичная прозрачная кассета с неоновыми бобинами плёнки, лазерными дорожками и эквалайзером.',
+        feature: 'Вращающиеся катушки плёнки, танцующий эквалайзер звука и неоновые дорожки.',
         gif: '/static/gifts/05_Синтвейв_Кассета.gif',
         png: '/static/gifts/05_Синтвейв_Кассета.png',
         webp: '/static/gifts/05_Синтвейв_Кассета.webp'
@@ -1455,6 +1625,8 @@ const GIFT_SPECS = {
         title: 'Клинок Богомола',
         rarity: 'Военный',
         badgeClass: 'badge-mantis-blade',
+        desc: 'Бионическая рука из карбона и титана с выдвинутым термо-клинком богомола, раскалённым до оранжевого свечения.',
+        feature: 'Бегущий термо-импульс по лезвию, искры и пульсирующие энергоканалы.',
         gif: '/static/gifts/06_Клинок_Богомола.gif',
         png: '/static/gifts/06_Клинок_Богомола.png',
         webp: '/static/gifts/06_Клинок_Богомола.webp'
@@ -1464,6 +1636,8 @@ const GIFT_SPECS = {
         title: 'Тактический Кибер-Дрон',
         rarity: 'Тактический',
         badgeClass: 'badge-tactical-drone',
+        desc: 'Стелс-дрон разведки с векторными плазменными двигателями, мультиспектральной оптикой и круговым сонаром.',
+        feature: 'Парение в воздухе, факелы плазменных двигателей, сенсор и радарные волны.',
         gif: '/static/gifts/07_Кибер_Дрон.gif',
         png: '/static/gifts/07_Кибер_Дрон.png',
         webp: '/static/gifts/07_Кибер_Дрон.webp'
@@ -1473,6 +1647,8 @@ const GIFT_SPECS = {
         title: 'Плазменная ЭМИ-Граната',
         rarity: 'Спец-Оружие',
         badgeClass: 'badge-emp-grenade',
+        desc: 'Тактическая сферическая граната из титана со светящимися силовыми кольцами и таймером детонации.',
+        feature: 'Электрические микро-дуги молний по корпусу, мигающий LED и плазменные искры.',
         gif: '/static/gifts/08_ЭМИ_Граната.gif',
         png: '/static/gifts/08_ЭМИ_Граната.png',
         webp: '/static/gifts/08_ЭМИ_Граната.webp'
@@ -1482,11 +1658,14 @@ const GIFT_SPECS = {
         title: 'Нейро-Инжектор «MaxDoc»',
         rarity: 'Стимулятор',
         badgeClass: 'badge-combat-stim',
+        desc: 'Боевой стимулятор из карбона с прозрачной колбой, наполненной биолюминесцентной восстанавливающей сывороткой.',
+        feature: 'Поднимающиеся нанопузырьки в колбе, мягкое сияние исцеляющей ауры и искры.',
         gif: '/static/gifts/09_Нейро_Инжектор.gif',
         png: '/static/gifts/09_Нейро_Инжектор.png',
         webp: '/static/gifts/09_Нейро_Инжектор.webp'
     },
-    // Алиасы для обратной совместимости
+
+    // Алиасы обратной совместимости
     cyber_heart: { id: 'quantum_heart', title: 'Квантовое Кибер-Сердце', rarity: 'Реликтовый', badgeClass: 'badge-quantum-heart', gif: '/static/gifts/03_Квантовое_Сердце.gif', png: '/static/gifts/03_Квантовое_Сердце.png', webp: '/static/gifts/03_Квантовое_Сердце.webp' },
     cyber_skull: { id: 'samurai_helmet', title: 'Боевой Шлем Самурая Oni', rarity: 'Легендарный', badgeClass: 'badge-samurai-helmet', gif: '/static/gifts/04_Шлем_Самурая.gif', png: '/static/gifts/04_Шлем_Самурая.png', webp: '/static/gifts/04_Шлем_Самурая.webp' },
     black_ice: { id: 'cyber_katana', title: 'Кибер-Катана', rarity: 'Реликтовый', badgeClass: 'badge-cyber-katana', gif: '/static/gifts/01_Кибер_Катана.gif', png: '/static/gifts/01_Кибер_Катана.png', webp: '/static/gifts/01_Кибер_Катана.webp' },
@@ -1496,13 +1675,11 @@ const GIFT_SPECS = {
     supernova: { id: 'quantum_heart', title: 'Квантовое Кибер-Сердце', rarity: 'Реликтовый', badgeClass: 'badge-quantum-heart', gif: '/static/gifts/03_Квантовое_Сердце.gif', png: '/static/gifts/03_Квантовое_Сердце.png' },
     bear_heart: { id: 'samurai_helmet', title: 'Боевой Шлем Самурая Oni', rarity: 'Легендарный', badgeClass: 'badge-samurai-helmet', gif: '/static/gifts/04_Шлем_Самурая.gif', png: '/static/gifts/04_Шлем_Самурая.png' },
     quantum_crown: { id: 'samurai_helmet', title: 'Боевой Шлем Самурая Oni', rarity: 'Легендарный', badgeClass: 'badge-samurai-helmet', gif: '/static/gifts/04_Шлем_Самурая.gif', png: '/static/gifts/04_Шлем_Самурая.png' },
-    cute_kitten: { id: 'cyber_katana', title: 'Кибер-Катана', rarity: 'Реликтовый', badgeClass: 'badge-cyber-katana', gif: '/static/gifts/01_Кибер_Катана.gif', png: '/static/gifts/01_Кибер_Катана.png' },
+    cute_kitten: { id: 'synthwave_cassette', title: 'Синтвейв Нейро-Кассета', rarity: 'Ретро-Вейв', badgeClass: 'badge-synthwave-cassette', gif: '/static/gifts/05_Синтвейв_Кассета.gif', png: '/static/gifts/05_Синтвейв_Кассета.png' },
     cyber_unicorn: { id: 'cyber_katana', title: 'Кибер-Катана', rarity: 'Реликтовый', badgeClass: 'badge-cyber-katana', gif: '/static/gifts/01_Кибер_Катана.gif', png: '/static/gifts/01_Кибер_Катана.png' },
-    gentle_bouquet: { id: 'neuro_visor', title: 'Нейро-Визор HUD', rarity: 'Тактический', badgeClass: 'badge-neuro-visor', gif: '/static/gifts/02_Нейро_Визор.gif', png: '/static/gifts/02_Нейро_Визор.png' },
-    quantum_diamond: { id: 'neuro_visor', title: 'Нейро-Визор HUD', rarity: 'Тактический', badgeClass: 'badge-neuro-visor', gif: '/static/gifts/02_Нейро_Визор.gif', png: '/static/gifts/02_Нейро_Визор.png' },
-    cozy_cup: { id: 'synthwave_cassette', title: 'Синтвейв Нейро-Кассета', rarity: 'Ретро-Вейв', badgeClass: 'badge-synthwave-cassette', gif: '/static/gifts/05_Синтвейв_Кассета.gif', png: '/static/gifts/05_Синтвейв_Кассета.png' },
-    moon_rocket: { id: 'synthwave_cassette', title: 'Синтвейв Нейро-Кассета', rarity: 'Ретро-Вейв', badgeClass: 'badge-synthwave-cassette', gif: '/static/gifts/05_Синтвейв_Кассета.gif', png: '/static/gifts/05_Синтвейв_Кассета.png' },
-    infinite_coffee: { id: 'combat_stim', title: 'Нейро-Инжектор «MaxDoc»', rarity: 'Стимулятор', badgeClass: 'badge-combat-stim', gif: '/static/gifts/09_Нейро_Инжектор.gif', png: '/static/gifts/09_Нейро_Инжектор.png' }
+    gentle_bouquet: { id: 'mantis_blade', title: 'Клинок Богомола', rarity: 'Военный', badgeClass: 'badge-mantis-blade', gif: '/static/gifts/06_Клинок_Богомола.gif', png: '/static/gifts/06_Клинок_Богомола.png' },
+    cozy_cup: { id: 'combat_stim', title: 'Нейро-Инжектор «MaxDoc»', rarity: 'Стимулятор', badgeClass: 'badge-combat-stim', gif: '/static/gifts/09_Нейро_Инжектор.gif', png: '/static/gifts/09_Нейро_Инжектор.png' },
+    emp_grenade_legacy: { id: 'emp_grenade', title: 'Плазменная ЭМИ-Граната', rarity: 'Спец-Оружие', badgeClass: 'badge-emp-grenade', gif: '/static/gifts/08_ЭМИ_Граната.gif', png: '/static/gifts/08_ЭМИ_Граната.png' }
 };
 
 function getGiftTitle(type) {
@@ -1585,26 +1762,64 @@ function openCurrentProfileGiftModal() {
     }
 }
 
-function openSendGiftModal(receiverId, displayName, username) {
+function openSendGiftModal(receiverId = null, displayName = null, username = null, preselectedGiftType = 'cyber_katana') {
     if (!window.IS_AUTHENTICATED) {
         showToast('Пожалуйста, войдите в аккаунт для отправки подарка 🎁', 'error');
         openAuthModal('login');
         return;
     }
 
-    if (receiverId === window.CURRENT_USER_ID) {
-        showToast('Нельзя отправить подарок самому себе 🙂', 'error');
-        return;
+    const selectContainer = document.getElementById('giftReceiverSelectContainer');
+    const receiverText = document.getElementById('giftModalReceiverText');
+    const receiverIdInput = document.getElementById('giftReceiverId');
+
+    if (receiverId) {
+        if (receiverId === window.CURRENT_USER_ID) {
+            showToast('Нельзя отправить подарок самому себе 🙂', 'error');
+            return;
+        }
+        receiverIdInput.value = receiverId;
+        document.getElementById('giftReceiverName').textContent = `${displayName} (@${username})`;
+        if (receiverText) receiverText.style.display = 'block';
+        if (selectContainer) selectContainer.style.display = 'none';
+    } else {
+        receiverIdInput.value = '';
+        if (receiverText) receiverText.style.display = 'none';
+        if (selectContainer) {
+            selectContainer.style.display = 'block';
+            loadUsersIntoGiftSelect();
+        }
     }
 
-    document.getElementById('giftReceiverId').value = receiverId;
-    document.getElementById('giftReceiverName').textContent = `${displayName} (@${username})`;
     document.getElementById('giftMessage').value = '';
     document.getElementById('giftIsAnonymous').checked = false;
-    selectGiftType('cyber_katana');
+    selectGiftType(preselectedGiftType || 'cyber_katana');
 
     const modal = document.getElementById('sendGiftModal');
     if (modal) modal.style.display = 'flex';
+}
+
+async function loadUsersIntoGiftSelect() {
+    const select = document.getElementById('giftReceiverSelect');
+    if (!select) return;
+    try {
+        const res = await fetch('/api/users');
+        if (!res.ok) return;
+        const users = await res.json();
+        select.innerHTML = '<option value="">-- Выберите получателя артефакта --</option>';
+        users.forEach(u => {
+            if (u.id !== window.CURRENT_USER_ID) {
+                const opt = document.createElement('option');
+                opt.value = u.id;
+                opt.textContent = `${u.display_name} (@${u.username})`;
+                select.appendChild(opt);
+            }
+        });
+    } catch (e) {}
+}
+
+function onGiftReceiverSelected(val) {
+    document.getElementById('giftReceiverId').value = val;
 }
 
 function closeSendGiftModal() {
@@ -1633,6 +1848,10 @@ function updateGiftCharCount() {
 async function handleSendGiftSubmit(e) {
     e.preventDefault();
     const receiverId = parseInt(document.getElementById('giftReceiverId').value, 10);
+    if (!receiverId || isNaN(receiverId)) {
+        showToast('Пожалуйста, выберите получателя подарка 👥', 'error');
+        return;
+    }
     const giftType = document.getElementById('selectedGiftType').value;
     const message = document.getElementById('giftMessage').value.trim();
     const isAnonymous = document.getElementById('giftIsAnonymous').checked;
@@ -1724,13 +1943,54 @@ function closeGiftDetailModal() {
     if (modal) modal.style.display = 'none';
 }
 
-// Edit Profile Modal
+// ==========================================
+// CYBERPUNK CUSTOM STUDIO & EDIT PROFILE MODAL
+// ==========================================
+let currentSelectedSkills = [];
+let currentPinnedTrophyId = 0;
+
 function openEditProfileModal() {
     if (!currentProfileUserData) return;
-    document.getElementById('editDisplayName').value = currentProfileUserData.display_name;
-    document.getElementById('editBio').value = currentProfileUserData.bio || '';
-    document.getElementById('editAvatar').value = currentProfileUserData.avatar_url;
-    document.getElementById('editBanner').value = currentProfileUserData.banner_url || '';
+    const u = currentProfileUserData;
+
+    document.getElementById('editDisplayName').value = u.display_name || '';
+    document.getElementById('editBio').value = u.bio || '';
+    document.getElementById('editAvatar').value = u.avatar_url || '';
+    document.getElementById('editBanner').value = u.banner_url || '';
+    document.getElementById('editCustomRank').value = u.custom_rank || '';
+    document.getElementById('editStatusEmoji').value = u.status_emoji || '⚡';
+    document.getElementById('editStatusText').value = u.status_text || '';
+    document.getElementById('editAccentColor').value = u.accent_color || '#00f0ff';
+    document.getElementById('editAccentColorCustom').value = u.accent_color || '#00f0ff';
+    document.getElementById('editAvatarFrame').value = u.avatar_frame || 'default';
+    document.getElementById('editProfileBgEffect').value = u.profile_bg_effect || 'none';
+
+    // Подсветка активных чипов
+    setAvatarFrame(u.avatar_frame || 'default', false);
+    setProfileBgEffect(u.profile_bg_effect || 'none', false);
+    setAccentColorPreset(u.accent_color || '#00f0ff', false);
+
+    // Стек и навыки
+    currentSelectedSkills = (u.skills_tags || '').split(',').map(s => s.trim()).filter(Boolean);
+    updateSkillsUI();
+
+    // Социальные сети
+    let social = {};
+    try {
+        if (u.social_links) social = JSON.parse(u.social_links);
+    } catch(e) {}
+    document.getElementById('editSocialTg').value = social.tg || '';
+    document.getElementById('editSocialGh').value = social.gh || '';
+    document.getElementById('editSocialDiscord').value = social.discord || '';
+    document.getElementById('editSocialSteam').value = social.steam || '';
+    document.getElementById('editSocialVk').value = social.vk || '';
+    document.getElementById('editSocialWeb').value = social.web || '';
+
+    // Главный экспонат
+    initTrophyGrid(u.pinned_gift_id || 0);
+
+    switchCustomTab('profile');
+    updateModalLivePreview();
 
     const modal = document.getElementById('editProfileModal');
     if (modal) modal.style.display = 'flex';
@@ -1741,12 +2001,323 @@ function closeEditProfileModal() {
     if (modal) modal.style.display = 'none';
 }
 
+function switchCustomTab(tabKey) {
+    const tabs = ['profile', 'status', 'avatar', 'theme', 'skills', 'social', 'trophy'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`tabCustom${capitalize(t)}`);
+        const pane = document.getElementById(`customPane${capitalize(t)}`);
+        if (btn) btn.classList.toggle('active', t === tabKey);
+        if (pane) pane.style.display = (t === tabKey) ? 'block' : 'none';
+    });
+}
+
+function toggleSkillTag(skill) {
+    const idx = currentSelectedSkills.indexOf(skill);
+    if (idx >= 0) {
+        currentSelectedSkills.splice(idx, 1);
+    } else {
+        if (currentSelectedSkills.length >= 10) {
+            showToast('Максимум 10 навыков в профиле', 'info');
+            return;
+        }
+        currentSelectedSkills.push(skill);
+    }
+    updateSkillsUI();
+    updateModalLivePreview();
+}
+
+function addCustomSkillTag() {
+    const input = document.getElementById('customSkillInput');
+    if (!input) return;
+    const val = input.value.trim().replace(/^[#@]/, '');
+    if (!val) return;
+    if (currentSelectedSkills.includes(val)) {
+        showToast('Этот навык уже добавлен', 'info');
+        input.value = '';
+        return;
+    }
+    if (currentSelectedSkills.length >= 10) {
+        showToast('Максимум 10 навыков в профиле', 'info');
+        return;
+    }
+    currentSelectedSkills.push(val);
+    input.value = '';
+    updateSkillsUI();
+    updateModalLivePreview();
+}
+
+function removeSkillTag(skill) {
+    const idx = currentSelectedSkills.indexOf(skill);
+    if (idx >= 0) {
+        currentSelectedSkills.splice(idx, 1);
+        updateSkillsUI();
+        updateModalLivePreview();
+    }
+}
+
+function updateSkillsUI() {
+    const hidden = document.getElementById('editSkillsTags');
+    if (hidden) hidden.value = currentSelectedSkills.join(',');
+
+    document.querySelectorAll('#skillsPresetChips .choice-chip').forEach(chip => {
+        const sk = chip.getAttribute('data-skill');
+        chip.classList.toggle('selected', currentSelectedSkills.includes(sk));
+    });
+
+    const box = document.getElementById('selectedSkillsBadges');
+    if (box) {
+        if (currentSelectedSkills.length === 0) {
+            box.innerHTML = '<span class="text-muted" style="font-size: 0.8rem;">Теги пока не выбраны</span>';
+        } else {
+            box.innerHTML = '';
+            currentSelectedSkills.forEach(sk => {
+                const b = document.createElement('span');
+                b.className = 'selected-skill-badge';
+                b.innerHTML = `<span>#${escapeHtml(sk)}</span> <span class="remove-tag" onclick="removeSkillTag('${escapeHtml(sk)}')">✕</span>`;
+                box.appendChild(b);
+            });
+        }
+    }
+}
+
+function initTrophyGrid(selectedId = 0) {
+    currentPinnedTrophyId = selectedId;
+    const grid = document.getElementById('trophySelectGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const card0 = document.createElement('div');
+    card0.className = `trophy-select-card ${selectedId === 0 ? 'active' : ''}`;
+    card0.innerHTML = `
+        <div style="font-size: 1.8rem; margin-bottom: 0.2rem;">🚫</div>
+        <span class="trophy-select-name">Без экспоната</span>
+    `;
+    card0.onclick = () => selectPinnedTrophy(0);
+    grid.appendChild(card0);
+
+    const giftKeys = Object.keys(GIFT_SPECS);
+    giftKeys.forEach((key, idx) => {
+        const spec = GIFT_SPECS[key];
+        const giftId = idx + 1;
+        const card = document.createElement('div');
+        card.className = `trophy-select-card ${selectedId === giftId ? 'active' : ''}`;
+        card.innerHTML = `
+            <img src="${spec.png}" alt="${spec.title}" class="trophy-select-img">
+            <span class="trophy-select-name">${spec.title}</span>
+        `;
+        card.onclick = () => selectPinnedTrophy(giftId);
+        grid.appendChild(card);
+    });
+
+    const hidden = document.getElementById('editPinnedGiftId');
+    if (hidden) hidden.value = selectedId;
+}
+
+function selectPinnedTrophy(giftId) {
+    currentPinnedTrophyId = giftId;
+    const hidden = document.getElementById('editPinnedGiftId');
+    if (hidden) hidden.value = giftId;
+
+    document.querySelectorAll('#trophySelectGrid .trophy-select-card').forEach((c, idx) => {
+        c.classList.toggle('active', idx === giftId);
+    });
+}
+
+function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function setRankPreset(rank) {
+    document.getElementById('editCustomRank').value = rank;
+    updateModalLivePreview();
+}
+
+function setStatusEmojiPreset(emoji) {
+    document.getElementById('editStatusEmoji').value = emoji;
+    updateModalLivePreview();
+}
+
+function setAvatarFrame(frameKey, updatePreview = true) {
+    document.getElementById('editAvatarFrame').value = frameKey;
+    ['default', 'pulse', 'hex', 'glitch', 'gold'].forEach(k => {
+        const chip = document.getElementById(`chipFrame-${k}`);
+        if (chip) chip.classList.toggle('active', k === frameKey);
+    });
+    if (updatePreview) updateModalLivePreview();
+}
+
+function setAccentColorPreset(colorHex, updatePreview = true) {
+    document.getElementById('editAccentColor').value = colorHex;
+    document.getElementById('editAccentColorCustom').value = colorHex;
+
+    document.querySelectorAll('.aura-color-swatch').forEach(sw => {
+        const isMatch = (sw.style.backgroundColor === colorHex || sw.getAttribute('data-color') === colorHex);
+        sw.classList.toggle('active', isMatch);
+    });
+
+    if (updatePreview) updateModalLivePreview();
+}
+
+function setProfileBgEffect(effectKey, updatePreview = true) {
+    document.getElementById('editProfileBgEffect').value = effectKey;
+    ['none', 'scanlines', 'hex_grid', 'cyber_dots'].forEach(k => {
+        const chip = document.getElementById(`chipEffect-${k}`);
+        if (chip) chip.classList.toggle('active', k === effectKey);
+    });
+    if (updatePreview) updateModalLivePreview();
+}
+
+function setBannerPreset(url) {
+    document.getElementById('editBanner').value = url;
+    document.querySelectorAll('.banner-preset-thumb').forEach(thumb => {
+        thumb.classList.toggle('active', thumb.style.backgroundImage.includes(url));
+    });
+    showToast('Обложка выбрана из киберпанк-коллекции! 🌆', 'success');
+    updateModalLivePreview();
+}
+
+function triggerAvatarUpload() {
+    const input = document.getElementById('modalAvatarFileInput');
+    if (input) input.click();
+}
+
+async function handleModalAvatarFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        showToast('Загрузка аватарки на сервер...', 'info');
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) throw new Error('Ошибка загрузки аватарки');
+        const data = await res.json();
+        document.getElementById('editAvatar').value = data.url;
+        updateModalLivePreview();
+        showToast('Аватарка успешно загружена с диска! 🖼️✨', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function triggerBannerUpload() {
+    const input = document.getElementById('modalBannerFileInput');
+    if (input) input.click();
+}
+
+async function handleModalBannerFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        showToast('Загрузка обложки на сервер...', 'info');
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) throw new Error('Ошибка загрузки обложки');
+        const data = await res.json();
+        document.getElementById('editBanner').value = data.url;
+        updateModalLivePreview();
+        showToast('Обложка успешно загружена с диска! 🌌✨', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function updateModalLivePreview() {
+    const name = document.getElementById('editDisplayName').value.trim() || 'Пользователь';
+    const rank = document.getElementById('editCustomRank').value.trim();
+    const avatarUrl = document.getElementById('editAvatar').value.trim() || '/static/avatars/default.svg';
+    const frame = document.getElementById('editAvatarFrame').value || 'default';
+    const color = document.getElementById('editAccentColor').value || '#00f0ff';
+    const emoji = document.getElementById('editStatusEmoji').value || '⚡';
+    const statusText = document.getElementById('editStatusText').value.trim();
+
+    document.getElementById('previewDisplayName').textContent = name;
+    if (currentProfileUserData) {
+        document.getElementById('previewUsername').textContent = `@${currentProfileUserData.username}`;
+    }
+
+    const previewAvatar = document.getElementById('previewAvatarImg');
+    if (previewAvatar) previewAvatar.src = avatarUrl;
+
+    const previewFrame = document.getElementById('previewAvatarFrameBox');
+    if (previewFrame) {
+        previewFrame.className = `avatar-frame-box avatar-frame-${frame}`;
+        previewFrame.style.setProperty('--profile-accent', color);
+    }
+
+    const rankBadge = document.getElementById('previewRankBadge');
+    if (rankBadge) {
+        if (rank) {
+            rankBadge.textContent = rank;
+            rankBadge.style.color = color;
+            rankBadge.style.borderColor = color;
+            rankBadge.style.display = 'inline-flex';
+        } else {
+            rankBadge.style.display = 'none';
+        }
+    }
+
+    const previewBox = document.getElementById('modalLivePreviewBox');
+    if (previewBox) {
+        previewBox.style.borderColor = color;
+        previewBox.style.boxShadow = `0 0 20px ${color}25`;
+    }
+
+    const statusWrap = document.getElementById('previewStatusCapsuleWrap');
+    if (statusWrap) {
+        if (statusText) {
+            document.getElementById('previewStatusEmoji').textContent = emoji;
+            document.getElementById('previewStatusText').textContent = statusText;
+            statusWrap.style.display = 'block';
+        } else {
+            statusWrap.style.display = 'none';
+        }
+    }
+
+    const prevSkills = document.getElementById('previewSkillsWrap');
+    if (prevSkills) {
+        if (currentSelectedSkills && currentSelectedSkills.length > 0) {
+            prevSkills.innerHTML = currentSelectedSkills.slice(0, 3).map(s => `<span class="skill-tag-chip" style="font-size: 0.68rem; padding: 1px 6px;">#${escapeHtml(s)}</span>`).join(' ');
+            prevSkills.style.display = 'flex';
+        } else {
+            prevSkills.style.display = 'none';
+        }
+    }
+}
+
 async function handleProfileUpdate(e) {
     e.preventDefault();
     const displayName = document.getElementById('editDisplayName').value.trim();
     const bio = document.getElementById('editBio').value.trim();
     const avatarUrl = document.getElementById('editAvatar').value.trim();
     const bannerUrl = document.getElementById('editBanner').value.trim();
+    const customRank = document.getElementById('editCustomRank').value.trim();
+    const statusEmoji = document.getElementById('editStatusEmoji').value.trim() || '⚡';
+    const statusText = document.getElementById('editStatusText').value.trim();
+    const accentColor = document.getElementById('editAccentColor').value.trim() || '#00f0ff';
+    const avatarFrame = document.getElementById('editAvatarFrame').value.trim() || 'default';
+    const profileBgEffect = document.getElementById('editProfileBgEffect').value.trim() || 'none';
+
+    const skillsTags = currentSelectedSkills.join(',');
+    const socialLinksObj = {
+        tg: document.getElementById('editSocialTg').value.trim(),
+        gh: document.getElementById('editSocialGh').value.trim(),
+        discord: document.getElementById('editSocialDiscord').value.trim(),
+        steam: document.getElementById('editSocialSteam').value.trim(),
+        vk: document.getElementById('editSocialVk').value.trim(),
+        web: document.getElementById('editSocialWeb').value.trim()
+    };
+    const pinnedGiftId = parseInt(document.getElementById('editPinnedGiftId').value, 10) || 0;
 
     try {
         const res = await fetch('/api/users/profile', {
@@ -1756,14 +2327,23 @@ async function handleProfileUpdate(e) {
                 display_name: displayName,
                 bio: bio,
                 avatar_url: avatarUrl,
-                banner_url: bannerUrl
+                banner_url: bannerUrl,
+                custom_rank: customRank,
+                status_emoji: statusEmoji,
+                status_text: statusText,
+                accent_color: accentColor,
+                avatar_frame: avatarFrame,
+                profile_bg_effect: profileBgEffect,
+                skills_tags: skillsTags,
+                social_links: JSON.stringify(socialLinksObj),
+                pinned_gift_id: pinnedGiftId
             })
         });
 
         if (!res.ok) throw new Error('Ошибка обновления профиля');
 
         closeEditProfileModal();
-        showToast('Профиль успешно обновлен! ✨', 'success');
+        showToast('Профиль и кибер-стиль успешно обновлены! 🎨⚡', 'success');
         if (currentProfileUserId) loadUserProfile(currentProfileUserId);
     } catch (err) {
         showToast(err.message, 'error');
@@ -1809,8 +2389,60 @@ async function createProfilePost() {
     }
 }
 
-// Showcase Gifts Gallery
+// Showcase Gifts Gallery & 9 Cyberpunk Artifacts Catalog
+function renderVaultCatalog() {
+    const grid = document.getElementById('vaultCatalogGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const giftKeys = ['cyber_katana', 'neuro_visor', 'quantum_heart', 'samurai_helmet', 'synthwave_cassette', 'mantis_blade', 'tactical_drone', 'emp_grenade', 'combat_stim'];
+
+    giftKeys.forEach((key, idx) => {
+        const spec = GIFT_SPECS[key];
+        if (!spec) return;
+        const card = document.createElement('div');
+        card.className = 'artifact-card-item catalog-gift-card';
+        card.innerHTML = `
+            <span class="artifact-rarity-pill ${spec.badgeClass}">${spec.rarity}</span>
+            <div class="artifact-stage">
+                <img src="${spec.gif || spec.png}" alt="${escapeHtml(spec.title)}" class="gift-art-img" loading="lazy">
+            </div>
+            <div class="artifact-card-title">${spec.title}</div>
+            <div class="artifact-catalog-desc" style="font-size: 0.78rem; color: var(--text-dim); line-height: 1.4; margin: 0.4rem 0 0.8rem; min-height: 34px;">${spec.desc || ''}</div>
+            <button type="button" class="btn btn-primary btn-sm btn-block" onclick="event.stopPropagation(); openSendGiftModal(null, null, null, '${spec.id}')">
+                <span>🎁 Подарить другу</span>
+            </button>
+        `;
+        card.addEventListener('click', () => {
+            openSendGiftModal(null, null, null, spec.id);
+        });
+        grid.appendChild(card);
+    });
+}
+
+function switchVaultTab(tab) {
+    const catGrid = document.getElementById('vaultCatalogGrid');
+    const histGrid = document.getElementById('globalShowcaseGrid');
+    const btnCat = document.getElementById('tabVaultCatalog');
+    const btnHist = document.getElementById('tabVaultHistory');
+
+    if (tab === 'catalog') {
+        if (catGrid) catGrid.style.display = 'grid';
+        if (histGrid) histGrid.style.display = 'none';
+        if (btnCat) btnCat.classList.add('active');
+        if (btnHist) btnHist.classList.remove('active');
+    } else {
+        if (catGrid) catGrid.style.display = 'none';
+        if (histGrid) histGrid.style.display = 'grid';
+        if (btnCat) btnCat.classList.remove('active');
+        if (btnHist) btnHist.classList.add('active');
+    }
+}
+
 async function loadShowcaseGifts() {
+    renderVaultCatalog();
+    switchVaultTab('catalog');
+
     const grid = document.getElementById('globalShowcaseGrid');
     if (!grid) return;
     grid.innerHTML = '<p class="text-muted" style="grid-column: 1 / -1; padding: 24px; text-align: center;">Загрузка подарков...</p>';
@@ -1822,7 +2454,7 @@ async function loadShowcaseGifts() {
 
         grid.innerHTML = '';
         if (!gifts || gifts.length === 0) {
-            grid.innerHTML = '<p class="text-muted" style="grid-column: 1 / -1; padding: 24px; text-align: center;">В витрине пока нет подарков. Отправьте первый!</p>';
+            grid.innerHTML = '<p class="text-muted" style="grid-column: 1 / -1; padding: 24px; text-align: center;">В истории пока нет подарков. Выберите артефакт в каталоге и отправьте первый!</p>';
             return;
         }
 
@@ -2270,7 +2902,10 @@ async function handleSendMessage(e) {
     const input = document.getElementById('chatMessageInput');
     if (!input) return;
 
-    const content = input.value.trim();
+    let content = input.value.trim();
+    if (currentChatAttachmentUrl) {
+        content = content ? `${content}\n${currentChatAttachmentUrl}` : currentChatAttachmentUrl;
+    }
     if (!content) return;
 
     const sendBtn = document.getElementById('chatSendBtn');
@@ -2294,6 +2929,7 @@ async function handleSendMessage(e) {
 
         const msg = await res.json();
         input.value = '';
+        clearChatFile();
 
         playAudioChime(600, 800, 0.08);
 
@@ -2311,6 +2947,16 @@ async function handleSendMessage(e) {
     }
 }
 
+let currentChatAttachmentUrl = '';
+
+function clearChatFile() {
+    currentChatAttachmentUrl = '';
+    const fileInput = document.getElementById('chatFileInput');
+    if (fileInput) fileInput.value = '';
+    const preview = document.getElementById('chatUploadPreview');
+    if (preview) preview.style.display = 'none';
+}
+
 // Загрузка фото/файла в чат
 async function handleChatFileUpload(e) {
     const file = e.target.files && e.target.files[0];
@@ -2319,7 +2965,7 @@ async function handleChatFileUpload(e) {
     const formData = new FormData();
     formData.append('file', file);
 
-    showToast('Загрузка в чат...', 'success');
+    showToast('Загрузка файла...', 'success');
 
     try {
         const res = await fetch('/api/upload', {
@@ -2330,12 +2976,14 @@ async function handleChatFileUpload(e) {
         if (!res.ok) throw new Error('Ошибка при загрузке файла');
         const data = await res.json();
 
-        // Автоматически отправляем в чат ссылку на файл
-        const input = document.getElementById('chatMessageInput');
-        if (input) {
-            input.value = data.url;
-            handleSendMessage();
+        currentChatAttachmentUrl = data.url;
+        const preview = document.getElementById('chatUploadPreview');
+        const previewName = document.getElementById('chatPreviewName');
+        if (preview && previewName) {
+            previewName.textContent = file.name;
+            preview.style.display = 'block';
         }
+        showToast('Файл прикреплен! Нажмите «Отправить»', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
@@ -2490,4 +3138,107 @@ function playAudioChime(freq1 = 520, freq2 = 780, duration = 0.1) {
         osc.start();
         osc.stop(ctx.currentTime + duration);
     } catch (e) {}
+}
+
+// ==========================================
+// CYBER AUDIO SUITE: SYNTHWAVE AMBIENT & SOUND FX
+// ==========================================
+let cyberAudioCtx = null;
+let cyberAudioPlaying = false;
+let cyberOsc1 = null;
+let cyberOsc2 = null;
+let cyberGain = null;
+let cyberFilter = null;
+let cyberInterval = null;
+
+function toggleCyberAudio() {
+    const btn = document.getElementById('cyberAudioBtn');
+    if (!cyberAudioPlaying) {
+        startCyberAudio();
+        cyberAudioPlaying = true;
+        if (btn) btn.classList.add('playing');
+        showToast('🎵 Киберпанк радио включено: Synthwave Chill', 'success');
+    } else {
+        stopCyberAudio();
+        cyberAudioPlaying = false;
+        if (btn) btn.classList.remove('playing');
+        showToast('Радио выключено 🔇', 'info');
+    }
+}
+
+function startCyberAudio() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!cyberAudioCtx) cyberAudioCtx = new AudioCtx();
+        if (cyberAudioCtx.state === 'suspended') cyberAudioCtx.resume();
+
+        // Warm analog drone + resonant filter
+        const osc1 = cyberAudioCtx.createOscillator();
+        const osc2 = cyberAudioCtx.createOscillator();
+        const filter = cyberAudioCtx.createBiquadFilter();
+        const gain = cyberAudioCtx.createGain();
+
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(65.41, cyberAudioCtx.currentTime); // C2
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(98.00, cyberAudioCtx.currentTime); // G2
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(450, cyberAudioCtx.currentTime);
+        filter.Q.setValueAtTime(4.0, cyberAudioCtx.currentTime);
+
+        gain.gain.setValueAtTime(0.035, cyberAudioCtx.currentTime);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(cyberAudioCtx.destination);
+
+        osc1.start();
+        osc2.start();
+
+        cyberOsc1 = osc1;
+        cyberOsc2 = osc2;
+        cyberFilter = filter;
+        cyberGain = gain;
+
+        // Subtle ambient chord pulse
+        const notes = [130.81, 164.81, 196.00, 246.94];
+        let noteIdx = 0;
+        cyberInterval = setInterval(() => {
+            if (!cyberAudioPlaying || !cyberAudioCtx) return;
+            try {
+                const arpOsc = cyberAudioCtx.createOscillator();
+                const arpGain = cyberAudioCtx.createGain();
+                arpOsc.type = 'sine';
+                arpOsc.frequency.setValueAtTime(notes[noteIdx % notes.length], cyberAudioCtx.currentTime);
+                arpGain.gain.setValueAtTime(0.025, cyberAudioCtx.currentTime);
+                arpGain.gain.exponentialRampToValueAtTime(0.0001, cyberAudioCtx.currentTime + 1.2);
+                arpOsc.connect(arpGain);
+                arpGain.connect(cyberAudioCtx.destination);
+                arpOsc.start();
+                arpOsc.stop(cyberAudioCtx.currentTime + 1.2);
+                noteIdx++;
+            } catch (e) {}
+        }, 1600);
+
+    } catch (e) {
+        console.warn('Web Audio error:', e);
+    }
+}
+
+function stopCyberAudio() {
+    if (cyberInterval) {
+        clearInterval(cyberInterval);
+        cyberInterval = null;
+    }
+    if (cyberOsc1) {
+        try { cyberOsc1.stop(); cyberOsc1.disconnect(); } catch (e) {}
+        cyberOsc1 = null;
+    }
+    if (cyberOsc2) {
+        try { cyberOsc2.stop(); cyberOsc2.disconnect(); } catch (e) {}
+        cyberOsc2 = null;
+    }
 }
