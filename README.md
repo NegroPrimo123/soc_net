@@ -1,4 +1,4 @@
-# ⚡ GoSocial v4.0 — Социальная сеть на Go и PostgreSQL
+# ⚡ GoSocial — Социальная сеть на Go и PostgreSQL
 
 Полнофункциональная социальная сеть, разработанная на **Go (Golang)** и СУБД **PostgreSQL 15** с чистым веб-интерфейсом (Glassmorphism, Plus Jakarta Sans), системой безопасной аутентификации (bcrypt + Sessions), адаптивными лентами, цифровыми подарками и **модулем личных сообщений (Direct Messages)** с доставкой в реальном времени через **Server-Sent Events (SSE)**.
 
