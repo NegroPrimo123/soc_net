@@ -339,6 +339,31 @@
 </div>
 
 <!-- Модальное окно расширенной кастомизации профиля -->
+
+<!-- Модальное окно подтверждения удаления сообщения -->
+<div id="deleteMessageModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeDeleteMessageModal()">
+    <div class="modal-card" style="max-width: 440px; padding: 1.75rem;">
+        <button class="modal-close-btn" onclick="closeDeleteMessageModal()" title="Закрыть">✕</button>
+        <div class="modal-header" style="margin-bottom: 1rem; text-align: left;">
+            <h3 style="font-size: 1.15rem; color: var(--text-pure);" id="delMsgModalTitle">Удаление сообщения</h3>
+            <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.35rem;" id="delMsgModalDesc">
+                Выберите, как именно вы хотите удалить выбранное сообщение.
+            </p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.25rem;">
+            <button type="button" class="btn btn-danger btn-block" id="btnDeleteMsgForEveryone" onclick="confirmDeleteMessageAction(true)">
+                <span>🗑️ Удалить у себя и у другого (для всех)</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-block" id="btnDeleteMsgForSelf" onclick="confirmDeleteMessageAction(false)">
+                <span>🗑️ Удалить только у себя</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-block" onclick="closeDeleteMessageModal()" style="opacity: 0.75;">
+                <span>Отмена</span>
+            </button>
+        </div>
+    </div>
+</div>
+
 <div id="editProfileModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeEditProfileModal()">
     <div class="modal-card modal-custom-studio-card" style="max-width: 820px; width: 95%; max-height: 92vh; overflow-y: auto;">
         <button class="modal-close-btn" onclick="closeEditProfileModal()" title="Закрыть">✕</button>
@@ -1173,11 +1198,7 @@
             ========================================== -->
             <div id="showcaseView" class="view-panel" style="display: none;">
                 <div class="vault-container">
-                    <div class="vault-hero-card">
-                        <div class="modal-header-badge">CYBERPUNK 2077 GIFTS</div>
-                        <h2>Витрина кибер-подарков Найт-Сити</h2>
-                        <p>Премиальная 3D-коллекция из 9 киберпанк-подарков на 100% прозрачном фоне (Alpha=0) с мягким неоновым свечением: Кибер-Катана, Нейро-Визор HUD, Квантовое Кибер-Сердце, Боевой Шлем Самурая Oni, Синтвейв Нейро-Кассета, Клинок Богомола, Тактический Кибер-Дрон, Плазменная ЭМИ-Граната и Нейро-Инжектор «MaxDoc». Выбирайте артефакт и дарите союзникам в сети!</p>
-                    </div>
+
 
                     <!-- Вкладки витрины: Каталог 9 артефактов / Врученные подарки -->
                     <div class="feed-filter-bar" style="margin-bottom: 1.5rem;">
@@ -1245,7 +1266,10 @@
                                         <div class="chat-user-handle" id="chatInterlocutorHandle">@...</div>
                                     </div>
                                 </div>
-                                <div class="chat-header-actions">
+                                <div class="chat-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button type="button" class="btn btn-secondary btn-sm" id="btnToggleMsgSelect" onclick="toggleChatSelectionMode()" title="Выделить сообщения для групповых действий">
+                                        <span>☑️ Выбрать</span>
+                                    </button>
                                     <button class="btn btn-secondary btn-sm" onclick="openInterlocutorProfile()">
                                         <span>Профиль</span>
                                     </button>
@@ -1261,6 +1285,34 @@
                                 <div class="chat-preview-card">
                                     <span id="chatPreviewName">image.png</span>
                                     <button type="button" onclick="clearChatFile()">✕</button>
+                                </div>
+                            </div>
+
+                            <!-- Баннер редактирования сообщения -->
+                            <div id="chatEditBanner" class="chat-edit-banner" style="display: none;">
+                                <div class="chat-edit-banner-info">
+                                    <span class="chat-edit-icon">✏️</span>
+                                    <div class="chat-edit-text-wrap">
+                                        <div class="chat-edit-title">Редактирование сообщения</div>
+                                        <div id="chatEditPreviewText" class="chat-edit-preview">...</div>
+                                    </div>
+                                </div>
+                                <button type="button" class="chat-edit-cancel-btn" onclick="cancelEditChatMessage()" title="Отменить редактирование">✕</button>
+                            </div>
+
+                            <!-- Панель пакетных действий над выбранными сообщениями -->
+                            <div id="chatBatchActionsBar" class="chat-batch-actions-bar" style="display: none;">
+                                <div class="batch-count-info">
+                                    <span>Выбрано сообщений:</span>
+                                    <strong id="selectedMsgsCount">0</strong>
+                                </div>
+                                <div class="batch-btns-row">
+                                    <button type="button" class="btn btn-danger btn-sm" onclick="promptBatchDeleteMessages()">
+                                        <span>🗑️ Удалить выбранные</span>
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" onclick="exitChatSelectionMode()">
+                                        <span>✕ Отмена</span>
+                                    </button>
                                 </div>
                             </div>
 

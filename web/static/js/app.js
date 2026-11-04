@@ -679,19 +679,15 @@ async function addComment(postId) {
         input.value = '';
 
         const commentsList = document.getElementById(`comments-list-${postId}`);
-        const commentEl = document.createElement('div');
-        commentEl.className = 'comment-item';
-        commentEl.innerHTML = `
-            <img src="${escapeHtml(comment.user.avatar_url)}" alt="avatar" class="comment-avatar">
-            <div class="comment-bubble">
-                <div class="comment-author-line">
-                    <span class="comment-author">${escapeHtml(comment.user.display_name)}</span>
-                    <span class="comment-time">${formatTime(comment.created_at)}</span>
-                </div>
-                <div class="comment-text">${escapeHtml(comment.content)}</div>
-            </div>
-        `;
-        commentsList.appendChild(commentEl);
+        if (commentsList) {
+            const postCard = document.getElementById(`post-${postId}`);
+            const postOwnerId = postCard ? parseInt(postCard.getAttribute('data-owner-id') || '0') : 0;
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = renderCommentItemHtml(comment, postOwnerId);
+            if (tempDiv.firstElementChild) {
+                commentsList.appendChild(tempDiv.firstElementChild);
+            }
+        }
 
         const countEl = document.getElementById(`comment-count-${postId}`);
         if (countEl) {
@@ -792,6 +788,192 @@ function renderPostAtTop(post) {
     }
 }
 
+
+// ==========================================
+// ПОСТЫ: МЕНЮ 3 ТОЧКИ И ДЕЙСТВИЯ
+// ==========================================
+function togglePostDropdown(postId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const menu = document.getElementById(`post-dropdown-${postId}`);
+    if (!menu) return;
+    const isShown = menu.style.display === 'flex';
+    closeAllPostDropdowns();
+    if (!isShown) {
+        menu.style.display = 'flex';
+    }
+}
+
+function closeAllPostDropdowns() {
+    document.querySelectorAll('.post-dropdown-menu').forEach(m => {
+        m.style.display = 'none';
+    });
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.post-kebab-wrap')) {
+        closeAllPostDropdowns();
+    }
+});
+
+function downloadPostImage(imageUrl) {
+    closeAllPostDropdowns();
+    if (!imageUrl) return;
+    const a = document.createElement('a');
+    a.href = imageUrl;
+    a.download = imageUrl.split('/').pop() || 'photo.png';
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('Фото сохраняется 💾', 'success');
+}
+
+function copyPostText(postId) {
+    closeAllPostDropdowns();
+    const contentEl = document.getElementById(`post-content-${postId}`);
+    const text = contentEl ? contentEl.textContent.trim() : '';
+    if (!text) {
+        showToast('Текст публикации пуст', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Текст публикации скопирован в буфер обмена 📋', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать текст', 'error');
+    });
+}
+
+// ==========================================
+// КОММЕНТАРИИ: РЕНДЕРИНГ, РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ
+// ==========================================
+function renderCommentItemHtml(c, postOwnerId) {
+    const isCommentAuthor = window.IS_AUTHENTICATED && (window.CURRENT_USER_ID === c.user.id);
+    const canDeleteComment = window.IS_AUTHENTICATED && (isCommentAuthor || window.CURRENT_USER_ID === postOwnerId);
+    const editedHtml = c.is_edited ? '<span class="edited-badge">• (ред.)</span>' : '';
+
+    return `
+        <div class="comment-item" id="comment-item-${c.id}">
+            <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
+            <div class="comment-bubble">
+                <div class="comment-author-line">
+                    <div class="comment-author-meta" id="comment-meta-${c.id}">
+                        <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
+                        <span class="comment-time">${formatTime(c.created_at)}</span>
+                        ${editedHtml}
+                    </div>
+                    ${(isCommentAuthor || canDeleteComment) ? `
+                        <div class="comment-item-actions">
+                            ${isCommentAuthor ? `
+                                <button type="button" class="comment-action-btn" onclick="startEditComment(${c.id}, ${c.post_id})" title="Редактировать">✏️</button>
+                            ` : ''}
+                            ${canDeleteComment ? `
+                                <button type="button" class="comment-action-btn" onclick="deleteComment(${c.id}, ${c.post_id})" title="Удалить">🗑️</button>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="comment-text" id="comment-text-${c.id}">${escapeHtml(c.content)}</div>
+                <div class="comment-edit-box" id="comment-edit-box-${c.id}" style="display: none;">
+                    <input type="text" id="comment-edit-input-${c.id}" class="comment-edit-input" value="${escapeHtml(c.content)}" onkeydown="if(event.key==='Enter')saveEditComment(${c.id}, ${c.post_id}); if(event.key==='Escape')cancelEditComment(${c.id});">
+                    <div class="comment-edit-actions">
+                        <button type="button" class="btn btn-secondary btn-xs" onclick="cancelEditComment(${c.id})">Отмена</button>
+                        <button type="button" class="btn btn-primary btn-xs" onclick="saveEditComment(${c.id}, ${c.post_id})">Сохранить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function startEditComment(commentId, postId) {
+    const textEl = document.getElementById(`comment-text-${commentId}`);
+    const editBox = document.getElementById(`comment-edit-box-${commentId}`);
+    const input = document.getElementById(`comment-edit-input-${commentId}`);
+    if (textEl && editBox) {
+        textEl.style.display = 'none';
+        editBox.style.display = 'block';
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }
+}
+
+function cancelEditComment(commentId) {
+    const textEl = document.getElementById(`comment-text-${commentId}`);
+    const editBox = document.getElementById(`comment-edit-box-${commentId}`);
+    if (textEl && editBox) {
+        textEl.style.display = 'block';
+        editBox.style.display = 'none';
+    }
+}
+
+async function saveEditComment(commentId, postId) {
+    const input = document.getElementById(`comment-edit-input-${commentId}`);
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content) return;
+
+    try {
+        const res = await fetch(`/api/comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка редактирования комментария');
+        }
+        const updated = await res.json();
+        const textEl = document.getElementById(`comment-text-${commentId}`);
+        if (textEl) {
+            textEl.textContent = updated.content;
+            textEl.style.display = 'block';
+        }
+        const editBox = document.getElementById(`comment-edit-box-${commentId}`);
+        if (editBox) editBox.style.display = 'none';
+
+        const metaEl = document.getElementById(`comment-meta-${commentId}`);
+        if (metaEl && !metaEl.querySelector('.edited-badge')) {
+            const badge = document.createElement('span');
+            badge.className = 'edited-badge';
+            badge.textContent = ' • (ред.)';
+            metaEl.appendChild(badge);
+        }
+        showToast('Комментарий отредактирован ✏️', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function deleteComment(commentId, postId) {
+    if (!confirm('Вы уверены, что хотите удалить этот комментарий?')) return;
+
+    try {
+        const res = await fetch(`/api/comments/${commentId}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка удаления комментария');
+        }
+        const item = document.getElementById(`comment-item-${commentId}`);
+        if (item) item.remove();
+
+        const countEl = document.getElementById(`comment-count-${postId}`);
+        if (countEl) {
+            const current = parseInt(countEl.textContent || '1');
+            countEl.textContent = Math.max(0, current - 1);
+        }
+        showToast('Комментарий удален 🗑️', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
 function createPostElement(post) {
     const article = document.createElement('article');
     article.className = 'post-card';
@@ -824,28 +1006,43 @@ function createPostElement(post) {
 
     let commentsHtml = '';
     if (post.comments && post.comments.length > 0) {
-        commentsHtml = post.comments.map(c => `
-            <div class="comment-item">
-                <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
-                <div class="comment-bubble">
-                    <div class="comment-author-line">
-                        <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
-                        <span class="comment-time">${formatTime(c.created_at)}</span>
-                    </div>
-                    <div class="comment-text">${escapeHtml(c.content)}</div>
-                </div>
-            </div>
-        `).join('');
+        commentsHtml = post.comments.map(c => renderCommentItemHtml(c, post.user_id)).join('');
     }
 
     const isOwner = (window.IS_AUTHENTICATED && window.CURRENT_USER_ID === post.user_id);
-    const ownerActionsHtml = isOwner ? `
-        <div class="post-owner-actions">
-            <button class="icon-btn-subtle" onclick="openEditPost(${post.id})" title="Редактировать">✏️</button>
-            <button class="icon-btn-subtle" onclick="deletePost(${post.id})" title="Удалить">🗑️</button>
+    const postMenuHtml = `
+        <div class="post-kebab-wrap">
+            <button type="button" class="post-kebab-btn" onclick="togglePostDropdown(${post.id}, event)" title="Действия с постом">
+                ⋮
+            </button>
+            <div class="post-dropdown-menu" id="post-dropdown-${post.id}" style="display: none;">
+                ${isOwner ? `
+                    <button type="button" class="post-dropdown-item" onclick="openEditPost(${post.id})">
+                        <span>✏️ Редактировать</span>
+                    </button>
+                    <button type="button" class="post-dropdown-item text-danger" onclick="deletePost(${post.id})">
+                        <span>🗑️ Удалить</span>
+                    </button>
+                    <div class="post-dropdown-divider"></div>
+                ` : ''}
+                ${finalImageUrl ? `
+                    <button type="button" class="post-dropdown-item" onclick="downloadPostImage('${escapeHtml(finalImageUrl)}')">
+                        <span>💾 Сохранить фото</span>
+                    </button>
+                ` : ''}
+                ${rawContent ? `
+                    <button type="button" class="post-dropdown-item" onclick="copyPostText(${post.id})">
+                        <span>📋 Скопировать текст</span>
+                    </button>
+                ` : ''}
+                <button type="button" class="post-dropdown-item" onclick="sharePost(${post.id})">
+                    <span>🔗 Скопировать ссылку</span>
+                </button>
+            </div>
         </div>
-    ` : '';
+    `;
 
+    article.setAttribute('data-owner-id', post.user_id);
     article.innerHTML = `
         <div class="post-header">
             <div class="author-block">
@@ -861,7 +1058,7 @@ function createPostElement(post) {
                     </div>
                 </div>
             </div>
-            ${ownerActionsHtml}
+            ${postMenuHtml}
         </div>
 
         <div class="post-content" id="post-content-${post.id}" ${rawContent ? '' : 'style="display:none;"'}>${formatHashtags(rawContent)}</div>
@@ -2688,9 +2885,6 @@ function renderVaultCatalog() {
             </div>
             <div class="artifact-card-title">${spec.title}</div>
             <div class="artifact-catalog-desc" style="font-size: 0.78rem; color: var(--text-dim); line-height: 1.4; margin: 0.4rem 0 0.8rem; min-height: 34px;">${spec.desc || ''}</div>
-            <button type="button" class="btn btn-primary btn-sm btn-block" onclick="event.stopPropagation(); openSendGiftModal(null, null, null, '${spec.id}')">
-                <span>🎁 Подарить другу</span>
-            </button>
         `;
         card.addEventListener('click', () => {
             openSendGiftModal(null, null, null, spec.id);
@@ -3122,6 +3316,218 @@ async function loadChatMessages(userId) {
     }
 }
 
+
+// ==========================================
+// ЧАТ / ДИАЛОГИ: СОСТОЯНИЕ ВЫБОРА, РЕДАКТИРОВАНИЯ И УДАЛЕНИЯ
+// ==========================================
+let isChatSelectionMode = false;
+let editingChatMessageId = null;
+let pendingDeleteMessageId = null;
+let pendingDeleteIsOut = false;
+let pendingBatchDelete = false;
+
+function startEditChatMessage(msgId) {
+    const msgEl = document.getElementById(`chat-msg-${msgId}`);
+    if (!msgEl) return;
+    const contentEl = msgEl.querySelector('.chat-bubble-content');
+    if (!contentEl) return;
+    const text = contentEl.textContent.trim();
+
+    editingChatMessageId = msgId;
+    const banner = document.getElementById('chatEditBanner');
+    const preview = document.getElementById('chatEditPreviewText');
+    const input = document.getElementById('chatMessageInput');
+
+    if (preview) preview.textContent = text;
+    if (banner) banner.style.display = 'flex';
+    if (input) {
+        input.value = text;
+        input.focus();
+        input.select();
+    }
+}
+
+function cancelEditChatMessage() {
+    editingChatMessageId = null;
+    const banner = document.getElementById('chatEditBanner');
+    const input = document.getElementById('chatMessageInput');
+    if (banner) banner.style.display = 'none';
+    if (input) input.value = '';
+}
+
+function openDeleteMessageModal(msgId, isOut) {
+    pendingDeleteMessageId = msgId;
+    pendingDeleteIsOut = isOut;
+    pendingBatchDelete = false;
+
+    const modal = document.getElementById('deleteMessageModal');
+    const title = document.getElementById('delMsgModalTitle');
+    const desc = document.getElementById('delMsgModalDesc');
+    const btnForEveryone = document.getElementById('btnDeleteMsgForEveryone');
+
+    if (title) title.textContent = 'Удаление сообщения';
+    if (desc) desc.textContent = isOut 
+        ? 'Вы можете удалить это сообщение только у себя или для обоих участников переписки.'
+        : 'Удалить это сообщение из вашей истории переписки?';
+
+    if (btnForEveryone) {
+        btnForEveryone.style.display = isOut ? 'block' : 'none';
+    }
+
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeDeleteMessageModal() {
+    const modal = document.getElementById('deleteMessageModal');
+    if (modal) modal.style.display = 'none';
+    pendingDeleteMessageId = null;
+    pendingBatchDelete = false;
+}
+
+async function confirmDeleteMessageAction(forEveryone) {
+    if (pendingBatchDelete) {
+        await executeBatchDelete(forEveryone);
+        return;
+    }
+
+    if (!pendingDeleteMessageId) return;
+    const msgId = pendingDeleteMessageId;
+
+    try {
+        const res = await fetch(`/api/messages/${msgId}?for_everyone=${forEveryone}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка удаления сообщения');
+        }
+
+        const msgEl = document.getElementById(`chat-msg-${msgId}`);
+        if (msgEl) msgEl.remove();
+
+        closeDeleteMessageModal();
+        showToast(forEveryone ? 'Сообщение удалено для всех 🗑️' : 'Сообщение удалено только у вас 🗑️', 'success');
+        loadConversations();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function toggleChatSelectionMode() {
+    isChatSelectionMode = !isChatSelectionMode;
+    const cols = document.querySelectorAll('.chat-msg-select-col');
+    cols.forEach(col => {
+        col.style.display = isChatSelectionMode ? 'flex' : 'none';
+    });
+
+    const batchBar = document.getElementById('chatBatchActionsBar');
+    const btnToggle = document.getElementById('btnToggleMsgSelect');
+
+    if (isChatSelectionMode) {
+        if (batchBar) batchBar.style.display = 'flex';
+        if (btnToggle) {
+            btnToggle.classList.add('active');
+            btnToggle.innerHTML = '<span>✕ Отмена</span>';
+        }
+        updateSelectedMessagesCount();
+    } else {
+        exitChatSelectionMode();
+    }
+}
+
+function exitChatSelectionMode() {
+    isChatSelectionMode = false;
+    document.querySelectorAll('.chat-msg-select-col').forEach(col => {
+        col.style.display = 'none';
+    });
+    document.querySelectorAll('.chat-msg-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+
+    const batchBar = document.getElementById('chatBatchActionsBar');
+    if (batchBar) batchBar.style.display = 'none';
+
+    const btnToggle = document.getElementById('btnToggleMsgSelect');
+    if (btnToggle) {
+        btnToggle.classList.remove('active');
+        btnToggle.innerHTML = '<span>☑️ Выбрать</span>';
+    }
+    updateSelectedMessagesCount();
+}
+
+function onChatMessageCheckboxChange() {
+    updateSelectedMessagesCount();
+}
+
+function updateSelectedMessagesCount() {
+    const checked = document.querySelectorAll('.chat-msg-checkbox:checked');
+    const countEl = document.getElementById('selectedMsgsCount');
+    if (countEl) countEl.textContent = checked.length;
+}
+
+function promptBatchDeleteMessages() {
+    const checked = Array.from(document.querySelectorAll('.chat-msg-checkbox:checked'));
+    if (checked.length === 0) {
+        showToast('Выберите хотя бы одно сообщение', 'error');
+        return;
+    }
+
+    pendingBatchDelete = true;
+    const allOut = checked.every(cb => cb.getAttribute('data-is-out') === '1');
+
+    const modal = document.getElementById('deleteMessageModal');
+    const title = document.getElementById('delMsgModalTitle');
+    const desc = document.getElementById('delMsgModalDesc');
+    const btnForEveryone = document.getElementById('btnDeleteMsgForEveryone');
+
+    if (title) title.textContent = `Удаление сообщений (${checked.length})`;
+    if (desc) desc.textContent = allOut
+        ? `Выбрано ${checked.length} ваших сообщений. Удалить их только у себя или для обоих участников?`
+        : `Выбрано ${checked.length} сообщений. Среди них есть входящие сообщения, поэтому их можно удалить только у себя.`;
+
+    if (btnForEveryone) {
+        btnForEveryone.style.display = allOut ? 'block' : 'none';
+    }
+
+    if (modal) modal.style.display = 'flex';
+}
+
+async function executeBatchDelete(forEveryone) {
+    const checked = Array.from(document.querySelectorAll('.chat-msg-checkbox:checked'));
+    if (checked.length === 0) return;
+
+    const ids = checked.map(cb => parseInt(cb.getAttribute('data-msg-id'))).filter(id => !isNaN(id));
+    if (ids.length === 0) return;
+
+    try {
+        const res = await fetch('/api/messages/batch-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message_ids: ids,
+                for_everyone: forEveryone
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка удаления сообщений');
+        }
+
+        ids.forEach(id => {
+            const el = document.getElementById(`chat-msg-${id}`);
+            if (el) el.remove();
+        });
+
+        exitChatSelectionMode();
+        closeDeleteMessageModal();
+        showToast(forEveryone ? `Удалено сообщений: ${ids.length} (для всех) 🗑️` : `Удалено сообщений: ${ids.length} (только у вас) 🗑️`, 'success');
+        loadConversations();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
 function appendChatMessageElement(m) {
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
@@ -3138,8 +3544,11 @@ function appendChatMessageElement(m) {
     const row = document.createElement('div');
     row.id = `chat-msg-${m.id}`;
     row.className = 'chat-bubble-row ' + (isOut ? 'out' : 'in');
+    row.setAttribute('data-msg-id', m.id);
+    row.setAttribute('data-is-out', isOut ? '1' : '0');
 
     const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
+    const editedBadge = m.is_edited ? '<span class="chat-bubble-edited" title="Отредактировано">• (ред.)</span>' : '';
 
     const trimmed = (m.content || '').trim();
     const isImageFile = /\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(trimmed);
@@ -3157,15 +3566,45 @@ function appendChatMessageElement(m) {
         contentHtml = escapeHtml(m.content);
     }
 
-    row.innerHTML = `
-        <div class="chat-bubble ${isOut ? 'out' : 'in'}">
-            <div class="chat-bubble-content">${contentHtml}</div>
-            <div class="chat-bubble-footer">
-                <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
-                ${statusCheck}
-            </div>
+    const selectCol = `
+        <div class="chat-msg-select-col" style="${isChatSelectionMode ? 'display:flex;' : 'display:none;'}">
+            <input type="checkbox" class="chat-msg-checkbox" data-msg-id="${m.id}" data-is-out="${isOut ? '1' : '0'}" onchange="onChatMessageCheckboxChange()">
         </div>
     `;
+
+    const hoverActions = `
+        <div class="chat-msg-hover-actions">
+            ${isOut && !isImageFile && !isUploadedPath ? `<button type="button" class="chat-msg-act-btn" onclick="startEditChatMessage(${m.id})" title="Редактировать">✏️</button>` : ''}
+            <button type="button" class="chat-msg-act-btn" onclick="openDeleteMessageModal(${m.id}, ${isOut})" title="Удалить">🗑️</button>
+        </div>
+    `;
+
+    if (isOut) {
+        row.innerHTML = `
+            ${selectCol}
+            ${hoverActions}
+            <div class="chat-bubble out">
+                <div class="chat-bubble-content">${contentHtml}</div>
+                <div class="chat-bubble-footer">
+                    ${editedBadge}
+                    <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
+                    ${statusCheck}
+                </div>
+            </div>
+        `;
+    } else {
+        row.innerHTML = `
+            ${selectCol}
+            <div class="chat-bubble in">
+                <div class="chat-bubble-content">${contentHtml}</div>
+                <div class="chat-bubble-footer">
+                    ${editedBadge}
+                    <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
+                </div>
+            </div>
+            ${hoverActions}
+        `;
+    }
 
     container.appendChild(row);
 }
@@ -3199,6 +3638,44 @@ async function handleSendMessage(e) {
     if (!content) return;
 
     const sendBtn = document.getElementById('chatSendBtn');
+
+    // Если сейчас включен режим редактирования сообщения:
+    if (editingChatMessageId) {
+        if (sendBtn) sendBtn.disabled = true;
+        isSendingMessage = true;
+        try {
+            const res = await fetch(`/api/messages/${editingChatMessageId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: content })
+            });
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || 'Ошибка редактирования сообщения');
+            }
+            const updated = await res.json();
+            const msgEl = document.getElementById(`chat-msg-${updated.id}`);
+            if (msgEl) {
+                const contentEl = msgEl.querySelector('.chat-bubble-content');
+                if (contentEl) contentEl.textContent = updated.content;
+                const footer = msgEl.querySelector('.chat-bubble-footer');
+                if (footer && !footer.querySelector('.chat-bubble-edited')) {
+                    const ed = document.createElement('span');
+                    ed.className = 'chat-bubble-edited';
+                    ed.textContent = ' • (ред.)';
+                    footer.insertBefore(ed, footer.firstChild);
+                }
+            }
+            cancelEditChatMessage();
+            showToast('Сообщение изменено ✏️', 'success');
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            if (sendBtn) sendBtn.disabled = false;
+            isSendingMessage = false;
+        }
+        return;
+    }
     if (sendBtn) sendBtn.disabled = true;
     isSendingMessage = true;
 
@@ -3363,28 +3840,80 @@ function handleSSEEvent(event) {
             if (likeCount) likeCount.textContent = event.likes_count;
             break;
 
-        case 'new_comment':
+        case 'new_comment': {
             const countEl = document.getElementById(`comment-count-${event.post_id}`);
             if (countEl) countEl.textContent = event.comments_count;
 
             const commentsList = document.getElementById(`comments-list-${event.post_id}`);
             if (commentsList && event.comment && event.comment.user_id !== window.CURRENT_USER_ID) {
                 const c = event.comment;
-                const commentEl = document.createElement('div');
-                commentEl.className = 'comment-item';
-                commentEl.innerHTML = `
-                    <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
-                    <div class="comment-bubble">
-                        <div class="comment-author-line">
-                            <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
-                            <span class="comment-time">${formatTime(c.created_at)}</span>
-                        </div>
-                        <div class="comment-text">${escapeHtml(c.content)}</div>
-                    </div>
-                `;
-                commentsList.appendChild(commentEl);
+                const postCard = document.getElementById(`post-${event.post_id}`);
+                const postOwnerId = postCard ? parseInt(postCard.getAttribute('data-owner-id') || '0') : 0;
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderCommentItemHtml(c, postOwnerId);
+                if (tempDiv.firstElementChild) {
+                    commentsList.appendChild(tempDiv.firstElementChild);
+                }
             }
             break;
+        }
+
+        case 'comment_updated': {
+            const comment = event.payload || event.comment;
+            if (comment) {
+                const textEl = document.getElementById(`comment-text-${comment.id}`);
+                if (textEl) textEl.textContent = comment.content;
+                const metaEl = document.getElementById(`comment-meta-${comment.id}`);
+                if (metaEl && !metaEl.querySelector('.edited-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'edited-badge';
+                    badge.textContent = ' • (ред.)';
+                    metaEl.appendChild(badge);
+                }
+            }
+            break;
+        }
+
+        case 'comment_deleted': {
+            const commentId = event.comment_id;
+            const commentEl = document.getElementById(`comment-item-${commentId}`);
+            if (commentEl) commentEl.remove();
+            if (event.post_id) {
+                const countEl = document.getElementById(`comment-count-${event.post_id}`);
+                if (countEl && event.comments_count !== undefined) {
+                    countEl.textContent = event.comments_count;
+                }
+            }
+            break;
+        }
+
+        case 'message_updated': {
+            const msg = event.payload || event.message;
+            if (msg) {
+                const msgEl = document.getElementById(`chat-msg-${msg.id}`);
+                if (msgEl) {
+                    const contentEl = msgEl.querySelector('.chat-bubble-content');
+                    if (contentEl) contentEl.textContent = msg.content;
+                    const footer = msgEl.querySelector('.chat-bubble-footer');
+                    if (footer && !footer.querySelector('.chat-bubble-edited')) {
+                        const ed = document.createElement('span');
+                        ed.className = 'chat-bubble-edited';
+                        ed.textContent = ' • (ред.)';
+                        footer.insertBefore(ed, footer.firstChild);
+                    }
+                }
+            }
+            break;
+        }
+
+        case 'message_deleted': {
+            const msgId = event.payload ? event.payload.message_id : event.message_id;
+            if (msgId) {
+                const msgEl = document.getElementById(`chat-msg-${msgId}`);
+                if (msgEl) msgEl.remove();
+            }
+            break;
+        }
 
         case 'new_gift':
             if (event.gift) {

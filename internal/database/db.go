@@ -76,8 +76,12 @@ func migrate(db *sql.DB) error {
 		post_id INT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
 		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		content TEXT NOT NULL,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+		is_edited BOOLEAN DEFAULT FALSE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 	);
+	ALTER TABLE comments ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE;
+	ALTER TABLE comments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
 	CREATE TABLE IF NOT EXISTS follows (
 		follower_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -143,8 +147,16 @@ func migrate(db *sql.DB) error {
 		receiver_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		content TEXT NOT NULL,
 		is_read BOOLEAN DEFAULT FALSE,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+		is_edited BOOLEAN DEFAULT FALSE,
+		deleted_for_sender BOOLEAN DEFAULT FALSE,
+		deleted_for_receiver BOOLEAN DEFAULT FALSE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 	);
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_for_sender BOOLEAN DEFAULT FALSE;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_for_receiver BOOLEAN DEFAULT FALSE;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 	CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
 	CREATE INDEX IF NOT EXISTS idx_messages_receiver_id ON messages(receiver_id);
 	CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, receiver_id, created_at ASC);

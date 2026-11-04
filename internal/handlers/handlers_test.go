@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -471,4 +472,205 @@ func strconvItoa(i int) string {
 		buf[curr] = '-'
 	}
 	return string(buf[curr:])
+}
+
+func TestCommentOperations(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, tokenUser2 := setupTestApp(t)
+
+	// User 1 creates a post
+	postPayload := `{"content": "Тестовый пост для проверки комментариев"}`
+	req := httptest.NewRequest("POST", "/api/posts", strings.NewReader(postPayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Failed to create post: %d", w.Code)
+	}
+	var post models.Post
+	json.Unmarshal(w.Body.Bytes(), &post)
+
+	// User 2 comments on the post
+	commentPayload := `{"content": "Первоначальный комментарий"}`
+	req = httptest.NewRequest("POST", fmt.Sprintf("/api/posts/%d/comments", post.ID), strings.NewReader(commentPayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Failed to create comment: %d", w.Code)
+	}
+	var comment models.Comment
+	json.Unmarshal(w.Body.Bytes(), &comment)
+
+	t.Run("Редактирование своего комментария автором -> 200 OK", func(t *testing.T) {
+		editPayload := `{"content": "Отредактированный комментарий"}`
+		reqEdit := httptest.NewRequest("PUT", fmt.Sprintf("/api/comments/%d", comment.ID), strings.NewReader(editPayload))
+		reqEdit.Header.Set("Content-Type", "application/json")
+		reqEdit.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
+		wEdit := httptest.NewRecorder()
+		mux.ServeHTTP(wEdit, reqEdit)
+
+		if wEdit.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d. Body: %s", wEdit.Code, wEdit.Body.String())
+		}
+		var updated models.Comment
+		json.Unmarshal(wEdit.Body.Bytes(), &updated)
+		if updated.Content != "Отредактированный комментарий" {
+			t.Fatalf("Expected updated content, got %s", updated.Content)
+		}
+		if !updated.IsEdited {
+			t.Fatalf("Expected IsEdited to be true")
+		}
+	})
+
+	t.Run("Попытка чужого пользователя отредактировать комментарий -> 403 Forbidden", func(t *testing.T) {
+		editPayload := `{"content": "Взлом комментария"}`
+		reqEdit := httptest.NewRequest("PUT", fmt.Sprintf("/api/comments/%d", comment.ID), strings.NewReader(editPayload))
+		reqEdit.Header.Set("Content-Type", "application/json")
+		reqEdit.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		wEdit := httptest.NewRecorder()
+		mux.ServeHTTP(wEdit, reqEdit)
+
+		if wEdit.Code != http.StatusForbidden {
+			t.Fatalf("Expected 403 Forbidden, got %d", wEdit.Code)
+		}
+	})
+
+	t.Run("Удаление комментария автором -> 200 OK", func(t *testing.T) {
+		reqDel := httptest.NewRequest("DELETE", fmt.Sprintf("/api/comments/%d", comment.ID), nil)
+		reqDel.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
+		wDel := httptest.NewRecorder()
+		mux.ServeHTTP(wDel, reqDel)
+
+		if wDel.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d. Body: %s", wDel.Code, wDel.Body.String())
+		}
+	})
+}
+
+func TestMessageEditAndDeleteOperations(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, tokenUser2 := setupTestApp(t)
+
+	// User 1 sends message to User 2
+	msgPayload := `{"receiver_id": 2, "content": "Сообщение для редактирования и удаления"}`
+	req := httptest.NewRequest("POST", "/api/messages", strings.NewReader(msgPayload))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Failed to send message: %d", w.Code)
+	}
+	var msg models.Message
+	json.Unmarshal(w.Body.Bytes(), &msg)
+
+	t.Run("Редактирование своего сообщения отправителем -> 200 OK", func(t *testing.T) {
+		editPayload := `{"content": "Исправленный текст сообщения"}`
+		reqEdit := httptest.NewRequest("PUT", fmt.Sprintf("/api/messages/%d", msg.ID), strings.NewReader(editPayload))
+		reqEdit.Header.Set("Content-Type", "application/json")
+		reqEdit.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		wEdit := httptest.NewRecorder()
+		mux.ServeHTTP(wEdit, reqEdit)
+
+		if wEdit.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d. Body: %s", wEdit.Code, wEdit.Body.String())
+		}
+		var updated models.Message
+		json.Unmarshal(wEdit.Body.Bytes(), &updated)
+		if updated.Content != "Исправленный текст сообщения" {
+			t.Fatalf("Expected updated content, got %s", updated.Content)
+		}
+		if !updated.IsEdited {
+			t.Fatalf("Expected IsEdited to be true")
+		}
+	})
+
+	t.Run("Попытка получателя отредактировать входящее сообщение -> 403 Forbidden", func(t *testing.T) {
+		editPayload := `{"content": "Подделка сообщения"}`
+		reqEdit := httptest.NewRequest("PUT", fmt.Sprintf("/api/messages/%d", msg.ID), strings.NewReader(editPayload))
+		reqEdit.Header.Set("Content-Type", "application/json")
+		reqEdit.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
+		wEdit := httptest.NewRecorder()
+		mux.ServeHTTP(wEdit, reqEdit)
+
+		if wEdit.Code != http.StatusForbidden {
+			t.Fatalf("Expected 403 Forbidden, got %d", wEdit.Code)
+		}
+	})
+
+	t.Run("Удаление сообщения только у себя -> 200 OK", func(t *testing.T) {
+		// User 2 deletes incoming message for self
+		reqDel := httptest.NewRequest("DELETE", fmt.Sprintf("/api/messages/%d?for_everyone=false", msg.ID), nil)
+		reqDel.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
+		wDel := httptest.NewRecorder()
+		mux.ServeHTTP(wDel, reqDel)
+
+		if wDel.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d. Body: %s", wDel.Code, wDel.Body.String())
+		}
+
+		// User 2 checks conversation -> msg is NOT present
+		reqGet2 := httptest.NewRequest("GET", "/api/messages/1", nil)
+		reqGet2.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
+		wGet2 := httptest.NewRecorder()
+		mux.ServeHTTP(wGet2, reqGet2)
+		var list2 []models.Message
+		json.Unmarshal(wGet2.Body.Bytes(), &list2)
+		for _, m := range list2 {
+			if m.ID == msg.ID {
+				t.Fatalf("Message should be deleted for user 2")
+			}
+		}
+
+		// User 1 still sees the message
+		reqGet1 := httptest.NewRequest("GET", "/api/messages/2", nil)
+		reqGet1.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		wGet1 := httptest.NewRecorder()
+		mux.ServeHTTP(wGet1, reqGet1)
+		var list1 []models.Message
+		json.Unmarshal(wGet1.Body.Bytes(), &list1)
+		found := false
+		for _, m := range list1 {
+			if m.ID == msg.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("Message should still be visible for user 1")
+		}
+	})
+
+	t.Run("Групповое удаление сообщений (Batch Delete) -> 200 OK", func(t *testing.T) {
+		// Send 2 more messages from 1 to 2
+		m1Payload := `{"receiver_id": 2, "content": "Пакетное 1"}`
+		req1 := httptest.NewRequest("POST", "/api/messages", strings.NewReader(m1Payload))
+		req1.Header.Set("Content-Type", "application/json")
+		req1.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		w1 := httptest.NewRecorder()
+		mux.ServeHTTP(w1, req1)
+		var m1 models.Message
+		json.Unmarshal(w1.Body.Bytes(), &m1)
+
+		m2Payload := `{"receiver_id": 2, "content": "Пакетное 2"}`
+		req2 := httptest.NewRequest("POST", "/api/messages", strings.NewReader(m2Payload))
+		req2.Header.Set("Content-Type", "application/json")
+		req2.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		w2 := httptest.NewRecorder()
+		mux.ServeHTTP(w2, req2)
+		var m2 models.Message
+		json.Unmarshal(w2.Body.Bytes(), &m2)
+
+		batchPayload := fmt.Sprintf(`{"message_ids": [%d, %d], "for_everyone": true}`, m1.ID, m2.ID)
+		reqBatch := httptest.NewRequest("POST", "/api/messages/batch-delete", strings.NewReader(batchPayload))
+		reqBatch.Header.Set("Content-Type", "application/json")
+		reqBatch.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		wBatch := httptest.NewRecorder()
+		mux.ServeHTTP(wBatch, reqBatch)
+
+		if wBatch.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d. Body: %s", wBatch.Code, wBatch.Body.String())
+		}
+	})
 }
