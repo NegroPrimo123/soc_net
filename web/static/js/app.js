@@ -2088,13 +2088,17 @@ function renderUserProfile(data) {
     const profComposer = document.getElementById('profComposerCard');
 
     if (data.is_owner) {
-        if (profComposer) profComposer.style.display = 'block';
+        if (profComposer) {
+            profComposer.style.display = 'block';
+            const compAvatar = document.getElementById('profComposerAvatar');
+            if (compAvatar && user.avatar_url) compAvatar.src = user.avatar_url;
+        }
         actionsBox.innerHTML = `
             <button class="btn btn-primary btn-sm" onclick="openEditProfileModal()">
-                <span>🎨 Оформление профиля</span>
+                <span>Оформление профиля</span>
             </button>
             <button class="btn btn-secondary btn-sm" onclick="openEditProfileModal()">
-                <span>✏️ Редактировать</span>
+                <span>Редактировать</span>
             </button>
         `;
     } else {
@@ -2104,10 +2108,10 @@ function renderUserProfile(data) {
 
         actionsBox.innerHTML = `
             <button class="btn btn-secondary btn-sm" onclick="openChatWithUser(${user.id}, '${escapeHtml(user.display_name)}', '${escapeHtml(user.username)}', '${escapeHtml(user.avatar_url)}')">
-                <span>💬 Сообщение</span>
+                <span>Сообщение</span>
             </button>
             <button class="btn btn-outline btn-sm" onclick="openSendGiftModal(${user.id}, '${escapeHtml(user.display_name)}', '${escapeHtml(user.username)}')">
-                <span>🎁 Отправить подарок</span>
+                <span>Отправить подарок</span>
             </button>
             <button class="btn ${followClass} btn-sm" onclick="toggleProfileFollow(${user.id})">
                 <span>${followText}</span>
@@ -3281,15 +3285,123 @@ async function handleProfileUpdate(e) {
     } finally {
         if (saveBtn) {
             saveBtn.disabled = false;
-            saveBtn.innerHTML = '<span>Сохранить в профиль</span><span class="btn-arrow">✨</span>';
+            saveBtn.innerHTML = '<span>Сохранить в профиль</span><span class="btn-arrow">→</span>';
         }
     }
 }
 
+// ==========================================
+// СОЗДАНИЕ ПОСТА В ПРОФИЛЕ С ФОТО
+// ==========================================
+let currentProfUploadedImageUrl = '';
+
+function toggleProfImageBox() {
+    const box = document.getElementById('profImageBox');
+    if (!box) return;
+    box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+    if (box.style.display === 'block') {
+        const inp = document.getElementById('profImageUrl');
+        if (inp) inp.focus();
+    }
+}
+
+function updateProfImagePreview() {
+    const urlInput = document.getElementById('profImageUrl');
+    const url = urlInput ? urlInput.value.trim() : '';
+    const previewBox = document.getElementById('profUploadPreview');
+    const previewImg = document.getElementById('profPreviewImg');
+    const previewName = document.getElementById('profPreviewName');
+    const previewSize = document.getElementById('profPreviewSize');
+
+    if (url) {
+        currentProfUploadedImageUrl = url;
+        if (previewImg) {
+            previewImg.src = url;
+            previewImg.style.display = 'block';
+        }
+        if (previewName) previewName.textContent = 'Изображение по ссылке';
+        if (previewSize) previewSize.textContent = 'Внешний URL';
+        if (previewBox) previewBox.style.display = 'block';
+    } else if (!currentProfUploadedImageUrl || currentProfUploadedImageUrl.startsWith('http')) {
+        clearProfComposerFile();
+    }
+}
+
+async function handleProfComposerFileUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 30 * 1024 * 1024) {
+        showToast('Размер файла не должен превышать 30 МБ', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showToast('Загрузка фото...', 'info');
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Ошибка загрузки фото');
+        }
+
+        const data = await res.json();
+        currentProfUploadedImageUrl = data.url;
+
+        const previewBox = document.getElementById('profUploadPreview');
+        const previewImg = document.getElementById('profPreviewImg');
+        const previewName = document.getElementById('profPreviewName');
+        const previewSize = document.getElementById('profPreviewSize');
+
+        if (previewBox && previewName && previewSize) {
+            previewName.textContent = data.filename || file.name;
+            previewSize.textContent = formatBytes(data.size || file.size);
+            if (previewImg) {
+                previewImg.src = data.url;
+                previewImg.style.display = 'block';
+            }
+            previewBox.style.display = 'block';
+        }
+
+        showToast('Фото успешно прикреплено', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function clearProfComposerFile() {
+    currentProfUploadedImageUrl = '';
+    const fileInput = document.getElementById('profFileInput');
+    if (fileInput) fileInput.value = '';
+    const urlInput = document.getElementById('profImageUrl');
+    if (urlInput) urlInput.value = '';
+    const previewBox = document.getElementById('profUploadPreview');
+    if (previewBox) previewBox.style.display = 'none';
+    const previewImg = document.getElementById('profPreviewImg');
+    if (previewImg) previewImg.src = '';
+}
+
 async function createProfilePost() {
     const textarea = document.getElementById('profPostContent');
-    const content = textarea.value.trim();
-    if (!content) return;
+    let content = textarea ? textarea.value.trim() : '';
+    const urlInput = document.getElementById('profImageUrl');
+    const imageUrl = currentProfUploadedImageUrl || (urlInput ? urlInput.value.trim() : '');
+
+    if (imageUrl && content === imageUrl) {
+        content = '';
+    }
+
+    if (!content && !imageUrl) {
+        showToast('Введите текст публикации или прикрепите фото', 'error');
+        return;
+    }
 
     try {
         const res = await fetch('/api/posts', {
@@ -3298,15 +3410,16 @@ async function createProfilePost() {
             body: JSON.stringify({
                 user_id: window.CURRENT_USER_ID,
                 content: content,
-                image_url: ''
+                image_url: imageUrl
             })
         });
 
         const post = await res.json();
         if (!res.ok) throw new Error(post.error || 'Ошибка публикации');
 
-        textarea.value = '';
-        showToast('Запись опубликована в ваш профиль! 🌟', 'success');
+        if (textarea) textarea.value = '';
+        clearProfComposerFile();
+        showToast('Запись опубликована в ваш профиль', 'success');
 
         const profPosts = document.getElementById('profPostsContainer');
         if (profPosts) {
@@ -3314,6 +3427,12 @@ async function createProfilePost() {
             if (empty) empty.remove();
             const el = createPostElement(post);
             profPosts.insertBefore(el, profPosts.firstChild);
+        }
+
+        const feedPosts = document.getElementById('feedPostsContainer');
+        if (feedPosts) {
+            const elFeed = createPostElement(post);
+            feedPosts.insertBefore(elFeed, feedPosts.firstChild);
         }
 
         const stat = document.getElementById('heroStatPosts');
@@ -4032,17 +4151,9 @@ function appendChatMessageElement(m) {
         </div>
     `;
 
-    const hoverActions = `
-        <div class="chat-msg-hover-actions">
-            ${isOut && !isImageFile && !isUploadedPath ? `<button type="button" class="chat-msg-act-btn" onclick="startEditChatMessage(${m.id})" title="Редактировать">Ред.</button>` : ''}
-            <button type="button" class="chat-msg-act-btn" onclick="openDeleteMessageModal(${m.id}, ${isOut})" title="Удалить">✕</button>
-        </div>
-    `;
-
     if (isOut) {
         row.innerHTML = `
             ${selectCol}
-            ${hoverActions}
             <div class="chat-bubble out">
                 <div class="chat-bubble-content">${contentHtml}</div>
                 <div class="chat-bubble-footer">
@@ -4062,7 +4173,6 @@ function appendChatMessageElement(m) {
                     <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
                 </div>
             </div>
-            ${hoverActions}
         `;
     }
 
@@ -4436,12 +4546,12 @@ function toggleCyberAudio() {
         startCyberAudio();
         cyberAudioPlaying = true;
         if (btn) btn.classList.add('playing');
-        showToast('🎵 Киберпанк радио включено: Synthwave Chill', 'success');
+        showToast('Киберпанк радио включено: Synthwave Chill', 'success');
     } else {
         stopCyberAudio();
         cyberAudioPlaying = false;
         if (btn) btn.classList.remove('playing');
-        showToast('Радио выключено 🔇', 'info');
+        showToast('Радио выключено', 'info');
     }
 }
 

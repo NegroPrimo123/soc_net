@@ -3404,15 +3404,11 @@ input:checked + .toggle-slider:before {
 }
 
 .chat-msg-hover-actions {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    opacity: 0;
-    transition: opacity 0.18s ease;
+    display: none !important;
 }
 
 .chat-bubble-row:hover .chat-msg-hover-actions {
-    opacity: 1;
+    display: none !important;
 }
 
 .chat-msg-act-btn {

@@ -912,15 +912,6 @@
                     <span class="header-badge" id="headerMessagesBadge" style="{{if gt .UnreadMessagesCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadMessagesCount}}</span>
                 </button>
 
-                <button class="header-icon-btn cyber-audio-btn" id="cyberAudioBtn" onclick="toggleCyberAudio()" title="Киберпанк Радио / Фоновый Синтвейв">
-                    <span class="audio-wave-bars">
-                        <span class="bar bar-1"></span>
-                        <span class="bar bar-2"></span>
-                        <span class="bar bar-3"></span>
-                        <span class="bar bar-4"></span>
-                    </span>
-                    <span class="header-audio-label">Radio</span>
-                </button>
 
                 <div class="telemetry-clock" id="telemetryClock">GoSocial</div>
 
@@ -1254,19 +1245,56 @@
                     <div class="profile-tab-panes">
                         <!-- Вкладка записей -->
                         <div id="profTabContentPosts" class="tab-pane active">
-                            <!-- Блок постинга в свой профиль -->
+                            <!-- Блок постинга в свой профиль с поддержкой фото -->
                             <div id="profComposerCard" class="post-composer-card" style="display: none; margin-bottom: 1.25rem;">
                                 <div class="composer-header-row">
-                                    <img src="{{.CurrentUser.AvatarURL}}" alt="user" class="mini-avatar">
+                                    <img id="profComposerAvatar" src="{{.CurrentUser.AvatarURL}}" alt="user" class="mini-avatar">
                                     <div class="composer-field-wrapper">
-                                        <textarea id="profPostContent" placeholder="Опубликовать заметку в личный профиль..." rows="2"></textarea>
+                                        <textarea id="profPostContent" placeholder="Опубликовать запись в профиль..." rows="2"></textarea>
                                     </div>
                                 </div>
-                                <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
-                                    <button class="btn btn-primary btn-sm" onclick="createProfilePost()">
-                                        <span>Опубликовать в профиль</span>
-                                        <span class="btn-arrow">→</span>
-                                    </button>
+
+                                <!-- Превью загруженного фото для профиля -->
+                                <div id="profUploadPreview" class="composer-upload-preview" style="display: none; margin-top: 0.75rem;">
+                                    <div class="upload-preview-card">
+                                        <img id="profPreviewImg" src="" alt="Превью" class="upload-thumb">
+                                        <div class="upload-file-info">
+                                            <span id="profPreviewName" class="upload-file-name">photo.jpg</span>
+                                            <span id="profPreviewSize" class="upload-file-size">1.2 MB</span>
+                                        </div>
+                                        <button type="button" class="upload-remove-btn" onclick="clearProfComposerFile()" title="Удалить фото">✕</button>
+                                    </div>
+                                </div>
+
+                                <!-- Поле для ввода прямой ссылки на фото -->
+                                <div class="composer-image-input-box" id="profImageBox" style="display: none; margin-top: 0.6rem;">
+                                    <div class="image-input-row">
+                                        <span class="input-icon-alt">🔗</span>
+                                        <input type="url" id="profImageUrl" placeholder="Прямая ссылка на фото (https://...)" oninput="updateProfImagePreview()">
+                                        <button type="button" class="btn btn-secondary btn-xs" onclick="toggleProfImageBox()">Скрыть</button>
+                                    </div>
+                                </div>
+
+                                <div class="composer-actions-bar" style="margin-top: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+                                    <div class="composer-left-tools">
+                                        <!-- Кнопка загрузки фото с диска -->
+                                        <button type="button" class="tool-btn btn-attach-disk" onclick="document.getElementById('profFileInput').click()" title="Загрузить фото с компьютера">
+                                            <span>Фото</span>
+                                        </button>
+                                        <input type="file" id="profFileInput" style="display: none;" accept="image/*" onchange="handleProfComposerFileUpload(event)">
+
+                                        <!-- Кнопка ссылки -->
+                                        <button type="button" class="tool-btn" onclick="toggleProfImageBox()" title="Прикрепить фото по ссылке">
+                                            <span>Ссылка</span>
+                                        </button>
+                                    </div>
+
+                                    <div class="composer-right-actions">
+                                        <button class="btn btn-primary btn-sm" onclick="createProfilePost()">
+                                            <span>Опубликовать в профиль</span>
+                                            <span class="btn-arrow">→</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
