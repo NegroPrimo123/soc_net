@@ -1227,6 +1227,39 @@ input:focus, textarea:focus, select:focus {
 /* ==========================================
    GIFTS SYSTEM («ЦВЕТНЫЕ КАРАНДАШИ»)
 ========================================== */
+.gift-selection-grid,
+.modal-gift-card,
+#sendGiftModal .modal-card,
+#giftDetailModal .modal-card,
+.artifacts-grid,
+#profGiftsGrid,
+#vaultCatalogGrid,
+#vaultHistoryGrid,
+#vaultGiftsGrid,
+#globalShowcaseGrid,
+.vault-container,
+#profTabContentGifts {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+.gift-selection-grid::-webkit-scrollbar,
+.modal-gift-card::-webkit-scrollbar,
+#sendGiftModal .modal-card::-webkit-scrollbar,
+#giftDetailModal .modal-card::-webkit-scrollbar,
+.artifacts-grid::-webkit-scrollbar,
+#profGiftsGrid::-webkit-scrollbar,
+#vaultCatalogGrid::-webkit-scrollbar,
+#vaultHistoryGrid::-webkit-scrollbar,
+#vaultGiftsGrid::-webkit-scrollbar,
+#globalShowcaseGrid::-webkit-scrollbar,
+.vault-container::-webkit-scrollbar,
+#profTabContentGifts::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
 .artifacts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

@@ -187,6 +187,9 @@ func migrate(db *sql.DB) error {
 	UPDATE gifts SET gift_type = 'tactical_drone' WHERE gift_type IN ('cyber_drone');
 	UPDATE gifts SET gift_type = 'combat_stim' WHERE gift_type IN ('neuro_stimulator', 'infinite_coffee');
 
+	UPDATE posts p SET comments_count = (SELECT count(1) FROM comments c WHERE c.post_id = p.id)
+	WHERE p.comments_count = 0 AND EXISTS (SELECT 1 FROM comments c WHERE c.post_id = p.id);
+
 	-- Полнотекстовый поиск с морфологией и триграммами (FTS + pg_trgm)
 	CREATE EXTENSION IF NOT EXISTS pg_trgm;
 

@@ -239,9 +239,10 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 			for i := range posts {
 
 				if cmts, ok := commentsMap[posts[i].ID]; ok {
-
 					posts[i].Comments = cmts
-
+					if len(cmts) > posts[i].CommentsCount {
+						posts[i].CommentsCount = len(cmts)
+					}
 				}
 
 			}
@@ -343,9 +344,10 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 			for i := range posts {
 
 				if cmts, ok := commentsMap[posts[i].ID]; ok {
-
 					posts[i].Comments = cmts
-
+					if len(cmts) > posts[i].CommentsCount {
+						posts[i].CommentsCount = len(cmts)
+					}
 				}
 
 			}
@@ -461,6 +463,9 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 
 
 	p.Comments, _ = r.GetComments(p.ID)
+	if len(p.Comments) > p.CommentsCount {
+		p.CommentsCount = len(p.Comments)
+	}
 
 	return &p, nil
 
