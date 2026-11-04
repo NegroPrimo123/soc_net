@@ -1263,7 +1263,6 @@ function closeAllPostDropdowns() {
         const card = m.closest('.post-card');
         if (card) card.style.zIndex = '';
     });
-});
 }
 
 document.addEventListener('click', (e) => {
