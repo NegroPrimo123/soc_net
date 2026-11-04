@@ -988,15 +988,25 @@ async function deletePost(postId) {
             throw new Error(err.error || 'Ошибка удаления');
         }
 
-        const postCard = document.getElementById(`post-${postId}`);
-        if (postCard) {
-            postCard.remove();
-            if (typeof feedOffset !== 'undefined' && feedOffset > 0) feedOffset--;
-            const pill = document.getElementById('feedCountPill');
-            if (pill) {
-                const totalInDom = document.querySelectorAll('#postsContainer .post-card').length;
-                pill.textContent = `${totalInDom} постов`;
-            }
+        const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
+        allCards.forEach(card => card.remove());
+
+        if (typeof feedOffset !== 'undefined' && feedOffset > 0) feedOffset--;
+        const pill = document.getElementById('feedCountPill');
+        if (pill) {
+            const totalInDom = document.querySelectorAll('#postsContainer .post-card').length;
+            pill.textContent = `${totalInDom} постов`;
+        }
+
+        const stat = document.getElementById('heroStatPosts');
+        if (stat) {
+            const current = parseInt(stat.textContent || '0');
+            stat.textContent = Math.max(0, current - 1);
+        }
+        const badge = document.getElementById('badgeProfPosts');
+        if (badge) {
+            const current = parseInt(badge.textContent || '0');
+            badge.textContent = Math.max(0, current - 1);
         }
 
         showToast('Публикация удалена', 'success');
@@ -1008,34 +1018,48 @@ async function deletePost(postId) {
 // ==========================================
 // LIKES & COMMENTS (OPTIMISTIC UI UPDATES)
 // ==========================================
-async function toggleLike(postId) {
+async function toggleLike(postId, event) {
     if (!window.IS_AUTHENTICATED) {
-        showToast('Войдите в аккаунт, чтобы ставить лайки ❤️', 'error');
+        showToast('Войдите в аккаунт, чтобы ставить лайки', 'error');
         openAuthModal('login');
         return;
     }
 
-    const postCard = document.getElementById(`post-${postId}`);
-    const likeBtn = postCard ? postCard.querySelector('.like-btn') : null;
-    const likeCount = document.getElementById(`likes-${postId}`);
-    const heartIcon = likeBtn ? likeBtn.querySelector('.heart-icon') : null;
+    const cards = document.querySelectorAll(`[id="post-${postId}"]`);
+    let wasLiked = false;
+    let currentCount = 0;
 
-    // Мгновенный оптимистичный отклик 0мс
-    const wasLiked = likeBtn ? likeBtn.classList.contains('active') : false;
-    const currentCount = parseInt(likeCount ? likeCount.textContent || '0' : '0', 10);
+    let clickedCard = event ? (event.currentTarget || event.target).closest('.post-card') : null;
+    if (!clickedCard && cards.length > 0) {
+        for (const c of cards) {
+            const vp = c.closest('.view-panel');
+            if (vp && vp.style.display !== 'none') {
+                clickedCard = c;
+                break;
+            }
+        }
+        if (!clickedCard) clickedCard = cards[0];
+    }
+
+    if (clickedCard) {
+        const btn = clickedCard.querySelector('.like-btn');
+        wasLiked = btn ? btn.classList.contains('active') : false;
+        const countEl = clickedCard.querySelector(`[id="likes-${postId}"]`) || (btn ? btn.querySelector('span') : null);
+        currentCount = parseInt(countEl ? countEl.textContent || '0' : '0', 10);
+    }
+
     const newLiked = !wasLiked;
     const newCount = newLiked ? currentCount + 1 : Math.max(0, currentCount - 1);
 
-    if (likeBtn && heartIcon && likeCount) {
-        likeCount.textContent = newCount;
-        if (newLiked) {
-            likeBtn.classList.add('active');
-            heartIcon.setAttribute('fill', 'currentColor');
-        } else {
-            likeBtn.classList.remove('active');
-            heartIcon.setAttribute('fill', 'none');
-        }
-    }
+    // Оптимистичное обновление во всех представлениях (лента и профиль)
+    cards.forEach(card => {
+        const btn = card.querySelector('.like-btn');
+        const countEl = card.querySelector(`[id="likes-${postId}"]`) || (btn ? btn.querySelector('span') : null);
+        const heart = btn ? btn.querySelector('.heart-icon') : null;
+        if (countEl) countEl.textContent = newCount;
+        if (btn) btn.classList.toggle('active', newLiked);
+        if (heart) heart.setAttribute('fill', newLiked ? 'currentColor' : 'none');
+    });
 
     try {
         const response = await fetch(`/api/posts/${postId}/like`, {
@@ -1049,48 +1073,85 @@ async function toggleLike(postId) {
         if (!response.ok) throw new Error('Ошибка при лайке');
 
         const data = await response.json();
-        if (likeCount) likeCount.textContent = data.likes_count;
-        if (likeBtn && heartIcon) {
-            if (data.is_liked) {
-                likeBtn.classList.add('active');
-                heartIcon.setAttribute('fill', 'currentColor');
-            } else {
-                likeBtn.classList.remove('active');
-                heartIcon.setAttribute('fill', 'none');
-            }
-        }
+        cards.forEach(card => {
+            const btn = card.querySelector('.like-btn');
+            const countEl = card.querySelector(`[id="likes-${postId}"]`) || (btn ? btn.querySelector('span') : null);
+            const heart = btn ? btn.querySelector('.heart-icon') : null;
+            if (countEl) countEl.textContent = data.likes_count;
+            if (btn) btn.classList.toggle('active', data.is_liked);
+            if (heart) heart.setAttribute('fill', data.is_liked ? 'currentColor' : 'none');
+        });
     } catch (err) {
         // Откат при сбое сети
-        if (likeCount) likeCount.textContent = currentCount;
-        if (likeBtn && heartIcon) {
-            if (wasLiked) {
-                likeBtn.classList.add('active');
-                heartIcon.setAttribute('fill', 'currentColor');
-            } else {
-                likeBtn.classList.remove('active');
-                heartIcon.setAttribute('fill', 'none');
-            }
-        }
+        cards.forEach(card => {
+            const btn = card.querySelector('.like-btn');
+            const countEl = card.querySelector(`[id="likes-${postId}"]`) || (btn ? btn.querySelector('span') : null);
+            const heart = btn ? btn.querySelector('.heart-icon') : null;
+            if (countEl) countEl.textContent = currentCount;
+            if (btn) btn.classList.toggle('active', wasLiked);
+            if (heart) heart.setAttribute('fill', wasLiked ? 'currentColor' : 'none');
+        });
         showToast('Ошибка при обновлении лайка', 'error');
     }
 }
 
-function toggleComments(postId) {
-    const section = document.getElementById(`comments-section-${postId}`);
+function toggleComments(postId, event) {
+    let section = null;
+    if (event) {
+        const target = event.currentTarget || event.target;
+        const card = target ? target.closest('.post-card') : null;
+        if (card) {
+            section = card.querySelector('.comments-section');
+        }
+    }
+    if (!section) {
+        const allSections = document.querySelectorAll(`[id="comments-section-${postId}"]`);
+        for (const s of allSections) {
+            const vp = s.closest('.view-panel');
+            if (vp && vp.style.display !== 'none') {
+                section = s;
+                break;
+            }
+        }
+        if (!section && allSections.length > 0) section = allSections[0];
+    }
     if (!section) return;
-    section.style.display = (section.style.display === 'none') ? 'block' : 'none';
+
+    section.style.display = (section.style.display === 'none' || !section.style.display) ? 'block' : 'none';
+    if (section.style.display === 'block') {
+        const inp = section.querySelector('.comment-input-row input');
+        if (inp) inp.focus();
+    }
 }
 
-async function addComment(postId) {
+async function addComment(postId, event) {
     if (!window.IS_AUTHENTICATED) {
         showToast('Войдите в аккаунт, чтобы оставить комментарий', 'error');
         openAuthModal('login');
         return;
     }
 
-    const input = document.getElementById(`comment-input-${postId}`);
-    const content = input.value.trim();
+    let input = null;
+    if (event) {
+        const target = event.currentTarget || event.target;
+        const card = target ? target.closest('.post-card') : null;
+        if (card) {
+            input = card.querySelector('.comment-input-row input');
+        }
+    }
+    if (!input) {
+        const allInputs = document.querySelectorAll(`[id="comment-input-${postId}"]`);
+        for (const inp of allInputs) {
+            const vp = inp.closest('.view-panel');
+            if (vp && vp.style.display !== 'none') {
+                input = inp;
+                break;
+            }
+        }
+        if (!input && allInputs.length > 0) input = allInputs[0];
+    }
 
+    const content = input ? input.value.trim() : '';
     if (!content) return;
 
     try {
@@ -1106,23 +1167,29 @@ async function addComment(postId) {
         if (!response.ok) throw new Error('Ошибка комментирования');
 
         const comment = await response.json();
-        input.value = '';
 
-        const commentsList = document.getElementById(`comments-list-${postId}`);
-        if (commentsList) {
-            const postCard = document.getElementById(`post-${postId}`);
-            const postOwnerId = postCard ? parseInt(postCard.getAttribute('data-owner-id') || '0') : 0;
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = renderCommentItemHtml(comment, postOwnerId);
-            if (tempDiv.firstElementChild) {
-                commentsList.appendChild(tempDiv.firstElementChild);
+        // Очищаем инпуты во всех копиях этой карточки
+        document.querySelectorAll(`[id="comment-input-${postId}"]`).forEach(inp => {
+            inp.value = '';
+        });
+
+        // Добавляем комментарий во все отображаемые списки комментариев этого поста (в ленте и в профиле)
+        const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
+        allCards.forEach(card => {
+            const commentsList = card.querySelector('.comments-list');
+            if (commentsList) {
+                const postOwnerId = parseInt(card.getAttribute('data-owner-id') || '0');
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderCommentItemHtml(comment, postOwnerId);
+                if (tempDiv.firstElementChild) {
+                    commentsList.appendChild(tempDiv.firstElementChild);
+                }
             }
-        }
-
-        const countEl = document.getElementById(`comment-count-${postId}`);
-        if (countEl) {
-            countEl.textContent = parseInt(countEl.textContent || '0') + 1;
-        }
+            const countEl = card.querySelector(`[id="comment-count-${postId}"]`) || card.querySelector('.comment-btn span');
+            if (countEl) {
+                countEl.textContent = parseInt(countEl.textContent || '0') + 1;
+            }
+        });
 
         showToast('Комментарий отправлен', 'success');
     } catch (err) {
@@ -1420,14 +1487,19 @@ async function deleteComment(commentId, postId) {
             const err = await res.json();
             throw new Error(err.error || 'Ошибка удаления комментария');
         }
-        const item = document.getElementById(`comment-item-${commentId}`);
-        if (item) item.remove();
 
-        const countEl = document.getElementById(`comment-count-${postId}`);
-        if (countEl) {
-            const current = parseInt(countEl.textContent || '1');
-            countEl.textContent = Math.max(0, current - 1);
-        }
+        // Удаляем элемент комментария во всех копиях карточки
+        document.querySelectorAll(`[id="comment-item-${commentId}"]`).forEach(item => item.remove());
+
+        // Уменьшаем счетчик во всех копиях карточки
+        document.querySelectorAll(`[id="post-${postId}"]`).forEach(card => {
+            const countEl = card.querySelector(`[id="comment-count-${postId}"]`) || card.querySelector('.comment-btn span');
+            if (countEl) {
+                const current = parseInt(countEl.textContent || '1');
+                countEl.textContent = Math.max(0, current - 1);
+            }
+        });
+
         showToast('Комментарий удален', 'success');
     } catch (err) {
         showToast(err.message, 'error');
@@ -1534,14 +1606,14 @@ function createPostElement(post) {
         ${mediaHtml}
 
         <div class="post-actions-bar">
-            <button class="action-btn like-btn ${isLiked ? 'active' : ''}" onclick="toggleLike(${post.id})">
+            <button class="action-btn like-btn ${isLiked ? 'active' : ''}" onclick="toggleLike(${post.id}, event)">
                 <svg class="heart-icon" width="18" height="18" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                 </svg>
                 <span id="likes-${post.id}">${post.likes_count}</span>
             </button>
 
-            <button class="action-btn comment-btn" onclick="toggleComments(${post.id})">
+            <button class="action-btn comment-btn" onclick="toggleComments(${post.id}, event)">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
                 </svg>
@@ -1565,8 +1637,8 @@ function createPostElement(post) {
             </div>
 
             <div class="comment-input-row">
-                <input type="text" id="comment-input-${post.id}" placeholder="Напишите комментарий..." onkeydown="if(event.key==='Enter')addComment(${post.id})">
-                <button class="btn btn-secondary btn-sm" onclick="addComment(${post.id})">Отправить</button>
+                <input type="text" id="comment-input-${post.id}" placeholder="Напишите комментарий..." onkeydown="if(event.key==='Enter')addComment(${post.id}, event)">
+                <button class="btn btn-secondary btn-sm" onclick="addComment(${post.id}, event)">Отправить</button>
             </div>
         </div>
     `;
