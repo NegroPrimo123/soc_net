@@ -778,64 +778,87 @@ input:focus, textarea:focus, select:focus {
     background-color: var(--bg-surface);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    padding: 1.35rem;
-    box-shadow: var(--shadow-sm);
-    transition: border-color 0.2s ease, transform 0.2s ease;
+    padding: 1.5rem 1.6rem;
+    margin-bottom: 1.5rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
 }
 
 .post-card:hover {
-    border-color: rgba(255, 255, 255, 0.14);
+    border-color: rgba(0, 242, 254, 0.22);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), 0 0 12px rgba(0, 242, 254, 0.06);
 }
 
 .post-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 0.85rem;
+    margin-bottom: 1.25rem;
 }
 
 .author-block {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 1rem;
 }
 
 .author-avatar {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     object-fit: cover;
     background-color: var(--bg-surface-hover);
+    border: 1.5px solid rgba(0, 242, 254, 0.3);
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.12);
+    flex-shrink: 0;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.author-avatar:hover {
+    transform: scale(1.04);
+    border-color: var(--accent-neon);
+}
+
+.author-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .author-name-row {
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .author-name {
     font-weight: 700;
-    color: var(--text-pure);
-    font-size: 0.95rem;
+    color: #ffffff;
+    font-size: 1.05rem;
+    letter-spacing: 0.2px;
+    line-height: 1.2;
 }
 
 .author-handle {
-    font-size: 0.82rem;
-    color: var(--text-muted);
+    font-size: 0.86rem;
+    color: var(--text-dim);
+    line-height: 1.2;
 }
 
 .meta-line {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.78rem;
+    gap: 8px;
+    font-size: 0.82rem;
     color: var(--text-muted);
+    margin-top: 2px;
 }
 
 .edited-badge {
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     color: var(--warm-amber);
+    font-style: italic;
 }
 
 .post-owner-actions {
@@ -857,25 +880,27 @@ input:focus, textarea:focus, select:focus {
 }
 
 .post-content {
-    font-size: 1rem;
-    line-height: 1.6;
-    color: var(--text-primary);
-    margin-bottom: 1rem;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: #f0f4f8;
+    margin: 0.75rem 0 1.25rem;
     white-space: pre-wrap;
     word-break: break-word;
+    letter-spacing: 0.15px;
 }
 
 .post-media {
-    margin-bottom: 1rem;
+    margin: 1.25rem 0;
     border-radius: var(--radius-md);
     overflow: hidden;
-    background-color: var(--bg-main);
+    background-color: #000;
     border: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
 }
 
 .post-media img {
     width: 100%;
-    max-height: 480px;
+    max-height: 520px;
     object-fit: cover;
     display: block;
 }
@@ -883,8 +908,9 @@ input:focus, textarea:focus, select:focus {
 .post-actions-bar {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    padding-top: 0.85rem;
+    gap: 1.8rem;
+    padding-top: 1rem;
+    margin-top: 0.5rem;
     border-top: 1px solid var(--border-subtle);
 }
 
@@ -3501,4 +3527,57 @@ input:checked + .toggle-slider:before {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+/* ==========================================================================
+   КОНТЕКСТНОЕ МЕНЮ ЛИЧНЫХ СООБЩЕНИЙ (ПРАВЫЙ КЛИК МЫШИ)
+   ========================================================================== */
+.chat-context-menu {
+    position: fixed;
+    min-width: 180px;
+    background: rgba(14, 18, 28, 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 15px rgba(0, 242, 254, 0.15);
+    padding: 6px;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: fadeInDropdown 0.15s ease;
+}
+
+.chat-context-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-pure);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.chat-context-item:hover {
+    background: rgba(0, 242, 254, 0.12);
+    color: var(--accent-neon);
+    transform: translateX(3px);
+}
+
+.chat-context-item.text-danger:hover {
+    background: rgba(255, 77, 79, 0.15);
+    color: #ff4d4f;
+}
+
+.chat-context-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
 }

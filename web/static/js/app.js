@@ -467,11 +467,429 @@ async function createPost() {
 }
 
 // ==========================================
+
+// ==========================================
+// МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ПОСТА И ФОТО
+// ==========================================
+function openEditPostModal(postId) {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите в аккаунт для редактирования', 'error');
+        openAuthModal('login');
+        return;
+    }
+    closeAllPostDropdowns();
+
+    const postEl = document.getElementById(`post-${postId}`);
+    if (!postEl) return;
+
+    const contentEl = document.getElementById(`post-content-${postId}`);
+    let text = contentEl ? contentEl.innerText.trim() : '';
+
+    const imgEl = postEl.querySelector('.post-media img');
+    let imgSrc = imgEl ? (imgEl.getAttribute('src') || '').trim() : '';
+
+    const modal = document.getElementById('editPostModal');
+    const idInput = document.getElementById('editPostId');
+    const contentInput = document.getElementById('editPostContentInput');
+    const imgUrlInput = document.getElementById('editPostImageUrl');
+    const previewWrap = document.getElementById('editPostPhotoPreviewWrap');
+    const photoImg = document.getElementById('editPostPhotoImg');
+    const btnLabel = document.getElementById('btnEditPhotoLabel');
+    const statusText = document.getElementById('editPhotoStatus');
+
+    if (idInput) idInput.value = postId;
+    if (contentInput) contentInput.value = text;
+    if (imgUrlInput) imgUrlInput.value = imgSrc;
+    if (statusText) statusText.textContent = '';
+
+    if (imgSrc) {
+        if (photoImg) photoImg.src = imgSrc;
+        if (previewWrap) previewWrap.style.display = 'block';
+        if (btnLabel) btnLabel.textContent = 'Заменить фото';
+    } else {
+        if (photoImg) photoImg.src = '';
+        if (previewWrap) previewWrap.style.display = 'none';
+        if (btnLabel) btnLabel.textContent = 'Прикрепить фото';
+    }
+
+    if (modal) modal.style.display = 'flex';
+}
+
+function openEditPost(postId) {
+    openEditPostModal(postId);
+}
+
+function closeEditPostModal() {
+    const modal = document.getElementById('editPostModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function removeEditPostPhoto() {
+    const imgUrlInput = document.getElementById('editPostImageUrl');
+    const previewWrap = document.getElementById('editPostPhotoPreviewWrap');
+    const photoImg = document.getElementById('editPostPhotoImg');
+    const btnLabel = document.getElementById('btnEditPhotoLabel');
+    const statusText = document.getElementById('editPhotoStatus');
+
+    if (imgUrlInput) imgUrlInput.value = '';
+    if (photoImg) photoImg.src = '';
+    if (previewWrap) previewWrap.style.display = 'none';
+    if (btnLabel) btnLabel.textContent = 'Прикрепить фото';
+    if (statusText) statusText.textContent = 'Фото удалено';
+}
+
+async function handleEditPostPhotoUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const statusText = document.getElementById('editPhotoStatus');
+    if (statusText) statusText.textContent = 'Загрузка фото...';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка загрузки фото');
+        }
+        const data = await res.json();
+        const url = data.url;
+
+        const imgUrlInput = document.getElementById('editPostImageUrl');
+        const previewWrap = document.getElementById('editPostPhotoPreviewWrap');
+        const photoImg = document.getElementById('editPostPhotoImg');
+        const btnLabel = document.getElementById('btnEditPhotoLabel');
+
+        if (imgUrlInput) imgUrlInput.value = url;
+        if (photoImg) photoImg.src = url;
+        if (previewWrap) previewWrap.style.display = 'block';
+        if (btnLabel) btnLabel.textContent = 'Заменить фото';
+        if (statusText) statusText.textContent = 'Фото готово к сохранению';
+    } catch (err) {
+        if (statusText) statusText.textContent = '';
+        showToast(err.message, 'error');
+    }
+}
+
+async function saveEditedPostModal() {
+    const idInput = document.getElementById('editPostId');
+    const contentInput = document.getElementById('editPostContentInput');
+    const imgUrlInput = document.getElementById('editPostImageUrl');
+    const saveBtn = document.getElementById('btnSaveEditedPost');
+
+    if (!idInput || !idInput.value) return;
+    const postId = parseInt(idInput.value);
+    const content = contentInput ? contentInput.value.trim() : '';
+    const imageUrl = imgUrlInput ? imgUrlInput.value.trim() : '';
+
+    if (!content && !imageUrl) {
+        showToast('Публикация не может быть полностью пустой', 'error');
+        return;
+    }
+
+    if (saveBtn) saveBtn.disabled = true;
+
+    try {
+        const payload = {
+            content: content,
+            image_url: imageUrl
+        };
+
+        const res = await fetch(`/api/posts/${postId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка сохранения публикации');
+        }
+
+        const post = await res.json();
+
+        // Обновляем текст в карточке
+        const contentEl = document.getElementById(`post-content-${postId}`);
+        if (contentEl) {
+            contentEl.innerHTML = formatHashtags(post.content);
+            contentEl.style.display = post.content ? 'block' : 'none';
+        }
+
+        // Обновляем или добавляем изображение в карточке
+        const postCard = document.getElementById(`post-${postId}`);
+        if (postCard) {
+            let mediaBox = postCard.querySelector('.post-media');
+            if (imageUrl) {
+                if (mediaBox) {
+                    const img = mediaBox.querySelector('img');
+                    if (img) img.src = imageUrl;
+                } else {
+                    mediaBox = document.createElement('div');
+                    mediaBox.className = 'post-media';
+                    mediaBox.id = `post-media-${postId}`;
+                    mediaBox.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="Медиа" loading="lazy">`;
+                    const actionsBar = postCard.querySelector('.post-actions-bar');
+                    if (actionsBar) {
+                        postCard.insertBefore(mediaBox, actionsBar);
+                    } else {
+                        postCard.appendChild(mediaBox);
+                    }
+                }
+            } else if (mediaBox) {
+                mediaBox.remove();
+            }
+
+            // Добавляем пометку (ред.)
+            const metaLine = postCard.querySelector('.meta-line');
+            if (metaLine && !metaLine.querySelector('.edited-badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'edited-badge';
+                badge.textContent = '• (ред.)';
+                metaLine.appendChild(badge);
+            }
+        }
+
+        closeEditPostModal();
+        showToast('Публикация обновлена', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
+    }
+}
+
+// ==========================================
+// МОДАЛЬНОЕ ОКНО «ПОДЕЛИТЬСЯ ПУБЛИКАЦИЕЙ»
+// ==========================================
+function openSharePostModal(postId) {
+    closeAllPostDropdowns();
+    const modal = document.getElementById('sharePostModal');
+    const idInput = document.getElementById('sharePostId');
+    const urlInput = document.getElementById('sharePostUrlInput');
+    const dialogsList = document.getElementById('shareRecentDialogsList');
+
+    const url = `${window.location.origin}/?post=${postId}`;
+    if (idInput) idInput.value = postId;
+    if (urlInput) urlInput.value = url;
+
+    if (dialogsList) {
+        dialogsList.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 10px;">Загрузка списка диалогов...</div>';
+        loadShareDialogs(postId);
+    }
+
+    if (modal) modal.style.display = 'flex';
+}
+
+function sharePost(postId) {
+    openSharePostModal(postId);
+}
+
+function closeSharePostModal() {
+    const modal = document.getElementById('sharePostModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function copyShareModalLink() {
+    const urlInput = document.getElementById('sharePostUrlInput');
+    const url = urlInput ? urlInput.value : '';
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка скопирована в буфер обмена', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать ссылку', 'error');
+    });
+}
+
+async function loadShareDialogs(postId) {
+    const dialogsList = document.getElementById('shareRecentDialogsList');
+    if (!dialogsList) return;
+
+    if (!window.IS_AUTHENTICATED) {
+        dialogsList.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 10px;">Войдите в аккаунт, чтобы отправлять в диалоги</div>';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/messages/conversations');
+        if (!res.ok) throw new Error('Ошибка загрузки диалогов');
+        const convos = await res.json();
+
+        dialogsList.innerHTML = '';
+        if (!convos || convos.length === 0) {
+            dialogsList.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 10px;">Нет активных диалогов</div>';
+            return;
+        }
+
+        convos.forEach(c => {
+            const u = c.user;
+            const item = document.createElement('div');
+            item.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);';
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                    <img src="${escapeHtml(u.avatar_url)}" alt="avatar" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover;">
+                    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: #fff;">${escapeHtml(u.display_name)}</span>
+                        <span style="font-size: 0.78rem; color: var(--text-dim); margin-left: 4px;">@${escapeHtml(u.username)}</span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="sendPostToUserDirect(${u.id}, ${postId})">
+                    Отправить
+                </button>
+            `;
+            dialogsList.appendChild(item);
+        });
+    } catch (e) {
+        dialogsList.innerHTML = `<div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 10px;">${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function sendPostToUserDirect(targetUserId, postId) {
+    if (!postId) {
+        const idInput = document.getElementById('sharePostId');
+        postId = idInput ? parseInt(idInput.value) : 0;
+    }
+
+    const postContentEl = document.getElementById(`post-content-${postId}`);
+    const snippet = postContentEl ? postContentEl.innerText.trim().slice(0, 60) : '';
+    const postUrl = `${window.location.origin}/?post=${postId}`;
+    const messageContent = snippet ? `Поделился публикацией: "${snippet}..."\n${postUrl}` : `Поделился публикацией:\n${postUrl}`;
+
+    try {
+        const res = await fetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                receiver_id: targetUserId,
+                content: messageContent
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка отправки сообщения');
+        }
+
+        closeSharePostModal();
+        showToast('Публикация отправлена в личные сообщения', 'success');
+        loadConversations();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// ==========================================
+// КОНТЕКСТНОЕ МЕНЮ ЛИЧНЫХ СООБЩЕНИЙ (ПРАВЫЙ КЛИК)
+// ==========================================
+let activeContextMsgId = null;
+let activeContextIsOut = false;
+
+function initChatContextMenu() {
+    const container = document.getElementById('chatMessagesContainer');
+    if (!container) return;
+
+    container.addEventListener('contextmenu', (e) => {
+        const row = e.target.closest('.chat-bubble-row');
+        if (!row) return;
+
+        e.preventDefault();
+        const msgId = parseInt(row.getAttribute('data-msg-id'));
+        const isOut = row.getAttribute('data-is-out') === '1';
+
+        activeContextMsgId = msgId;
+        activeContextIsOut = isOut;
+
+        const menu = document.getElementById('chatContextMenu');
+        if (!menu) return;
+
+        const btnEdit = document.getElementById('ctxBtnEdit');
+        if (btnEdit) {
+            const hasMedia = row.querySelector('.chat-media-preview-box, .chat-file-attachment');
+            btnEdit.style.display = (isOut && !hasMedia) ? 'flex' : 'none';
+        }
+
+        menu.style.display = 'flex';
+        let x = e.clientX;
+        let y = e.clientY;
+        const menuWidth = 190;
+        const menuHeight = 160;
+        if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+        if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+    });
+}
+
+function closeChatContextMenu() {
+    const menu = document.getElementById('chatContextMenu');
+    if (menu) menu.style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.chat-context-menu')) {
+        closeChatContextMenu();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeChatContextMenu();
+    }
+});
+
+function onContextEditMessage() {
+    closeChatContextMenu();
+    if (activeContextMsgId) {
+        startEditChatMessage(activeContextMsgId);
+    }
+}
+
+function onContextDeleteMessage() {
+    closeChatContextMenu();
+    if (activeContextMsgId) {
+        openDeleteMessageModal(activeContextMsgId, activeContextIsOut);
+    }
+}
+
+function onContextCopyMessage() {
+    closeChatContextMenu();
+    if (!activeContextMsgId) return;
+    const row = document.getElementById(`chat-msg-${activeContextMsgId}`);
+    if (!row) return;
+    const contentEl = row.querySelector('.chat-bubble-content');
+    const text = contentEl ? contentEl.innerText.trim() : '';
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Текст скопирован в буфер обмена', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать', 'error');
+    });
+}
+
+function onContextSelectMessage() {
+    closeChatContextMenu();
+    if (!isChatSelectionMode) {
+        toggleChatSelectionMode();
+    }
+    if (activeContextMsgId) {
+        const cb = document.querySelector(`.chat-msg-checkbox[data-msg-id="${activeContextMsgId}"]`);
+        if (cb) {
+            cb.checked = true;
+            updateSelectedMessagesCount();
+        }
+    }
+}
+
 // EDIT & DELETE POSTS
 // ==========================================
 function openEditPost(postId) {
     if (!window.IS_AUTHENTICATED) {
-        showToast('Войдите в аккаунт для редактирования ✏️', 'error');
+        showToast('Войдите в аккаунт для редактирования', 'error');
         openAuthModal('login');
         return;
     }
@@ -534,7 +952,7 @@ async function saveEditPost(postId) {
             metaLine.appendChild(badge);
         }
 
-        showToast('Публикация обновлена ✏️', 'success');
+        showToast('Публикация обновлена', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -542,7 +960,7 @@ async function saveEditPost(postId) {
 
 async function deletePost(postId) {
     if (!window.IS_AUTHENTICATED) {
-        showToast('Войдите в аккаунт для удаления публикации 🗑️', 'error');
+        showToast('Войдите в аккаунт для удаления публикации', 'error');
         openAuthModal('login');
         return;
     }
@@ -569,7 +987,7 @@ async function deletePost(postId) {
             }
         }
 
-        showToast('Публикация удалена 🗑️', 'success');
+        showToast('Публикация удалена', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -653,7 +1071,7 @@ function toggleComments(postId) {
 
 async function addComment(postId) {
     if (!window.IS_AUTHENTICATED) {
-        showToast('Войдите в аккаунт, чтобы оставить комментарий 💬', 'error');
+        showToast('Войдите в аккаунт, чтобы оставить комментарий', 'error');
         openAuthModal('login');
         return;
     }
@@ -694,7 +1112,7 @@ async function addComment(postId) {
             countEl.textContent = parseInt(countEl.textContent || '0') + 1;
         }
 
-        showToast('Комментарий отправлен 💬', 'success');
+        showToast('Комментарий отправлен', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -703,7 +1121,7 @@ async function addComment(postId) {
 function sharePost(postId) {
     const url = `${window.location.origin}/?post=${postId}`;
     navigator.clipboard.writeText(url).then(() => {
-        showToast('Ссылка на публикацию скопирована в буфер обмена 🔗', 'success');
+        showToast('Ссылка скопирована в буфер обмена', 'success');
     }).catch(() => {
         showToast('Публикация #' + postId, 'success');
     });
@@ -828,7 +1246,7 @@ function downloadPostImage(imageUrl) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    showToast('Фото сохраняется 💾', 'success');
+    showToast('Фото сохраняется', 'success');
 }
 
 function copyPostText(postId) {
@@ -840,7 +1258,7 @@ function copyPostText(postId) {
         return;
     }
     navigator.clipboard.writeText(text).then(() => {
-        showToast('Текст публикации скопирован в буфер обмена 📋', 'success');
+        showToast('Текст скопирован в буфер обмена', 'success');
     }).catch(() => {
         showToast('Не удалось скопировать текст', 'error');
     });
@@ -867,10 +1285,10 @@ function renderCommentItemHtml(c, postOwnerId) {
                     ${(isCommentAuthor || canDeleteComment) ? `
                         <div class="comment-item-actions">
                             ${isCommentAuthor ? `
-                                <button type="button" class="comment-action-btn" onclick="startEditComment(${c.id}, ${c.post_id})" title="Редактировать">✏️</button>
+                                <button type="button" class="comment-action-btn" onclick="startEditComment(${c.id}, ${c.post_id})" title="Редактировать">Ред.</button>
                             ` : ''}
                             ${canDeleteComment ? `
-                                <button type="button" class="comment-action-btn" onclick="deleteComment(${c.id}, ${c.post_id})" title="Удалить">🗑️</button>
+                                <button type="button" class="comment-action-btn" onclick="deleteComment(${c.id}, ${c.post_id})" title="Удалить">✕</button>
                             ` : ''}
                         </div>
                     ` : ''}
@@ -943,7 +1361,7 @@ async function saveEditComment(commentId, postId) {
             badge.textContent = ' • (ред.)';
             metaEl.appendChild(badge);
         }
-        showToast('Комментарий отредактирован ✏️', 'success');
+        showToast('Комментарий отредактирован', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -968,7 +1386,7 @@ async function deleteComment(commentId, postId) {
             const current = parseInt(countEl.textContent || '1');
             countEl.textContent = Math.max(0, current - 1);
         }
-        showToast('Комментарий удален 🗑️', 'success');
+        showToast('Комментарий удален', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -1017,26 +1435,26 @@ function createPostElement(post) {
             </button>
             <div class="post-dropdown-menu" id="post-dropdown-${post.id}" style="display: none;">
                 ${isOwner ? `
-                    <button type="button" class="post-dropdown-item" onclick="openEditPost(${post.id})">
-                        <span>✏️ Редактировать</span>
+                    <button type="button" class="post-dropdown-item" onclick="openEditPostModal(${post.id})">
+                        <span>Редактировать</span>
                     </button>
                     <button type="button" class="post-dropdown-item text-danger" onclick="deletePost(${post.id})">
-                        <span>🗑️ Удалить</span>
+                        <span>Удалить</span>
                     </button>
                     <div class="post-dropdown-divider"></div>
                 ` : ''}
                 ${finalImageUrl ? `
                     <button type="button" class="post-dropdown-item" onclick="downloadPostImage('${escapeHtml(finalImageUrl)}')">
-                        <span>💾 Сохранить фото</span>
+                        <span>Сохранить фото</span>
                     </button>
                 ` : ''}
                 ${rawContent ? `
                     <button type="button" class="post-dropdown-item" onclick="copyPostText(${post.id})">
-                        <span>📋 Скопировать текст</span>
+                        <span>Скопировать текст</span>
                     </button>
                 ` : ''}
-                <button type="button" class="post-dropdown-item" onclick="sharePost(${post.id})">
-                    <span>🔗 Скопировать ссылку</span>
+                <button type="button" class="post-dropdown-item" onclick="openSharePostModal(${post.id})">
+                    <span>Поделиться</span>
                 </button>
             </div>
         </div>
@@ -3300,7 +3718,7 @@ async function loadChatMessages(userId) {
         if (!messages || messages.length === 0) {
             container.innerHTML = `
                 <div class="chat-empty-hint">
-                    История переписки пуста. Отправьте первое сообщение, чтобы начать диалог! 👋
+                    История переписки пуста. Отправьте первое сообщение, чтобы начать диалог.
                 </div>
             `;
             return;
@@ -3406,7 +3824,7 @@ async function confirmDeleteMessageAction(forEveryone) {
         if (msgEl) msgEl.remove();
 
         closeDeleteMessageModal();
-        showToast(forEveryone ? 'Сообщение удалено для всех 🗑️' : 'Сообщение удалено только у вас 🗑️', 'success');
+        showToast(forEveryone ? 'Сообщение удалено для всех' : 'Сообщение удалено', 'success');
         loadConversations();
     } catch (err) {
         showToast(err.message, 'error');
@@ -3427,7 +3845,7 @@ function toggleChatSelectionMode() {
         if (batchBar) batchBar.style.display = 'flex';
         if (btnToggle) {
             btnToggle.classList.add('active');
-            btnToggle.innerHTML = '<span>✕ Отмена</span>';
+            btnToggle.innerHTML = '<span>Отмена</span>';
         }
         updateSelectedMessagesCount();
     } else {
@@ -3450,7 +3868,7 @@ function exitChatSelectionMode() {
     const btnToggle = document.getElementById('btnToggleMsgSelect');
     if (btnToggle) {
         btnToggle.classList.remove('active');
-        btnToggle.innerHTML = '<span>☑️ Выбрать</span>';
+        btnToggle.innerHTML = '<span>Выбрать</span>';
     }
     updateSelectedMessagesCount();
 }
@@ -3521,7 +3939,7 @@ async function executeBatchDelete(forEveryone) {
 
         exitChatSelectionMode();
         closeDeleteMessageModal();
-        showToast(forEveryone ? `Удалено сообщений: ${ids.length} (для всех) 🗑️` : `Удалено сообщений: ${ids.length} (только у вас) 🗑️`, 'success');
+        showToast(forEveryone ? `Удалено сообщений: ${ids.length} (для всех)` : `Удалено сообщений: ${ids.length}`, 'success');
         loadConversations();
     } catch (err) {
         showToast(err.message, 'error');
@@ -3574,8 +3992,8 @@ function appendChatMessageElement(m) {
 
     const hoverActions = `
         <div class="chat-msg-hover-actions">
-            ${isOut && !isImageFile && !isUploadedPath ? `<button type="button" class="chat-msg-act-btn" onclick="startEditChatMessage(${m.id})" title="Редактировать">✏️</button>` : ''}
-            <button type="button" class="chat-msg-act-btn" onclick="openDeleteMessageModal(${m.id}, ${isOut})" title="Удалить">🗑️</button>
+            ${isOut && !isImageFile && !isUploadedPath ? `<button type="button" class="chat-msg-act-btn" onclick="startEditChatMessage(${m.id})" title="Редактировать">Ред.</button>` : ''}
+            <button type="button" class="chat-msg-act-btn" onclick="openDeleteMessageModal(${m.id}, ${isOut})" title="Удалить">✕</button>
         </div>
     `;
 
@@ -3667,7 +4085,7 @@ async function handleSendMessage(e) {
                 }
             }
             cancelEditChatMessage();
-            showToast('Сообщение изменено ✏️', 'success');
+            showToast('Сообщение изменено', 'success');
         } catch (err) {
             showToast(err.message, 'error');
         } finally {
@@ -3774,7 +4192,7 @@ function handleIncomingSSEMessage(msg) {
     } else {
         playAudioChime(450, 750, 0.12);
         const senderName = msg.sender ? msg.sender.display_name : 'Пользователь';
-        showToast(`💬 Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
+        showToast(`Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
     }
 
     loadConversations();
@@ -3831,7 +4249,7 @@ function handleSSEEvent(event) {
         case 'new_post':
             if (event.post && event.post.user_id !== window.CURRENT_USER_ID) {
                 renderPostAtTop(event.post);
-                showToast(`Новая запись от ${event.post.user.display_name}! 🌟`, 'success');
+                showToast(`Новая запись от ${event.post.user.display_name}`, 'success');
             }
             break;
 
@@ -4130,4 +4548,12 @@ function renderNewChatUsersList(users) {
         `;
         list.appendChild(item);
     });
+}
+
+
+// Initialize chat context menu
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initChatContextMenu);
+} else {
+    initChatContextMenu();
 }

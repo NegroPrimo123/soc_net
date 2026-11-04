@@ -24,7 +24,7 @@
     <div class="modal-card modal-new-chat-card" style="max-width: 480px; width: 100%;">
         <button type="button" class="modal-close-btn" onclick="closeNewChatModal()" title="Закрыть">✕</button>
         <div class="modal-header">
-            <div class="modal-header-badge">💬 Сообщения</div>
+            <div class="modal-header-badge">Сообщения</div>
             <h3>Новый диалог</h3>
             <p class="modal-subtext">Выберите собеседника из списка пользователей сети</p>
         </div>
@@ -141,7 +141,7 @@
     <div class="modal-card modal-notif-card">
         <div class="notif-modal-header">
             <div class="notif-title-row">
-                <span class="notif-header-icon">🔔</span>
+                
                 <h3>Центр уведомлений</h3>
                 <span class="notif-badge-pill" id="notifTotalBadge">0</span>
             </div>
@@ -164,7 +164,7 @@
 
         <div id="notificationsList" class="notif-list-container">
             <div class="notif-empty-state">
-                <span class="notif-empty-glyph">🔔</span>
+                
                 <p>Загрузка уведомлений...</p>
             </div>
         </div>
@@ -302,7 +302,7 @@
                 <button type="button" class="btn btn-secondary" onclick="closeSendGiftModal()">Отмена</button>
                 <button type="submit" class="btn btn-primary" id="btnSubmitGift">
                     <span>Отправить подарок</span>
-                    <span class="btn-arrow">🎁</span>
+                    
                 </button>
             </div>
         </form>
@@ -341,6 +341,111 @@
 <!-- Модальное окно расширенной кастомизации профиля -->
 
 <!-- Модальное окно подтверждения удаления сообщения -->
+
+<!-- Модальное окно редактирования публикации и фото -->
+<div id="editPostModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeEditPostModal()">
+    <div class="modal-card" style="max-width: 580px; width: 95%; padding: 1.75rem;">
+        <button class="modal-close-btn" onclick="closeEditPostModal()" title="Закрыть">✕</button>
+        <div class="modal-header" style="margin-bottom: 1.25rem; text-align: left;">
+            <h3 style="font-size: 1.2rem; color: var(--text-pure);" id="editPostModalTitle">Редактирование публикации</h3>
+            <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.35rem;">
+                Измените текст записи или замените прикрепленное фото.
+            </p>
+        </div>
+
+        <input type="hidden" id="editPostId" value="">
+        <input type="hidden" id="editPostImageUrl" value="">
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-pure); margin-bottom: 0.4rem;">
+                Текст публикации:
+            </label>
+            <textarea id="editPostContentInput" rows="4" class="form-control" placeholder="Добавьте или измените текст публикации..." style="width: 100%; padding: 10px 14px; border-radius: var(--radius-sm); background: rgba(0,0,0,0.45); border: 1px solid var(--border-subtle); color: var(--text-pure); font-size: 0.95rem; resize: vertical; line-height: 1.5;"></textarea>
+        </div>
+
+        <!-- Секция управления фото -->
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-pure); margin-bottom: 0.4rem;">
+                Прикрепленное фото:
+            </label>
+            
+            <div id="editPostPhotoPreviewWrap" style="display: none; position: relative; margin-bottom: 0.75rem; border-radius: var(--radius-sm); overflow: hidden; max-height: 280px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); text-align: center;">
+                <img id="editPostPhotoImg" src="" alt="Фото" style="max-width: 100%; max-height: 280px; object-fit: contain; display: inline-block;">
+                <button type="button" onclick="removeEditPostPhoto()" title="Удалить фото" style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); border: 1px solid #ff4d4f; color: #ff4d4f; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: bold;">✕</button>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('editPostFileInput').click()">
+                    <span id="btnEditPhotoLabel">Заменить фото</span>
+                </button>
+                <input type="file" id="editPostFileInput" style="display: none;" accept="image/*" onchange="handleEditPostPhotoUpload(event)">
+                <span id="editPhotoStatus" style="font-size: 0.82rem; color: var(--text-dim);"></span>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeEditPostModal()">Отмена</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btnSaveEditedPost" onclick="saveEditedPostModal()">Сохранить изменения</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно «Поделиться публикацией» -->
+<div id="sharePostModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeSharePostModal()">
+    <div class="modal-card" style="max-width: 500px; width: 95%; padding: 1.75rem;">
+        <button class="modal-close-btn" onclick="closeSharePostModal()" title="Закрыть">✕</button>
+        <div class="modal-header" style="margin-bottom: 1.25rem; text-align: left;">
+            <h3 style="font-size: 1.2rem; color: var(--text-pure);">Поделиться публикацией</h3>
+            <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.35rem;">
+                Скопируйте ссылку или отправьте запись напрямую в диалог.
+            </p>
+        </div>
+
+        <input type="hidden" id="sharePostId" value="">
+
+        <!-- Ссылка на пост -->
+        <div style="margin-bottom: 1.25rem;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-pure); margin-bottom: 0.4rem;">
+                Прямая ссылка:
+            </label>
+            <div style="display: flex; gap: 0.5rem;">
+                <input type="text" id="sharePostUrlInput" readonly class="form-control" style="flex: 1; padding: 9px 12px; border-radius: var(--radius-sm); background: rgba(0,0,0,0.45); border: 1px solid var(--border-subtle); color: var(--text-dim); font-size: 0.85rem;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="copyShareModalLink()">
+                    Копировать
+                </button>
+            </div>
+        </div>
+
+        <!-- Отправка в личные сообщения -->
+        <div style="border-top: 1px solid var(--border-subtle); padding-top: 1.25rem;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-pure); margin-bottom: 0.4rem;">
+                Отправить в личные сообщения:
+            </label>
+            <div style="font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.6rem;">Выберите собеседника из ваших диалогов:</div>
+            <div id="shareRecentDialogsList" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; padding-right: 4px;">
+                <div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 10px;">Загрузка списка диалогов...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Контекстное меню личных сообщений (по правому клику мыши) -->
+<div id="chatContextMenu" class="chat-context-menu" style="display: none;">
+    <button type="button" class="chat-context-item" id="ctxBtnEdit" onclick="onContextEditMessage()">
+        Редактировать
+    </button>
+    <button type="button" class="chat-context-item" id="ctxBtnCopy" onclick="onContextCopyMessage()">
+        Скопировать текст
+    </button>
+    <button type="button" class="chat-context-item" id="ctxBtnSelect" onclick="onContextSelectMessage()">
+        Выбрать
+    </button>
+    <div class="chat-context-divider"></div>
+    <button type="button" class="chat-context-item text-danger" id="ctxBtnDelete" onclick="onContextDeleteMessage()">
+        Удалить
+    </button>
+</div>
+
 <div id="deleteMessageModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeDeleteMessageModal()">
     <div class="modal-card" style="max-width: 440px; padding: 1.75rem;">
         <button class="modal-close-btn" onclick="closeDeleteMessageModal()" title="Закрыть">✕</button>
@@ -352,10 +457,10 @@
         </div>
         <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.25rem;">
             <button type="button" class="btn btn-danger btn-block" id="btnDeleteMsgForEveryone" onclick="confirmDeleteMessageAction(true)">
-                <span>🗑️ Удалить у себя и у другого (для всех)</span>
+                <span>Удалить для всех</span>
             </button>
             <button type="button" class="btn btn-secondary btn-block" id="btnDeleteMsgForSelf" onclick="confirmDeleteMessageAction(false)">
-                <span>🗑️ Удалить только у себя</span>
+                <span>Удалить только у себя</span>
             </button>
             <button type="button" class="btn btn-secondary btn-block" onclick="closeDeleteMessageModal()" style="opacity: 0.75;">
                 <span>Отмена</span>
@@ -725,11 +830,7 @@
                 <span class="hud-nav-icon">🏠</span>
                 <span class="hud-nav-label">Лента</span>
             </button>
-            <button class="hud-nav-item" id="tabNavNotifications" onclick="toggleNotificationsPanel()">
-                <span class="hud-nav-icon">🔔</span>
-                <span class="hud-nav-label">Уведомления</span>
-                <span class="hud-nav-badge notif-badge" id="hudNotifNavBadge" style="{{if gt .UnreadNotifsCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadNotifsCount}}</span>
-            </button>
+            
             <button class="hud-nav-item" id="tabNavMessages" onclick="navigateTo('messages')">
                 <span class="hud-nav-icon">💬</span>
                 <span class="hud-nav-label">Сообщения</span>
@@ -893,7 +994,7 @@
                                     <span class="char-count" id="charCount">0 / 500</span>
                                     <button class="btn btn-primary btn-sm" id="btnPublishPost" onclick="createPost()">
                                         <span>Опубликовать</span>
-                                        <span class="btn-arrow">⚡</span>
+                                        
                                     </button>
                                 </div>
                             </div>
@@ -910,16 +1011,14 @@
                                 <span>Мои подписки</span>
                             </button>
                         </div>
-                        <div class="feed-count-pill" id="feedCountPill">
-                            {{len .Posts}} постов
-                        </div>
+                        
                     </div>
 
                     <!-- Контейнер постов ленты -->
                     <div id="postsContainer" class="posts-list">
                         {{if eq (len .Posts) 0}}
                         <div class="cyber-empty-card">
-                            <span class="empty-glyph">📝</span>
+                            
                             <h3>В ленте пока пусто</h3>
                             <p>Будьте первым, кто опубликует запись в этой ленте!</p>
                         </div>
@@ -942,12 +1041,33 @@
                                     </div>
                                 </div>
 
-                                {{if eq .UserID $.CurrentUser.ID}}
-                                <div class="post-owner-actions">
-                                    <button class="icon-btn-subtle" onclick="openEditPost({{.ID}})" title="Редактировать">✏️</button>
-                                    <button class="icon-btn-subtle" onclick="deletePost({{.ID}})" title="Удалить">🗑️</button>
+                                <div class="post-kebab-wrap">
+                                    <button type="button" class="post-kebab-btn" onclick="togglePostDropdown({{.ID}}, event)" title="Действия с постом">
+                                        ⋮
+                                    </button>
+                                    <div class="post-dropdown-menu" id="post-dropdown-{{.ID}}" style="display: none;">
+                                        {{if eq .UserID $.CurrentUser.ID}}
+                                        <button type="button" class="post-dropdown-item" onclick="openEditPostModal({{.ID}})">
+                                            <span>Редактировать</span>
+                                        </button>
+                                        <button type="button" class="post-dropdown-item text-danger" onclick="deletePost({{.ID}})">
+                                            <span>Удалить</span>
+                                        </button>
+                                        <div class="post-dropdown-divider"></div>
+                                        {{end}}
+                                        {{if .ImageURL}}
+                                        <button type="button" class="post-dropdown-item" onclick="downloadPostImage('{{.ImageURL}}')">
+                                            <span>Сохранить фото</span>
+                                        </button>
+                                        {{end}}
+                                        <button type="button" class="post-dropdown-item" onclick="copyPostText({{.ID}})">
+                                            <span>Скопировать текст</span>
+                                        </button>
+                                        <button type="button" class="post-dropdown-item" onclick="openSharePostModal({{.ID}})">
+                                            <span>Поделиться</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                {{end}}
                             </div>
 
                             <div class="post-content" id="post-content-{{.ID}}">{{.Content}}</div>
@@ -1268,7 +1388,7 @@
                                 </div>
                                 <div class="chat-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
                                     <button type="button" class="btn btn-secondary btn-sm" id="btnToggleMsgSelect" onclick="toggleChatSelectionMode()" title="Выделить сообщения для групповых действий">
-                                        <span>☑️ Выбрать</span>
+                                        <span>Выбрать</span>
                                     </button>
                                     <button class="btn btn-secondary btn-sm" onclick="openInterlocutorProfile()">
                                         <span>Профиль</span>
@@ -1291,7 +1411,7 @@
                             <!-- Баннер редактирования сообщения -->
                             <div id="chatEditBanner" class="chat-edit-banner" style="display: none;">
                                 <div class="chat-edit-banner-info">
-                                    <span class="chat-edit-icon">✏️</span>
+                                    
                                     <div class="chat-edit-text-wrap">
                                         <div class="chat-edit-title">Редактирование сообщения</div>
                                         <div id="chatEditPreviewText" class="chat-edit-preview">...</div>
@@ -1308,7 +1428,7 @@
                                 </div>
                                 <div class="batch-btns-row">
                                     <button type="button" class="btn btn-danger btn-sm" onclick="promptBatchDeleteMessages()">
-                                        <span>🗑️ Удалить выбранные</span>
+                                        <span>Удалить выбранные</span>
                                     </button>
                                     <button type="button" class="btn btn-secondary btn-sm" onclick="exitChatSelectionMode()">
                                         <span>✕ Отмена</span>
