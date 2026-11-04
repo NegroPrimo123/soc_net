@@ -1047,7 +1047,7 @@
                                     </button>
                                     <div class="post-dropdown-menu" id="post-dropdown-{{.ID}}" style="display: none;">
                                         {{if eq .UserID $.CurrentUser.ID}}
-                                        <button type="button" class="post-dropdown-item" onclick="openEditPostModal({{.ID}})">
+                                        <button type="button" class="post-dropdown-item" onclick="openEditPostModal({{.ID}}, this)">
                                             <span>Редактировать</span>
                                         </button>
                                         <button type="button" class="post-dropdown-item text-danger" onclick="deletePost({{.ID}})">
@@ -1060,7 +1060,7 @@
                                             <span>Сохранить фото</span>
                                         </button>
                                         {{end}}
-                                        <button type="button" class="post-dropdown-item" onclick="copyPostText({{.ID}})">
+                                        <button type="button" class="post-dropdown-item" onclick="copyPostText({{.ID}}, this)">
                                             <span>Скопировать текст</span>
                                         </button>
                                         <button type="button" class="post-dropdown-item" onclick="openSharePostModal({{.ID}})">

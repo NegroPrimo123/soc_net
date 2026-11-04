@@ -471,7 +471,7 @@ async function createPost() {
 // ==========================================
 // МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ПОСТА И ФОТО
 // ==========================================
-function openEditPostModal(postId) {
+function openEditPostModal(postId, clickedBtn) {
     if (!window.IS_AUTHENTICATED) {
         showToast('Войдите в аккаунт для редактирования', 'error');
         openAuthModal('login');
@@ -479,10 +479,24 @@ function openEditPostModal(postId) {
     }
     closeAllPostDropdowns();
 
-    const postEl = document.getElementById(`post-${postId}`);
+    let postEl = null;
+    if (clickedBtn && clickedBtn.closest) {
+        postEl = clickedBtn.closest('.post-card');
+    }
+    if (!postEl) {
+        const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
+        for (const card of allCards) {
+            const vp = card.closest('.view-panel');
+            if (vp && vp.style.display !== 'none') {
+                postEl = card;
+                break;
+            }
+        }
+        if (!postEl && allCards.length > 0) postEl = allCards[0];
+    }
     if (!postEl) return;
 
-    const contentEl = document.getElementById(`post-content-${postId}`);
+    const contentEl = postEl.querySelector('.post-content');
     let text = contentEl ? contentEl.innerText.trim() : '';
 
     const imgEl = postEl.querySelector('.post-media img');
@@ -613,16 +627,15 @@ async function saveEditedPostModal() {
 
         const post = await res.json();
 
-        // Обновляем текст в карточке
-        const contentEl = document.getElementById(`post-content-${postId}`);
-        if (contentEl) {
-            contentEl.innerHTML = formatHashtags(post.content);
-            contentEl.style.display = post.content ? 'block' : 'none';
-        }
+        // Обновляем текст и медиа во ВСЕХ карточках этого поста на странице (в ленте и в профиле)
+        const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
+        allCards.forEach(postCard => {
+            const contentEl = postCard.querySelector('.post-content');
+            if (contentEl) {
+                contentEl.innerHTML = formatHashtags(post.content);
+                contentEl.style.display = post.content ? 'block' : 'none';
+            }
 
-        // Обновляем или добавляем изображение в карточке
-        const postCard = document.getElementById(`post-${postId}`);
-        if (postCard) {
             let mediaBox = postCard.querySelector('.post-media');
             if (imageUrl) {
                 if (mediaBox) {
@@ -644,7 +657,6 @@ async function saveEditedPostModal() {
                 mediaBox.remove();
             }
 
-            // Добавляем пометку (ред.)
             const metaLine = postCard.querySelector('.meta-line');
             if (metaLine && !metaLine.querySelector('.edited-badge')) {
                 const badge = document.createElement('span');
@@ -652,7 +664,7 @@ async function saveEditedPostModal() {
                 badge.textContent = '• (ред.)';
                 metaLine.appendChild(badge);
             }
-        }
+        });
 
         closeEditPostModal();
         showToast('Публикация обновлена', 'success');
@@ -1215,19 +1227,43 @@ function togglePostDropdown(postId, event) {
         event.stopPropagation();
         event.preventDefault();
     }
-    const menu = document.getElementById(`post-dropdown-${postId}`);
+    let menu = null;
+    if (event) {
+        const target = event.currentTarget || event.target;
+        const wrap = target ? target.closest('.post-kebab-wrap') : null;
+        if (wrap) {
+            menu = wrap.querySelector('.post-dropdown-menu');
+        }
+    }
+    if (!menu) {
+        const allMenus = document.querySelectorAll(`[id="post-dropdown-${postId}"]`);
+        for (const m of allMenus) {
+            const viewPanel = m.closest('.view-panel');
+            if (viewPanel && viewPanel.style.display !== 'none') {
+                menu = m;
+                break;
+            }
+        }
+        if (!menu && allMenus.length > 0) menu = allMenus[allMenus.length - 1];
+    }
     if (!menu) return;
-    const isShown = menu.style.display === 'flex';
+
+    const isShown = (menu.style.display === 'flex');
     closeAllPostDropdowns();
     if (!isShown) {
         menu.style.display = 'flex';
+        const card = menu.closest('.post-card');
+        if (card) card.style.zIndex = '100';
     }
 }
 
 function closeAllPostDropdowns() {
     document.querySelectorAll('.post-dropdown-menu').forEach(m => {
         m.style.display = 'none';
+        const card = m.closest('.post-card');
+        if (card) card.style.zIndex = '';
     });
+});
 }
 
 document.addEventListener('click', (e) => {
@@ -1427,7 +1463,7 @@ function createPostElement(post) {
         commentsHtml = post.comments.map(c => renderCommentItemHtml(c, post.user_id)).join('');
     }
 
-    const isOwner = (window.IS_AUTHENTICATED && window.CURRENT_USER_ID === post.user_id);
+    const isOwner = (window.IS_AUTHENTICATED && (window.CURRENT_USER_ID == post.user_id || (post.user && window.CURRENT_USER_ID == post.user.id)));
     const postMenuHtml = `
         <div class="post-kebab-wrap">
             <button type="button" class="post-kebab-btn" onclick="togglePostDropdown(${post.id}, event)" title="Действия с постом">
@@ -1435,7 +1471,7 @@ function createPostElement(post) {
             </button>
             <div class="post-dropdown-menu" id="post-dropdown-${post.id}" style="display: none;">
                 ${isOwner ? `
-                    <button type="button" class="post-dropdown-item" onclick="openEditPostModal(${post.id})">
+                    <button type="button" class="post-dropdown-item" onclick="openEditPostModal(${post.id}, this)">
                         <span>Редактировать</span>
                     </button>
                     <button type="button" class="post-dropdown-item text-danger" onclick="deletePost(${post.id})">
@@ -1449,7 +1485,7 @@ function createPostElement(post) {
                     </button>
                 ` : ''}
                 ${rawContent ? `
-                    <button type="button" class="post-dropdown-item" onclick="copyPostText(${post.id})">
+                    <button type="button" class="post-dropdown-item" onclick="copyPostText(${post.id}, this)">
                         <span>Скопировать текст</span>
                     </button>
                 ` : ''}
