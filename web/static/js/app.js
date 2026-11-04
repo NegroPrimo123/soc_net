@@ -1284,9 +1284,16 @@ function downloadPostImage(imageUrl) {
     showToast('Фото сохраняется', 'success');
 }
 
-function copyPostText(postId) {
+function copyPostText(postId, clickedBtn) {
     closeAllPostDropdowns();
-    const contentEl = document.getElementById(`post-content-${postId}`);
+    let contentEl = null;
+    if (clickedBtn && clickedBtn.closest) {
+        const card = clickedBtn.closest('.post-card');
+        if (card) contentEl = card.querySelector('.post-content');
+    }
+    if (!contentEl) {
+        contentEl = document.getElementById(`post-content-${postId}`);
+    }
     const text = contentEl ? contentEl.textContent.trim() : '';
     if (!text) {
         showToast('Текст публикации пуст', 'error');
