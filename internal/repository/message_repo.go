@@ -1,185 +1,267 @@
-package repository
-
-import (
-	"database/sql"
-	"fmt"
-	"time"
-
-	"social-network/internal/models"
-)
-
-type MessageRepository struct {
-	db *sql.DB
-}
-
-func NewMessageRepository(db *sql.DB) *MessageRepository {
-	return &MessageRepository{db: db}
-}
-
-func (r *MessageRepository) SendMessage(senderID, receiverID int, content string) (*models.Message, error) {
-	if senderID == receiverID {
-		return nil, fmt.Errorf("нельзя отправить сообщение самому себе")
-	}
-
-	var exists bool
-	err := r.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", receiverID).Scan(&exists)
-	if err != nil || !exists {
-		return nil, fmt.Errorf("получатель не найден")
-	}
-
-	query := `
-	INSERT INTO messages (sender_id, receiver_id, content, is_read, created_at)
-	VALUES ($1, $2, $3, FALSE, NOW())
-	RETURNING id, created_at
-	`
-	var msgID int
-	var createdAt time.Time
-	err = r.db.QueryRow(query, senderID, receiverID, content).Scan(&msgID, &createdAt)
-	if err != nil {
-		return nil, fmt.Errorf("send message: %w", err)
-	}
-
-	return r.GetMessageByID(msgID)
-}
-
-func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
-	query := `
-	SELECT 
-		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, m.created_at,
-		s.id, s.username, s.display_name, s.avatar_url, s.bio,
-		rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio
-	FROM messages m
-	JOIN users s ON s.id = m.sender_id
-	JOIN users rc ON rc.id = m.receiver_id
-	WHERE m.id = $1
-	`
-	var m models.Message
-	var s, rc models.User
-	err := r.db.QueryRow(query, msgID).Scan(
-		&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.IsRead, &m.CreatedAt,
-		&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
-		&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
-	)
-	if err != nil {
-		return nil, err
-	}
-	m.Sender = &s
-	m.Receiver = &rc
-	return &m, nil
-}
-
-func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limit int) ([]models.Message, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-
-	query := `
-	SELECT 
-		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, m.created_at,
-		s.id, s.username, s.display_name, s.avatar_url, s.bio,
-		rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio
-	FROM messages m
-	JOIN users s ON s.id = m.sender_id
-	JOIN users rc ON rc.id = m.receiver_id
-	WHERE (m.sender_id = $1 AND m.receiver_id = $2)
-	   OR (m.sender_id = $2 AND m.receiver_id = $1)
-	ORDER BY m.created_at ASC
-	LIMIT $3
-	`
-	rows, err := r.db.Query(query, currentUserID, otherUserID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("query conversation: %w", err)
-	}
-	defer rows.Close()
-
-	var messages []models.Message
-	for rows.Next() {
-		var m models.Message
-		var s, rc models.User
-		if err := rows.Scan(
-			&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.IsRead, &m.CreatedAt,
-			&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
-			&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
-		); err != nil {
-			return nil, fmt.Errorf("scan message: %w", err)
-		}
-		m.Sender = &s
-		m.Receiver = &rc
-		messages = append(messages, m)
-	}
-
-	return messages, nil
-}
-
-func (r *MessageRepository) MarkAsRead(currentUserID, senderID int) error {
-	query := `
-	UPDATE messages
-	SET is_read = TRUE
-	WHERE receiver_id = $1 AND sender_id = $2 AND is_read = FALSE
-	`
-	_, err := r.db.Exec(query, currentUserID, senderID)
-	return err
-}
-
-func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Conversation, error) {
-	query := `
-	SELECT 
-		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
-		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, m.created_at,
-		(SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = $1 AND is_read = FALSE) AS unread_count
-	FROM users u
-	JOIN LATERAL (
-		SELECT id, sender_id, receiver_id, content, is_read, created_at
-		FROM messages
-		WHERE (sender_id = $1 AND receiver_id = u.id) OR (sender_id = u.id AND receiver_id = $1)
-		ORDER BY created_at DESC
-		LIMIT 1
-	) m ON TRUE
-	WHERE u.id != $1
-	ORDER BY m.created_at DESC
-	`
-	rows, err := r.db.Query(query, currentUserID)
-	if err != nil {
-		return nil, fmt.Errorf("query conversations list: %w", err)
-	}
-	defer rows.Close()
-
-	var conversations []models.Conversation
-	for rows.Next() {
-		var c models.Conversation
-		var m models.Message
-		var msgID, senderID, receiverID sql.NullInt64
-		var content sql.NullString
-		var isRead sql.NullBool
-		var msgCreatedAt sql.NullTime
-
-		if err := rows.Scan(
-			&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.BannerURL, &c.User.Bio, &c.User.CreatedAt,
-			&msgID, &senderID, &receiverID, &content, &isRead, &msgCreatedAt,
-			&c.UnreadCount,
-		); err != nil {
-			return nil, fmt.Errorf("scan conversation: %w", err)
-		}
-
-		if msgID.Valid {
-			m.ID = int(msgID.Int64)
-			m.SenderID = int(senderID.Int64)
-			m.ReceiverID = int(receiverID.Int64)
-			m.Content = content.String
-			m.IsRead = isRead.Bool
-			m.CreatedAt = msgCreatedAt.Time
-			c.LastMessage = &m
-		}
-
-		conversations = append(conversations, c)
-	}
-
-	return conversations, nil
-}
-
-func (r *MessageRepository) GetUnreadCount(currentUserID int) (int, error) {
-	var count int
-	query := `SELECT COUNT(*) FROM messages WHERE receiver_id = $1 AND is_read = FALSE`
-	err := r.db.QueryRow(query, currentUserID).Scan(&count)
-	return count, err
-}
+package repository
+
+import (
+	"database/sql"
+	"fmt"
+	"time"
+
+	"github.com/lib/pq"
+	"social-network/internal/models"
+)
+
+type MessageRepository struct {
+	db *sql.DB
+}
+
+func NewMessageRepository(db *sql.DB) *MessageRepository {
+	return &MessageRepository{db: db}
+}
+
+func (r *MessageRepository) SendMessage(senderID, receiverID int, content string) (*models.Message, error) {
+	if senderID == receiverID {
+		return nil, fmt.Errorf("нельзя отправить сообщение самому себе")
+	}
+
+	var exists bool
+	err := r.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", receiverID).Scan(&exists)
+	if err != nil || !exists {
+		return nil, fmt.Errorf("получатель не найден")
+	}
+
+	query := `
+	INSERT INTO messages (sender_id, receiver_id, content, is_read, created_at)
+	VALUES ($1, $2, $3, FALSE, NOW())
+	RETURNING id, created_at
+	`
+	var msgID int
+	var createdAt time.Time
+	err = r.db.QueryRow(query, senderID, receiverID, content).Scan(&msgID, &createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("send message: %w", err)
+	}
+
+	return r.GetMessageByID(msgID)
+}
+
+func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
+	query := `
+	SELECT 
+		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
+		s.id, s.username, s.display_name, s.avatar_url, s.bio,
+		rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio
+	FROM messages m
+	JOIN users s ON s.id = m.sender_id
+	JOIN users rc ON rc.id = m.receiver_id
+	WHERE m.id = $1
+	`
+	var m models.Message
+	var s, rc models.User
+	err := r.db.QueryRow(query, msgID).Scan(
+		&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.IsRead, &m.IsEdited, &m.CreatedAt,
+		&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
+		&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
+	)
+	if err != nil {
+		return nil, err
+	}
+	m.Sender = &s
+	m.Receiver = &rc
+	return &m, nil
+}
+
+func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limit int) ([]models.Message, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+	SELECT 
+		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
+		s.id, s.username, s.display_name, s.avatar_url, s.bio,
+		rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio
+	FROM messages m
+	JOIN users s ON s.id = m.sender_id
+	JOIN users rc ON rc.id = m.receiver_id
+	WHERE ((m.sender_id = $1 AND m.receiver_id = $2 AND COALESCE(m.deleted_for_sender, FALSE) = FALSE)
+	   OR  (m.sender_id = $2 AND m.receiver_id = $1 AND COALESCE(m.deleted_for_receiver, FALSE) = FALSE))
+	ORDER BY m.created_at ASC
+	LIMIT $3
+	`
+	rows, err := r.db.Query(query, currentUserID, otherUserID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query conversation: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []models.Message
+	for rows.Next() {
+		var m models.Message
+		var s, rc models.User
+		if err := rows.Scan(
+			&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.IsRead, &m.IsEdited, &m.CreatedAt,
+			&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
+			&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
+		); err != nil {
+			return nil, fmt.Errorf("scan message: %w", err)
+		}
+		m.Sender = &s
+		m.Receiver = &rc
+		messages = append(messages, m)
+	}
+
+	return messages, nil
+}
+
+func (r *MessageRepository) MarkAsRead(currentUserID, senderID int) error {
+	query := `
+	UPDATE messages
+	SET is_read = TRUE
+	WHERE receiver_id = $1 AND sender_id = $2 AND is_read = FALSE
+	`
+	_, err := r.db.Exec(query, currentUserID, senderID)
+	return err
+}
+
+func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Conversation, error) {
+	query := `
+	SELECT 
+		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
+		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, m.created_at,
+		(SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = $1 AND is_read = FALSE AND COALESCE(deleted_for_receiver, FALSE) = FALSE) AS unread_count
+	FROM users u
+	JOIN LATERAL (
+		SELECT id, sender_id, receiver_id, content, is_read, created_at
+		FROM messages
+		WHERE ((sender_id = $1 AND receiver_id = u.id AND COALESCE(deleted_for_sender, FALSE) = FALSE)
+		    OR (sender_id = u.id AND receiver_id = $1 AND COALESCE(deleted_for_receiver, FALSE) = FALSE))
+		ORDER BY created_at DESC
+		LIMIT 1
+	) m ON TRUE
+	WHERE u.id != $1
+	ORDER BY m.created_at DESC
+	`
+	rows, err := r.db.Query(query, currentUserID)
+	if err != nil {
+		return nil, fmt.Errorf("query conversations list: %w", err)
+	}
+	defer rows.Close()
+
+	var conversations []models.Conversation
+	for rows.Next() {
+		var c models.Conversation
+		var m models.Message
+		var msgID, senderID, receiverID sql.NullInt64
+		var content sql.NullString
+		var isRead sql.NullBool
+		var msgCreatedAt sql.NullTime
+
+		if err := rows.Scan(
+			&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.BannerURL, &c.User.Bio, &c.User.CreatedAt,
+			&msgID, &senderID, &receiverID, &content, &isRead, &msgCreatedAt,
+			&c.UnreadCount,
+		); err != nil {
+			return nil, fmt.Errorf("scan conversation: %w", err)
+		}
+
+		if msgID.Valid {
+			m.ID = int(msgID.Int64)
+			m.SenderID = int(senderID.Int64)
+			m.ReceiverID = int(receiverID.Int64)
+			m.Content = content.String
+			m.IsRead = isRead.Bool
+			m.CreatedAt = msgCreatedAt.Time
+			c.LastMessage = &m
+		}
+
+		conversations = append(conversations, c)
+	}
+
+	return conversations, nil
+}
+
+func (r *MessageRepository) GetUnreadCount(currentUserID int) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM messages WHERE receiver_id = $1 AND is_read = FALSE`
+	err := r.db.QueryRow(query, currentUserID).Scan(&count)
+	return count, err
+}
+
+func (r *MessageRepository) UpdateMessage(msgID, senderID int, content string) (*models.Message, error) {
+	query := `
+	UPDATE messages
+	SET content = $1, is_edited = TRUE, updated_at = NOW()
+	WHERE id = $2 AND sender_id = $3
+	`
+	res, err := r.db.Exec(query, content, msgID, senderID)
+	if err != nil {
+		return nil, fmt.Errorf("update message: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return nil, fmt.Errorf("сообщение не найдено или у вас нет прав на его редактирование")
+	}
+	return r.GetMessageByID(msgID)
+}
+
+func (r *MessageRepository) DeleteMessage(msgID, userID int, forEveryone bool) error {
+	if forEveryone {
+		query := `DELETE FROM messages WHERE id = $1 AND sender_id = $2`
+		res, err := r.db.Exec(query, msgID, userID)
+		if err != nil {
+			return fmt.Errorf("delete message for everyone: %w", err)
+		}
+		rows, _ := res.RowsAffected()
+		if rows == 0 {
+			return fmt.Errorf("сообщение не найдено или только автор может удалить его для всех")
+		}
+		return nil
+	}
+
+	query := `
+	UPDATE messages
+	SET 
+		deleted_for_sender = CASE WHEN sender_id = $2 THEN TRUE ELSE deleted_for_sender END,
+		deleted_for_receiver = CASE WHEN receiver_id = $2 THEN TRUE ELSE deleted_for_receiver END
+	WHERE id = $1 AND (sender_id = $2 OR receiver_id = $2)
+	`
+	res, err := r.db.Exec(query, msgID, userID)
+	if err != nil {
+		return fmt.Errorf("delete message for self: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("сообщение не найдено")
+	}
+	_, _ = r.db.Exec("DELETE FROM messages WHERE id = $1 AND deleted_for_sender = TRUE AND deleted_for_receiver = TRUE", msgID)
+	return nil
+}
+
+func (r *MessageRepository) BatchDeleteMessages(msgIDs []int, userID int, forEveryone bool) (int, error) {
+	if len(msgIDs) == 0 {
+		return 0, nil
+	}
+	if forEveryone {
+		query := `DELETE FROM messages WHERE id = ANY($1) AND sender_id = $2`
+		res, err := r.db.Exec(query, pq.Array(msgIDs), userID)
+		if err != nil {
+			return 0, fmt.Errorf("batch delete for everyone: %w", err)
+		}
+		rows, _ := res.RowsAffected()
+		return int(rows), nil
+	}
+
+	query := `
+	UPDATE messages
+	SET 
+		deleted_for_sender = CASE WHEN sender_id = $2 THEN TRUE ELSE deleted_for_sender END,
+		deleted_for_receiver = CASE WHEN receiver_id = $2 THEN TRUE ELSE deleted_for_receiver END
+	WHERE id = ANY($1) AND (sender_id = $2 OR receiver_id = $2)
+	`
+	res, err := r.db.Exec(query, pq.Array(msgIDs), userID)
+	if err != nil {
+		return 0, fmt.Errorf("batch delete for self: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	_, _ = r.db.Exec("DELETE FROM messages WHERE id = ANY($1) AND deleted_for_sender = TRUE AND deleted_for_receiver = TRUE", pq.Array(msgIDs))
+	return int(rows), nil
+}

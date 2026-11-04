@@ -467,11 +467,441 @@ async function createPost() {
 }
 
 // ==========================================
+
+// ==========================================
+// МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ПОСТА И ФОТО
+// ==========================================
+function openEditPostModal(postId, clickedBtn) {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите в аккаунт для редактирования', 'error');
+        openAuthModal('login');
+        return;
+    }
+    closeAllPostDropdowns();
+
+    let postEl = null;
+    if (clickedBtn && clickedBtn.closest) {
+        postEl = clickedBtn.closest('.post-card');
+    }
+    if (!postEl) {
+        const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
+        for (const card of allCards) {
+            const vp = card.closest('.view-panel');
+            if (vp && vp.style.display !== 'none') {
+                postEl = card;
+                break;
+            }
+        }
+        if (!postEl && allCards.length > 0) postEl = allCards[0];
+    }
+    if (!postEl) return;
+
+    const contentEl = postEl.querySelector('.post-content');
+    let text = contentEl ? contentEl.innerText.trim() : '';
+
+    const imgEl = postEl.querySelector('.post-media img');
+    let imgSrc = imgEl ? (imgEl.getAttribute('src') || '').trim() : '';
+
+    const modal = document.getElementById('editPostModal');
+    const idInput = document.getElementById('editPostId');
+    const contentInput = document.getElementById('editPostContentInput');
+    const imgUrlInput = document.getElementById('editPostImageUrl');
+    const previewWrap = document.getElementById('editPostPhotoPreviewWrap');
+    const photoImg = document.getElementById('editPostPhotoImg');
+    const btnLabel = document.getElementById('btnEditPhotoLabel');
+    const statusText = document.getElementById('editPhotoStatus');
+
+    if (idInput) idInput.value = postId;
+    if (contentInput) contentInput.value = text;
+    if (imgUrlInput) imgUrlInput.value = imgSrc;
+    if (statusText) statusText.textContent = '';
+
+    if (imgSrc) {
+        if (photoImg) photoImg.src = imgSrc;
+        if (previewWrap) previewWrap.style.display = 'block';
+        if (btnLabel) btnLabel.textContent = 'Заменить фото';
+    } else {
+        if (photoImg) photoImg.src = '';
+        if (previewWrap) previewWrap.style.display = 'none';
+        if (btnLabel) btnLabel.textContent = 'Прикрепить фото';
+    }
+
+    if (modal) modal.style.display = 'flex';
+}
+
+function openEditPost(postId) {
+    openEditPostModal(postId);
+}
+
+function closeEditPostModal() {
+    const modal = document.getElementById('editPostModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function removeEditPostPhoto() {
+    const imgUrlInput = document.getElementById('editPostImageUrl');
+    const previewWrap = document.getElementById('editPostPhotoPreviewWrap');
+    const photoImg = document.getElementById('editPostPhotoImg');
+    const btnLabel = document.getElementById('btnEditPhotoLabel');
+    const statusText = document.getElementById('editPhotoStatus');
+
+    if (imgUrlInput) imgUrlInput.value = '';
+    if (photoImg) photoImg.src = '';
+    if (previewWrap) previewWrap.style.display = 'none';
+    if (btnLabel) btnLabel.textContent = 'Прикрепить фото';
+    if (statusText) statusText.textContent = 'Фото удалено';
+}
+
+async function handleEditPostPhotoUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const statusText = document.getElementById('editPhotoStatus');
+    if (statusText) statusText.textContent = 'Загрузка фото...';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка загрузки фото');
+        }
+        const data = await res.json();
+        const url = data.url;
+
+        const imgUrlInput = document.getElementById('editPostImageUrl');
+        const previewWrap = document.getElementById('editPostPhotoPreviewWrap');
+        const photoImg = document.getElementById('editPostPhotoImg');
+        const btnLabel = document.getElementById('btnEditPhotoLabel');
+
+        if (imgUrlInput) imgUrlInput.value = url;
+        if (photoImg) photoImg.src = url;
+        if (previewWrap) previewWrap.style.display = 'block';
+        if (btnLabel) btnLabel.textContent = 'Заменить фото';
+        if (statusText) statusText.textContent = 'Фото готово к сохранению';
+    } catch (err) {
+        if (statusText) statusText.textContent = '';
+        showToast(err.message, 'error');
+    }
+}
+
+async function saveEditedPostModal() {
+    const idInput = document.getElementById('editPostId');
+    const contentInput = document.getElementById('editPostContentInput');
+    const imgUrlInput = document.getElementById('editPostImageUrl');
+    const saveBtn = document.getElementById('btnSaveEditedPost');
+
+    if (!idInput || !idInput.value) return;
+    const postId = parseInt(idInput.value);
+    const content = contentInput ? contentInput.value.trim() : '';
+    const imageUrl = imgUrlInput ? imgUrlInput.value.trim() : '';
+
+    if (!content && !imageUrl) {
+        showToast('Публикация не может быть полностью пустой', 'error');
+        return;
+    }
+
+    if (saveBtn) saveBtn.disabled = true;
+
+    try {
+        const payload = {
+            content: content,
+            image_url: imageUrl
+        };
+
+        const res = await fetch(`/api/posts/${postId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка сохранения публикации');
+        }
+
+        const post = await res.json();
+
+        // Обновляем текст и медиа во ВСЕХ карточках этого поста на странице (в ленте и в профиле)
+        const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
+        allCards.forEach(postCard => {
+            const contentEl = postCard.querySelector('.post-content');
+            if (contentEl) {
+                contentEl.innerHTML = formatHashtags(post.content);
+                contentEl.style.display = post.content ? 'block' : 'none';
+            }
+
+            let mediaBox = postCard.querySelector('.post-media');
+            if (imageUrl) {
+                if (mediaBox) {
+                    const img = mediaBox.querySelector('img');
+                    if (img) img.src = imageUrl;
+                } else {
+                    mediaBox = document.createElement('div');
+                    mediaBox.className = 'post-media';
+                    mediaBox.id = `post-media-${postId}`;
+                    mediaBox.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="Медиа" loading="lazy">`;
+                    const actionsBar = postCard.querySelector('.post-actions-bar');
+                    if (actionsBar) {
+                        postCard.insertBefore(mediaBox, actionsBar);
+                    } else {
+                        postCard.appendChild(mediaBox);
+                    }
+                }
+            } else if (mediaBox) {
+                mediaBox.remove();
+            }
+
+            const metaLine = postCard.querySelector('.meta-line');
+            if (metaLine && !metaLine.querySelector('.edited-badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'edited-badge';
+                badge.textContent = '• (ред.)';
+                metaLine.appendChild(badge);
+            }
+        });
+
+        closeEditPostModal();
+        showToast('Публикация обновлена', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
+    }
+}
+
+// ==========================================
+// МОДАЛЬНОЕ ОКНО «ПОДЕЛИТЬСЯ ПУБЛИКАЦИЕЙ»
+// ==========================================
+function openSharePostModal(postId) {
+    closeAllPostDropdowns();
+    const modal = document.getElementById('sharePostModal');
+    const idInput = document.getElementById('sharePostId');
+    const urlInput = document.getElementById('sharePostUrlInput');
+    const dialogsList = document.getElementById('shareRecentDialogsList');
+
+    const url = `${window.location.origin}/?post=${postId}`;
+    if (idInput) idInput.value = postId;
+    if (urlInput) urlInput.value = url;
+
+    if (dialogsList) {
+        dialogsList.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 10px;">Загрузка списка диалогов...</div>';
+        loadShareDialogs(postId);
+    }
+
+    if (modal) modal.style.display = 'flex';
+}
+
+function sharePost(postId) {
+    openSharePostModal(postId);
+}
+
+function closeSharePostModal() {
+    const modal = document.getElementById('sharePostModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function copyShareModalLink() {
+    const urlInput = document.getElementById('sharePostUrlInput');
+    const url = urlInput ? urlInput.value : '';
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка скопирована в буфер обмена', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать ссылку', 'error');
+    });
+}
+
+async function loadShareDialogs(postId) {
+    const dialogsList = document.getElementById('shareRecentDialogsList');
+    if (!dialogsList) return;
+
+    if (!window.IS_AUTHENTICATED) {
+        dialogsList.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 10px;">Войдите в аккаунт, чтобы отправлять в диалоги</div>';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/messages/conversations');
+        if (!res.ok) throw new Error('Ошибка загрузки диалогов');
+        const convos = await res.json();
+
+        dialogsList.innerHTML = '';
+        if (!convos || convos.length === 0) {
+            dialogsList.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 10px;">Нет активных диалогов</div>';
+            return;
+        }
+
+        convos.forEach(c => {
+            const u = c.user;
+            const item = document.createElement('div');
+            item.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);';
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                    <img src="${escapeHtml(u.avatar_url)}" alt="avatar" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover;">
+                    <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: #fff;">${escapeHtml(u.display_name)}</span>
+                        <span style="font-size: 0.78rem; color: var(--text-dim); margin-left: 4px;">@${escapeHtml(u.username)}</span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="sendPostToUserDirect(${u.id}, ${postId})">
+                    Отправить
+                </button>
+            `;
+            dialogsList.appendChild(item);
+        });
+    } catch (e) {
+        dialogsList.innerHTML = `<div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 10px;">${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function sendPostToUserDirect(targetUserId, postId) {
+    if (!postId) {
+        const idInput = document.getElementById('sharePostId');
+        postId = idInput ? parseInt(idInput.value) : 0;
+    }
+
+    const postContentEl = document.getElementById(`post-content-${postId}`);
+    const snippet = postContentEl ? postContentEl.innerText.trim().slice(0, 60) : '';
+    const postUrl = `${window.location.origin}/?post=${postId}`;
+    const messageContent = snippet ? `Поделился публикацией: "${snippet}..."\n${postUrl}` : `Поделился публикацией:\n${postUrl}`;
+
+    try {
+        const res = await fetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                receiver_id: targetUserId,
+                content: messageContent
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка отправки сообщения');
+        }
+
+        closeSharePostModal();
+        showToast('Публикация отправлена в личные сообщения', 'success');
+        loadConversations();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// ==========================================
+// КОНТЕКСТНОЕ МЕНЮ ЛИЧНЫХ СООБЩЕНИЙ (ПРАВЫЙ КЛИК)
+// ==========================================
+let activeContextMsgId = null;
+let activeContextIsOut = false;
+
+function initChatContextMenu() {
+    const container = document.getElementById('chatMessagesContainer');
+    if (!container) return;
+
+    container.addEventListener('contextmenu', (e) => {
+        const row = e.target.closest('.chat-bubble-row');
+        if (!row) return;
+
+        e.preventDefault();
+        const msgId = parseInt(row.getAttribute('data-msg-id'));
+        const isOut = row.getAttribute('data-is-out') === '1';
+
+        activeContextMsgId = msgId;
+        activeContextIsOut = isOut;
+
+        const menu = document.getElementById('chatContextMenu');
+        if (!menu) return;
+
+        const btnEdit = document.getElementById('ctxBtnEdit');
+        if (btnEdit) {
+            const hasMedia = row.querySelector('.chat-media-preview-box, .chat-file-attachment');
+            btnEdit.style.display = (isOut && !hasMedia) ? 'flex' : 'none';
+        }
+
+        menu.style.display = 'flex';
+        let x = e.clientX;
+        let y = e.clientY;
+        const menuWidth = 190;
+        const menuHeight = 160;
+        if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
+        if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+    });
+}
+
+function closeChatContextMenu() {
+    const menu = document.getElementById('chatContextMenu');
+    if (menu) menu.style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.chat-context-menu')) {
+        closeChatContextMenu();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeChatContextMenu();
+    }
+});
+
+function onContextEditMessage() {
+    closeChatContextMenu();
+    if (activeContextMsgId) {
+        startEditChatMessage(activeContextMsgId);
+    }
+}
+
+function onContextDeleteMessage() {
+    closeChatContextMenu();
+    if (activeContextMsgId) {
+        openDeleteMessageModal(activeContextMsgId, activeContextIsOut);
+    }
+}
+
+function onContextCopyMessage() {
+    closeChatContextMenu();
+    if (!activeContextMsgId) return;
+    const row = document.getElementById(`chat-msg-${activeContextMsgId}`);
+    if (!row) return;
+    const contentEl = row.querySelector('.chat-bubble-content');
+    const text = contentEl ? contentEl.innerText.trim() : '';
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Текст скопирован в буфер обмена', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать', 'error');
+    });
+}
+
+function onContextSelectMessage() {
+    closeChatContextMenu();
+    if (!isChatSelectionMode) {
+        toggleChatSelectionMode();
+    }
+    if (activeContextMsgId) {
+        const cb = document.querySelector(`.chat-msg-checkbox[data-msg-id="${activeContextMsgId}"]`);
+        if (cb) {
+            cb.checked = true;
+            updateSelectedMessagesCount();
+        }
+    }
+}
+
 // EDIT & DELETE POSTS
 // ==========================================
 function openEditPost(postId) {
     if (!window.IS_AUTHENTICATED) {
-        showToast('Войдите в аккаунт для редактирования ✏️', 'error');
+        showToast('Войдите в аккаунт для редактирования', 'error');
         openAuthModal('login');
         return;
     }
@@ -534,7 +964,7 @@ async function saveEditPost(postId) {
             metaLine.appendChild(badge);
         }
 
-        showToast('Публикация обновлена ✏️', 'success');
+        showToast('Публикация обновлена', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -542,7 +972,7 @@ async function saveEditPost(postId) {
 
 async function deletePost(postId) {
     if (!window.IS_AUTHENTICATED) {
-        showToast('Войдите в аккаунт для удаления публикации 🗑️', 'error');
+        showToast('Войдите в аккаунт для удаления публикации', 'error');
         openAuthModal('login');
         return;
     }
@@ -558,18 +988,28 @@ async function deletePost(postId) {
             throw new Error(err.error || 'Ошибка удаления');
         }
 
-        const postCard = document.getElementById(`post-${postId}`);
-        if (postCard) {
-            postCard.remove();
-            if (typeof feedOffset !== 'undefined' && feedOffset > 0) feedOffset--;
-            const pill = document.getElementById('feedCountPill');
-            if (pill) {
-                const totalInDom = document.querySelectorAll('#postsContainer .post-card').length;
-                pill.textContent = `${totalInDom} постов`;
-            }
+        const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
+        allCards.forEach(card => card.remove());
+
+        if (typeof feedOffset !== 'undefined' && feedOffset > 0) feedOffset--;
+        const pill = document.getElementById('feedCountPill');
+        if (pill) {
+            const totalInDom = document.querySelectorAll('#postsContainer .post-card').length;
+            pill.textContent = `${totalInDom} постов`;
         }
 
-        showToast('Публикация удалена 🗑️', 'success');
+        const stat = document.getElementById('heroStatPosts');
+        if (stat) {
+            const current = parseInt(stat.textContent || '0');
+            stat.textContent = Math.max(0, current - 1);
+        }
+        const badge = document.getElementById('badgeProfPosts');
+        if (badge) {
+            const current = parseInt(badge.textContent || '0');
+            badge.textContent = Math.max(0, current - 1);
+        }
+
+        showToast('Публикация удалена', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -578,34 +1018,48 @@ async function deletePost(postId) {
 // ==========================================
 // LIKES & COMMENTS (OPTIMISTIC UI UPDATES)
 // ==========================================
-async function toggleLike(postId) {
+async function toggleLike(postId, event) {
     if (!window.IS_AUTHENTICATED) {
-        showToast('Войдите в аккаунт, чтобы ставить лайки ❤️', 'error');
+        showToast('Войдите в аккаунт, чтобы ставить лайки', 'error');
         openAuthModal('login');
         return;
     }
 
-    const postCard = document.getElementById(`post-${postId}`);
-    const likeBtn = postCard ? postCard.querySelector('.like-btn') : null;
-    const likeCount = document.getElementById(`likes-${postId}`);
-    const heartIcon = likeBtn ? likeBtn.querySelector('.heart-icon') : null;
+    const cards = document.querySelectorAll(`[id="post-${postId}"]`);
+    let wasLiked = false;
+    let currentCount = 0;
 
-    // Мгновенный оптимистичный отклик 0мс
-    const wasLiked = likeBtn ? likeBtn.classList.contains('active') : false;
-    const currentCount = parseInt(likeCount ? likeCount.textContent || '0' : '0', 10);
+    let clickedCard = event ? (event.currentTarget || event.target).closest('.post-card') : null;
+    if (!clickedCard && cards.length > 0) {
+        for (const c of cards) {
+            const vp = c.closest('.view-panel');
+            if (vp && vp.style.display !== 'none') {
+                clickedCard = c;
+                break;
+            }
+        }
+        if (!clickedCard) clickedCard = cards[0];
+    }
+
+    if (clickedCard) {
+        const btn = clickedCard.querySelector('.like-btn');
+        wasLiked = btn ? btn.classList.contains('active') : false;
+        const countEl = clickedCard.querySelector(`[id="likes-${postId}"]`) || (btn ? btn.querySelector('span') : null);
+        currentCount = parseInt(countEl ? countEl.textContent || '0' : '0', 10);
+    }
+
     const newLiked = !wasLiked;
     const newCount = newLiked ? currentCount + 1 : Math.max(0, currentCount - 1);
 
-    if (likeBtn && heartIcon && likeCount) {
-        likeCount.textContent = newCount;
-        if (newLiked) {
-            likeBtn.classList.add('active');
-            heartIcon.setAttribute('fill', 'currentColor');
-        } else {
-            likeBtn.classList.remove('active');
-            heartIcon.setAttribute('fill', 'none');
-        }
-    }
+    // Оптимистичное обновление во всех представлениях (лента и профиль)
+    cards.forEach(card => {
+        const btn = card.querySelector('.like-btn');
+        const countEl = card.querySelector(`[id="likes-${postId}"]`) || (btn ? btn.querySelector('span') : null);
+        const heart = btn ? btn.querySelector('.heart-icon') : null;
+        if (countEl) countEl.textContent = newCount;
+        if (btn) btn.classList.toggle('active', newLiked);
+        if (heart) heart.setAttribute('fill', newLiked ? 'currentColor' : 'none');
+    });
 
     try {
         const response = await fetch(`/api/posts/${postId}/like`, {
@@ -619,48 +1073,85 @@ async function toggleLike(postId) {
         if (!response.ok) throw new Error('Ошибка при лайке');
 
         const data = await response.json();
-        if (likeCount) likeCount.textContent = data.likes_count;
-        if (likeBtn && heartIcon) {
-            if (data.is_liked) {
-                likeBtn.classList.add('active');
-                heartIcon.setAttribute('fill', 'currentColor');
-            } else {
-                likeBtn.classList.remove('active');
-                heartIcon.setAttribute('fill', 'none');
-            }
-        }
+        cards.forEach(card => {
+            const btn = card.querySelector('.like-btn');
+            const countEl = card.querySelector(`[id="likes-${postId}"]`) || (btn ? btn.querySelector('span') : null);
+            const heart = btn ? btn.querySelector('.heart-icon') : null;
+            if (countEl) countEl.textContent = data.likes_count;
+            if (btn) btn.classList.toggle('active', data.is_liked);
+            if (heart) heart.setAttribute('fill', data.is_liked ? 'currentColor' : 'none');
+        });
     } catch (err) {
         // Откат при сбое сети
-        if (likeCount) likeCount.textContent = currentCount;
-        if (likeBtn && heartIcon) {
-            if (wasLiked) {
-                likeBtn.classList.add('active');
-                heartIcon.setAttribute('fill', 'currentColor');
-            } else {
-                likeBtn.classList.remove('active');
-                heartIcon.setAttribute('fill', 'none');
-            }
-        }
+        cards.forEach(card => {
+            const btn = card.querySelector('.like-btn');
+            const countEl = card.querySelector(`[id="likes-${postId}"]`) || (btn ? btn.querySelector('span') : null);
+            const heart = btn ? btn.querySelector('.heart-icon') : null;
+            if (countEl) countEl.textContent = currentCount;
+            if (btn) btn.classList.toggle('active', wasLiked);
+            if (heart) heart.setAttribute('fill', wasLiked ? 'currentColor' : 'none');
+        });
         showToast('Ошибка при обновлении лайка', 'error');
     }
 }
 
-function toggleComments(postId) {
-    const section = document.getElementById(`comments-section-${postId}`);
+function toggleComments(postId, event) {
+    let section = null;
+    if (event) {
+        const target = event.currentTarget || event.target;
+        const card = target ? target.closest('.post-card') : null;
+        if (card) {
+            section = card.querySelector('.comments-section');
+        }
+    }
+    if (!section) {
+        const allSections = document.querySelectorAll(`[id="comments-section-${postId}"]`);
+        for (const s of allSections) {
+            const vp = s.closest('.view-panel');
+            if (vp && vp.style.display !== 'none') {
+                section = s;
+                break;
+            }
+        }
+        if (!section && allSections.length > 0) section = allSections[0];
+    }
     if (!section) return;
-    section.style.display = (section.style.display === 'none') ? 'block' : 'none';
+
+    section.style.display = (section.style.display === 'none' || !section.style.display) ? 'block' : 'none';
+    if (section.style.display === 'block') {
+        const inp = section.querySelector('.comment-input-row input');
+        if (inp) inp.focus();
+    }
 }
 
-async function addComment(postId) {
+async function addComment(postId, event) {
     if (!window.IS_AUTHENTICATED) {
-        showToast('Войдите в аккаунт, чтобы оставить комментарий 💬', 'error');
+        showToast('Войдите в аккаунт, чтобы оставить комментарий', 'error');
         openAuthModal('login');
         return;
     }
 
-    const input = document.getElementById(`comment-input-${postId}`);
-    const content = input.value.trim();
+    let input = null;
+    if (event) {
+        const target = event.currentTarget || event.target;
+        const card = target ? target.closest('.post-card') : null;
+        if (card) {
+            input = card.querySelector('.comment-input-row input');
+        }
+    }
+    if (!input) {
+        const allInputs = document.querySelectorAll(`[id="comment-input-${postId}"]`);
+        for (const inp of allInputs) {
+            const vp = inp.closest('.view-panel');
+            if (vp && vp.style.display !== 'none') {
+                input = inp;
+                break;
+            }
+        }
+        if (!input && allInputs.length > 0) input = allInputs[0];
+    }
 
+    const content = input ? input.value.trim() : '';
     if (!content) return;
 
     try {
@@ -676,29 +1167,31 @@ async function addComment(postId) {
         if (!response.ok) throw new Error('Ошибка комментирования');
 
         const comment = await response.json();
-        input.value = '';
 
-        const commentsList = document.getElementById(`comments-list-${postId}`);
-        const commentEl = document.createElement('div');
-        commentEl.className = 'comment-item';
-        commentEl.innerHTML = `
-            <img src="${escapeHtml(comment.user.avatar_url)}" alt="avatar" class="comment-avatar">
-            <div class="comment-bubble">
-                <div class="comment-author-line">
-                    <span class="comment-author">${escapeHtml(comment.user.display_name)}</span>
-                    <span class="comment-time">${formatTime(comment.created_at)}</span>
-                </div>
-                <div class="comment-text">${escapeHtml(comment.content)}</div>
-            </div>
-        `;
-        commentsList.appendChild(commentEl);
+        // Очищаем инпуты во всех копиях этой карточки
+        document.querySelectorAll(`[id="comment-input-${postId}"]`).forEach(inp => {
+            inp.value = '';
+        });
 
-        const countEl = document.getElementById(`comment-count-${postId}`);
-        if (countEl) {
-            countEl.textContent = parseInt(countEl.textContent || '0') + 1;
-        }
+        // Добавляем комментарий во все отображаемые списки комментариев этого поста (в ленте и в профиле)
+        const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
+        allCards.forEach(card => {
+            const commentsList = card.querySelector('.comments-list');
+            if (commentsList) {
+                const postOwnerId = parseInt(card.getAttribute('data-owner-id') || '0');
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderCommentItemHtml(comment, postOwnerId);
+                if (tempDiv.firstElementChild) {
+                    commentsList.appendChild(tempDiv.firstElementChild);
+                }
+            }
+            const countEl = card.querySelector(`[id="comment-count-${postId}"]`) || card.querySelector('.comment-btn span');
+            if (countEl) {
+                countEl.textContent = parseInt(countEl.textContent || '0') + 1;
+            }
+        });
 
-        showToast('Комментарий отправлен 💬', 'success');
+        showToast('Комментарий отправлен', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -707,7 +1200,7 @@ async function addComment(postId) {
 function sharePost(postId) {
     const url = `${window.location.origin}/?post=${postId}`;
     navigator.clipboard.writeText(url).then(() => {
-        showToast('Ссылка на публикацию скопирована в буфер обмена 🔗', 'success');
+        showToast('Ссылка скопирована в буфер обмена', 'success');
     }).catch(() => {
         showToast('Публикация #' + postId, 'success');
     });
@@ -792,6 +1285,227 @@ function renderPostAtTop(post) {
     }
 }
 
+
+// ==========================================
+// ПОСТЫ: МЕНЮ 3 ТОЧКИ И ДЕЙСТВИЯ
+// ==========================================
+function togglePostDropdown(postId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    let menu = null;
+    if (event) {
+        const target = event.currentTarget || event.target;
+        const wrap = target ? target.closest('.post-kebab-wrap') : null;
+        if (wrap) {
+            menu = wrap.querySelector('.post-dropdown-menu');
+        }
+    }
+    if (!menu) {
+        const allMenus = document.querySelectorAll(`[id="post-dropdown-${postId}"]`);
+        for (const m of allMenus) {
+            const viewPanel = m.closest('.view-panel');
+            if (viewPanel && viewPanel.style.display !== 'none') {
+                menu = m;
+                break;
+            }
+        }
+        if (!menu && allMenus.length > 0) menu = allMenus[allMenus.length - 1];
+    }
+    if (!menu) return;
+
+    const isShown = (menu.style.display === 'flex');
+    closeAllPostDropdowns();
+    if (!isShown) {
+        menu.style.display = 'flex';
+        const card = menu.closest('.post-card');
+        if (card) card.style.zIndex = '100';
+    }
+}
+
+function closeAllPostDropdowns() {
+    document.querySelectorAll('.post-dropdown-menu').forEach(m => {
+        m.style.display = 'none';
+        const card = m.closest('.post-card');
+        if (card) card.style.zIndex = '';
+    });
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.post-kebab-wrap')) {
+        closeAllPostDropdowns();
+    }
+});
+
+function downloadPostImage(imageUrl) {
+    closeAllPostDropdowns();
+    if (!imageUrl) return;
+    const a = document.createElement('a');
+    a.href = imageUrl;
+    a.download = imageUrl.split('/').pop() || 'photo.png';
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('Фото сохраняется', 'success');
+}
+
+function copyPostText(postId, clickedBtn) {
+    closeAllPostDropdowns();
+    let contentEl = null;
+    if (clickedBtn && clickedBtn.closest) {
+        const card = clickedBtn.closest('.post-card');
+        if (card) contentEl = card.querySelector('.post-content');
+    }
+    if (!contentEl) {
+        contentEl = document.getElementById(`post-content-${postId}`);
+    }
+    const text = contentEl ? contentEl.textContent.trim() : '';
+    if (!text) {
+        showToast('Текст публикации пуст', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Текст скопирован в буфер обмена', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать текст', 'error');
+    });
+}
+
+// ==========================================
+// КОММЕНТАРИИ: РЕНДЕРИНГ, РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ
+// ==========================================
+function renderCommentItemHtml(c, postOwnerId) {
+    const isCommentAuthor = window.IS_AUTHENTICATED && (window.CURRENT_USER_ID === c.user.id);
+    const canDeleteComment = window.IS_AUTHENTICATED && (isCommentAuthor || window.CURRENT_USER_ID === postOwnerId);
+    const editedHtml = c.is_edited ? '<span class="edited-badge">• (ред.)</span>' : '';
+
+    return `
+        <div class="comment-item" id="comment-item-${c.id}">
+            <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
+            <div class="comment-bubble">
+                <div class="comment-author-line">
+                    <div class="comment-author-meta" id="comment-meta-${c.id}">
+                        <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
+                        <span class="comment-time">${formatTime(c.created_at)}</span>
+                        ${editedHtml}
+                    </div>
+                    ${(isCommentAuthor || canDeleteComment) ? `
+                        <div class="comment-item-actions">
+                            ${isCommentAuthor ? `
+                                <button type="button" class="comment-action-btn" onclick="startEditComment(${c.id}, ${c.post_id})" title="Редактировать">Ред.</button>
+                            ` : ''}
+                            ${canDeleteComment ? `
+                                <button type="button" class="comment-action-btn" onclick="deleteComment(${c.id}, ${c.post_id})" title="Удалить">✕</button>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="comment-text" id="comment-text-${c.id}">${escapeHtml(c.content)}</div>
+                <div class="comment-edit-box" id="comment-edit-box-${c.id}" style="display: none;">
+                    <input type="text" id="comment-edit-input-${c.id}" class="comment-edit-input" value="${escapeHtml(c.content)}" onkeydown="if(event.key==='Enter')saveEditComment(${c.id}, ${c.post_id}); if(event.key==='Escape')cancelEditComment(${c.id});">
+                    <div class="comment-edit-actions">
+                        <button type="button" class="btn btn-secondary btn-xs" onclick="cancelEditComment(${c.id})">Отмена</button>
+                        <button type="button" class="btn btn-primary btn-xs" onclick="saveEditComment(${c.id}, ${c.post_id})">Сохранить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function startEditComment(commentId, postId) {
+    const textEl = document.getElementById(`comment-text-${commentId}`);
+    const editBox = document.getElementById(`comment-edit-box-${commentId}`);
+    const input = document.getElementById(`comment-edit-input-${commentId}`);
+    if (textEl && editBox) {
+        textEl.style.display = 'none';
+        editBox.style.display = 'block';
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }
+}
+
+function cancelEditComment(commentId) {
+    const textEl = document.getElementById(`comment-text-${commentId}`);
+    const editBox = document.getElementById(`comment-edit-box-${commentId}`);
+    if (textEl && editBox) {
+        textEl.style.display = 'block';
+        editBox.style.display = 'none';
+    }
+}
+
+async function saveEditComment(commentId, postId) {
+    const input = document.getElementById(`comment-edit-input-${commentId}`);
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content) return;
+
+    try {
+        const res = await fetch(`/api/comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка редактирования комментария');
+        }
+        const updated = await res.json();
+        const textEl = document.getElementById(`comment-text-${commentId}`);
+        if (textEl) {
+            textEl.textContent = updated.content;
+            textEl.style.display = 'block';
+        }
+        const editBox = document.getElementById(`comment-edit-box-${commentId}`);
+        if (editBox) editBox.style.display = 'none';
+
+        const metaEl = document.getElementById(`comment-meta-${commentId}`);
+        if (metaEl && !metaEl.querySelector('.edited-badge')) {
+            const badge = document.createElement('span');
+            badge.className = 'edited-badge';
+            badge.textContent = ' • (ред.)';
+            metaEl.appendChild(badge);
+        }
+        showToast('Комментарий отредактирован', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function deleteComment(commentId, postId) {
+    if (!confirm('Вы уверены, что хотите удалить этот комментарий?')) return;
+
+    try {
+        const res = await fetch(`/api/comments/${commentId}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка удаления комментария');
+        }
+
+        // Удаляем элемент комментария во всех копиях карточки
+        document.querySelectorAll(`[id="comment-item-${commentId}"]`).forEach(item => item.remove());
+
+        // Уменьшаем счетчик во всех копиях карточки
+        document.querySelectorAll(`[id="post-${postId}"]`).forEach(card => {
+            const countEl = card.querySelector(`[id="comment-count-${postId}"]`) || card.querySelector('.comment-btn span');
+            if (countEl) {
+                const current = parseInt(countEl.textContent || '1');
+                countEl.textContent = Math.max(0, current - 1);
+            }
+        });
+
+        showToast('Комментарий удален', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
 function createPostElement(post) {
     const article = document.createElement('article');
     article.className = 'post-card';
@@ -823,29 +1537,47 @@ function createPostElement(post) {
     let editedHtml = post.is_edited ? `<span class="edited-badge">• (ред.)</span>` : '';
 
     let commentsHtml = '';
+    const actualCommentsCount = (post.comments && post.comments.length > (post.comments_count || 0))
+        ? post.comments.length
+        : (post.comments_count || 0);
     if (post.comments && post.comments.length > 0) {
-        commentsHtml = post.comments.map(c => `
-            <div class="comment-item">
-                <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
-                <div class="comment-bubble">
-                    <div class="comment-author-line">
-                        <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
-                        <span class="comment-time">${formatTime(c.created_at)}</span>
-                    </div>
-                    <div class="comment-text">${escapeHtml(c.content)}</div>
-                </div>
-            </div>
-        `).join('');
+        commentsHtml = post.comments.map(c => renderCommentItemHtml(c, post.user_id)).join('');
     }
 
-    const isOwner = (window.IS_AUTHENTICATED && window.CURRENT_USER_ID === post.user_id);
-    const ownerActionsHtml = isOwner ? `
-        <div class="post-owner-actions">
-            <button class="icon-btn-subtle" onclick="openEditPost(${post.id})" title="Редактировать">✏️</button>
-            <button class="icon-btn-subtle" onclick="deletePost(${post.id})" title="Удалить">🗑️</button>
+    const isOwner = (window.IS_AUTHENTICATED && (window.CURRENT_USER_ID == post.user_id || (post.user && window.CURRENT_USER_ID == post.user.id)));
+    const postMenuHtml = `
+        <div class="post-kebab-wrap">
+            <button type="button" class="post-kebab-btn" onclick="togglePostDropdown(${post.id}, event)" title="Действия с постом">
+                ⋮
+            </button>
+            <div class="post-dropdown-menu" id="post-dropdown-${post.id}" style="display: none;">
+                ${isOwner ? `
+                    <button type="button" class="post-dropdown-item" onclick="openEditPostModal(${post.id}, this)">
+                        <span>Редактировать</span>
+                    </button>
+                    <button type="button" class="post-dropdown-item text-danger" onclick="deletePost(${post.id})">
+                        <span>Удалить</span>
+                    </button>
+                    <div class="post-dropdown-divider"></div>
+                ` : ''}
+                ${finalImageUrl ? `
+                    <button type="button" class="post-dropdown-item" onclick="downloadPostImage('${escapeHtml(finalImageUrl)}')">
+                        <span>Сохранить фото</span>
+                    </button>
+                ` : ''}
+                ${rawContent ? `
+                    <button type="button" class="post-dropdown-item" onclick="copyPostText(${post.id}, this)">
+                        <span>Скопировать текст</span>
+                    </button>
+                ` : ''}
+                <button type="button" class="post-dropdown-item" onclick="openSharePostModal(${post.id})">
+                    <span>Поделиться</span>
+                </button>
+            </div>
         </div>
-    ` : '';
+    `;
 
+    article.setAttribute('data-owner-id', post.user_id);
     article.innerHTML = `
         <div class="post-header">
             <div class="author-block">
@@ -861,7 +1593,7 @@ function createPostElement(post) {
                     </div>
                 </div>
             </div>
-            ${ownerActionsHtml}
+            ${postMenuHtml}
         </div>
 
         <div class="post-content" id="post-content-${post.id}" ${rawContent ? '' : 'style="display:none;"'}>${formatHashtags(rawContent)}</div>
@@ -877,18 +1609,18 @@ function createPostElement(post) {
         ${mediaHtml}
 
         <div class="post-actions-bar">
-            <button class="action-btn like-btn ${isLiked ? 'active' : ''}" onclick="toggleLike(${post.id})">
+            <button class="action-btn like-btn ${isLiked ? 'active' : ''}" onclick="toggleLike(${post.id}, event)">
                 <svg class="heart-icon" width="18" height="18" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                 </svg>
                 <span id="likes-${post.id}">${post.likes_count}</span>
             </button>
 
-            <button class="action-btn comment-btn" onclick="toggleComments(${post.id})">
+            <button class="action-btn comment-btn" onclick="toggleComments(${post.id}, event)">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
                 </svg>
-                <span id="comment-count-${post.id}">${post.comments_count}</span>
+                <span id="comment-count-${post.id}">${actualCommentsCount}</span>
             </button>
 
             <button class="action-btn share-btn" onclick="sharePost(${post.id})" title="Поделиться">
@@ -908,8 +1640,8 @@ function createPostElement(post) {
             </div>
 
             <div class="comment-input-row">
-                <input type="text" id="comment-input-${post.id}" placeholder="Напишите комментарий..." onkeydown="if(event.key==='Enter')addComment(${post.id})">
-                <button class="btn btn-secondary btn-sm" onclick="addComment(${post.id})">Отправить</button>
+                <input type="text" id="comment-input-${post.id}" placeholder="Напишите комментарий..." onkeydown="if(event.key==='Enter')addComment(${post.id}, event)">
+                <button class="btn btn-secondary btn-sm" onclick="addComment(${post.id}, event)">Отправить</button>
             </div>
         </div>
     `;
@@ -1431,13 +2163,17 @@ function renderUserProfile(data) {
     const profComposer = document.getElementById('profComposerCard');
 
     if (data.is_owner) {
-        if (profComposer) profComposer.style.display = 'block';
+        if (profComposer) {
+            profComposer.style.display = 'block';
+            const compAvatar = document.getElementById('profComposerAvatar');
+            if (compAvatar && user.avatar_url) compAvatar.src = user.avatar_url;
+        }
         actionsBox.innerHTML = `
             <button class="btn btn-primary btn-sm" onclick="openEditProfileModal()">
-                <span>🎨 Оформление профиля</span>
+                <span>Оформление профиля</span>
             </button>
             <button class="btn btn-secondary btn-sm" onclick="openEditProfileModal()">
-                <span>✏️ Редактировать</span>
+                <span>Редактировать</span>
             </button>
         `;
     } else {
@@ -1447,10 +2183,10 @@ function renderUserProfile(data) {
 
         actionsBox.innerHTML = `
             <button class="btn btn-secondary btn-sm" onclick="openChatWithUser(${user.id}, '${escapeHtml(user.display_name)}', '${escapeHtml(user.username)}', '${escapeHtml(user.avatar_url)}')">
-                <span>💬 Сообщение</span>
+                <span>Сообщение</span>
             </button>
             <button class="btn btn-outline btn-sm" onclick="openSendGiftModal(${user.id}, '${escapeHtml(user.display_name)}', '${escapeHtml(user.username)}')">
-                <span>🎁 Отправить подарок</span>
+                <span>Отправить подарок</span>
             </button>
             <button class="btn ${followClass} btn-sm" onclick="toggleProfileFollow(${user.id})">
                 <span>${followText}</span>
@@ -2624,15 +3360,123 @@ async function handleProfileUpdate(e) {
     } finally {
         if (saveBtn) {
             saveBtn.disabled = false;
-            saveBtn.innerHTML = '<span>Сохранить в профиль</span><span class="btn-arrow">✨</span>';
+            saveBtn.innerHTML = '<span>Сохранить в профиль</span><span class="btn-arrow">→</span>';
         }
     }
 }
 
+// ==========================================
+// СОЗДАНИЕ ПОСТА В ПРОФИЛЕ С ФОТО
+// ==========================================
+let currentProfUploadedImageUrl = '';
+
+function toggleProfImageBox() {
+    const box = document.getElementById('profImageBox');
+    if (!box) return;
+    box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+    if (box.style.display === 'block') {
+        const inp = document.getElementById('profImageUrl');
+        if (inp) inp.focus();
+    }
+}
+
+function updateProfImagePreview() {
+    const urlInput = document.getElementById('profImageUrl');
+    const url = urlInput ? urlInput.value.trim() : '';
+    const previewBox = document.getElementById('profUploadPreview');
+    const previewImg = document.getElementById('profPreviewImg');
+    const previewName = document.getElementById('profPreviewName');
+    const previewSize = document.getElementById('profPreviewSize');
+
+    if (url) {
+        currentProfUploadedImageUrl = url;
+        if (previewImg) {
+            previewImg.src = url;
+            previewImg.style.display = 'block';
+        }
+        if (previewName) previewName.textContent = 'Изображение по ссылке';
+        if (previewSize) previewSize.textContent = 'Внешний URL';
+        if (previewBox) previewBox.style.display = 'block';
+    } else if (!currentProfUploadedImageUrl || currentProfUploadedImageUrl.startsWith('http')) {
+        clearProfComposerFile();
+    }
+}
+
+async function handleProfComposerFileUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 30 * 1024 * 1024) {
+        showToast('Размер файла не должен превышать 30 МБ', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showToast('Загрузка фото...', 'info');
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Ошибка загрузки фото');
+        }
+
+        const data = await res.json();
+        currentProfUploadedImageUrl = data.url;
+
+        const previewBox = document.getElementById('profUploadPreview');
+        const previewImg = document.getElementById('profPreviewImg');
+        const previewName = document.getElementById('profPreviewName');
+        const previewSize = document.getElementById('profPreviewSize');
+
+        if (previewBox && previewName && previewSize) {
+            previewName.textContent = data.filename || file.name;
+            previewSize.textContent = formatBytes(data.size || file.size);
+            if (previewImg) {
+                previewImg.src = data.url;
+                previewImg.style.display = 'block';
+            }
+            previewBox.style.display = 'block';
+        }
+
+        showToast('Фото успешно прикреплено', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function clearProfComposerFile() {
+    currentProfUploadedImageUrl = '';
+    const fileInput = document.getElementById('profFileInput');
+    if (fileInput) fileInput.value = '';
+    const urlInput = document.getElementById('profImageUrl');
+    if (urlInput) urlInput.value = '';
+    const previewBox = document.getElementById('profUploadPreview');
+    if (previewBox) previewBox.style.display = 'none';
+    const previewImg = document.getElementById('profPreviewImg');
+    if (previewImg) previewImg.src = '';
+}
+
 async function createProfilePost() {
     const textarea = document.getElementById('profPostContent');
-    const content = textarea.value.trim();
-    if (!content) return;
+    let content = textarea ? textarea.value.trim() : '';
+    const urlInput = document.getElementById('profImageUrl');
+    const imageUrl = currentProfUploadedImageUrl || (urlInput ? urlInput.value.trim() : '');
+
+    if (imageUrl && content === imageUrl) {
+        content = '';
+    }
+
+    if (!content && !imageUrl) {
+        showToast('Введите текст публикации или прикрепите фото', 'error');
+        return;
+    }
 
     try {
         const res = await fetch('/api/posts', {
@@ -2641,15 +3485,16 @@ async function createProfilePost() {
             body: JSON.stringify({
                 user_id: window.CURRENT_USER_ID,
                 content: content,
-                image_url: ''
+                image_url: imageUrl
             })
         });
 
         const post = await res.json();
         if (!res.ok) throw new Error(post.error || 'Ошибка публикации');
 
-        textarea.value = '';
-        showToast('Запись опубликована в ваш профиль! 🌟', 'success');
+        if (textarea) textarea.value = '';
+        clearProfComposerFile();
+        showToast('Запись опубликована в ваш профиль', 'success');
 
         const profPosts = document.getElementById('profPostsContainer');
         if (profPosts) {
@@ -2657,6 +3502,12 @@ async function createProfilePost() {
             if (empty) empty.remove();
             const el = createPostElement(post);
             profPosts.insertBefore(el, profPosts.firstChild);
+        }
+
+        const feedPosts = document.getElementById('feedPostsContainer');
+        if (feedPosts) {
+            const elFeed = createPostElement(post);
+            feedPosts.insertBefore(elFeed, feedPosts.firstChild);
         }
 
         const stat = document.getElementById('heroStatPosts');
@@ -2688,9 +3539,6 @@ function renderVaultCatalog() {
             </div>
             <div class="artifact-card-title">${spec.title}</div>
             <div class="artifact-catalog-desc" style="font-size: 0.78rem; color: var(--text-dim); line-height: 1.4; margin: 0.4rem 0 0.8rem; min-height: 34px;">${spec.desc || ''}</div>
-            <button type="button" class="btn btn-primary btn-sm btn-block" onclick="event.stopPropagation(); openSendGiftModal(null, null, null, '${spec.id}')">
-                <span>🎁 Подарить другу</span>
-            </button>
         `;
         card.addEventListener('click', () => {
             openSendGiftModal(null, null, null, spec.id);
@@ -3106,7 +3954,7 @@ async function loadChatMessages(userId) {
         if (!messages || messages.length === 0) {
             container.innerHTML = `
                 <div class="chat-empty-hint">
-                    История переписки пуста. Отправьте первое сообщение, чтобы начать диалог! 👋
+                    История переписки пуста. Отправьте первое сообщение, чтобы начать диалог.
                 </div>
             `;
             return;
@@ -3119,6 +3967,218 @@ async function loadChatMessages(userId) {
         updateUnreadMessagesCountBadge();
     } catch (err) {
         container.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+
+// ==========================================
+// ЧАТ / ДИАЛОГИ: СОСТОЯНИЕ ВЫБОРА, РЕДАКТИРОВАНИЯ И УДАЛЕНИЯ
+// ==========================================
+let isChatSelectionMode = false;
+let editingChatMessageId = null;
+let pendingDeleteMessageId = null;
+let pendingDeleteIsOut = false;
+let pendingBatchDelete = false;
+
+function startEditChatMessage(msgId) {
+    const msgEl = document.getElementById(`chat-msg-${msgId}`);
+    if (!msgEl) return;
+    const contentEl = msgEl.querySelector('.chat-bubble-content');
+    if (!contentEl) return;
+    const text = contentEl.textContent.trim();
+
+    editingChatMessageId = msgId;
+    const banner = document.getElementById('chatEditBanner');
+    const preview = document.getElementById('chatEditPreviewText');
+    const input = document.getElementById('chatMessageInput');
+
+    if (preview) preview.textContent = text;
+    if (banner) banner.style.display = 'flex';
+    if (input) {
+        input.value = text;
+        input.focus();
+        input.select();
+    }
+}
+
+function cancelEditChatMessage() {
+    editingChatMessageId = null;
+    const banner = document.getElementById('chatEditBanner');
+    const input = document.getElementById('chatMessageInput');
+    if (banner) banner.style.display = 'none';
+    if (input) input.value = '';
+}
+
+function openDeleteMessageModal(msgId, isOut) {
+    pendingDeleteMessageId = msgId;
+    pendingDeleteIsOut = isOut;
+    pendingBatchDelete = false;
+
+    const modal = document.getElementById('deleteMessageModal');
+    const title = document.getElementById('delMsgModalTitle');
+    const desc = document.getElementById('delMsgModalDesc');
+    const btnForEveryone = document.getElementById('btnDeleteMsgForEveryone');
+
+    if (title) title.textContent = 'Удаление сообщения';
+    if (desc) desc.textContent = isOut 
+        ? 'Вы можете удалить это сообщение только у себя или для обоих участников переписки.'
+        : 'Удалить это сообщение из вашей истории переписки?';
+
+    if (btnForEveryone) {
+        btnForEveryone.style.display = isOut ? 'block' : 'none';
+    }
+
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeDeleteMessageModal() {
+    const modal = document.getElementById('deleteMessageModal');
+    if (modal) modal.style.display = 'none';
+    pendingDeleteMessageId = null;
+    pendingBatchDelete = false;
+}
+
+async function confirmDeleteMessageAction(forEveryone) {
+    if (pendingBatchDelete) {
+        await executeBatchDelete(forEveryone);
+        return;
+    }
+
+    if (!pendingDeleteMessageId) return;
+    const msgId = pendingDeleteMessageId;
+
+    try {
+        const res = await fetch(`/api/messages/${msgId}?for_everyone=${forEveryone}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка удаления сообщения');
+        }
+
+        const msgEl = document.getElementById(`chat-msg-${msgId}`);
+        if (msgEl) msgEl.remove();
+
+        closeDeleteMessageModal();
+        showToast(forEveryone ? 'Сообщение удалено для всех' : 'Сообщение удалено', 'success');
+        loadConversations();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function toggleChatSelectionMode() {
+    isChatSelectionMode = !isChatSelectionMode;
+    const cols = document.querySelectorAll('.chat-msg-select-col');
+    cols.forEach(col => {
+        col.style.display = isChatSelectionMode ? 'flex' : 'none';
+    });
+
+    const batchBar = document.getElementById('chatBatchActionsBar');
+    const btnToggle = document.getElementById('btnToggleMsgSelect');
+
+    if (isChatSelectionMode) {
+        if (batchBar) batchBar.style.display = 'flex';
+        if (btnToggle) {
+            btnToggle.classList.add('active');
+            btnToggle.innerHTML = '<span>Отмена</span>';
+        }
+        updateSelectedMessagesCount();
+    } else {
+        exitChatSelectionMode();
+    }
+}
+
+function exitChatSelectionMode() {
+    isChatSelectionMode = false;
+    document.querySelectorAll('.chat-msg-select-col').forEach(col => {
+        col.style.display = 'none';
+    });
+    document.querySelectorAll('.chat-msg-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+
+    const batchBar = document.getElementById('chatBatchActionsBar');
+    if (batchBar) batchBar.style.display = 'none';
+
+    const btnToggle = document.getElementById('btnToggleMsgSelect');
+    if (btnToggle) {
+        btnToggle.classList.remove('active');
+        btnToggle.innerHTML = '<span>Выбрать</span>';
+    }
+    updateSelectedMessagesCount();
+}
+
+function onChatMessageCheckboxChange() {
+    updateSelectedMessagesCount();
+}
+
+function updateSelectedMessagesCount() {
+    const checked = document.querySelectorAll('.chat-msg-checkbox:checked');
+    const countEl = document.getElementById('selectedMsgsCount');
+    if (countEl) countEl.textContent = checked.length;
+}
+
+function promptBatchDeleteMessages() {
+    const checked = Array.from(document.querySelectorAll('.chat-msg-checkbox:checked'));
+    if (checked.length === 0) {
+        showToast('Выберите хотя бы одно сообщение', 'error');
+        return;
+    }
+
+    pendingBatchDelete = true;
+    const allOut = checked.every(cb => cb.getAttribute('data-is-out') === '1');
+
+    const modal = document.getElementById('deleteMessageModal');
+    const title = document.getElementById('delMsgModalTitle');
+    const desc = document.getElementById('delMsgModalDesc');
+    const btnForEveryone = document.getElementById('btnDeleteMsgForEveryone');
+
+    if (title) title.textContent = `Удаление сообщений (${checked.length})`;
+    if (desc) desc.textContent = allOut
+        ? `Выбрано ${checked.length} ваших сообщений. Удалить их только у себя или для обоих участников?`
+        : `Выбрано ${checked.length} сообщений. Среди них есть входящие сообщения, поэтому их можно удалить только у себя.`;
+
+    if (btnForEveryone) {
+        btnForEveryone.style.display = allOut ? 'block' : 'none';
+    }
+
+    if (modal) modal.style.display = 'flex';
+}
+
+async function executeBatchDelete(forEveryone) {
+    const checked = Array.from(document.querySelectorAll('.chat-msg-checkbox:checked'));
+    if (checked.length === 0) return;
+
+    const ids = checked.map(cb => parseInt(cb.getAttribute('data-msg-id'))).filter(id => !isNaN(id));
+    if (ids.length === 0) return;
+
+    try {
+        const res = await fetch('/api/messages/batch-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message_ids: ids,
+                for_everyone: forEveryone
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка удаления сообщений');
+        }
+
+        ids.forEach(id => {
+            const el = document.getElementById(`chat-msg-${id}`);
+            if (el) el.remove();
+        });
+
+        exitChatSelectionMode();
+        closeDeleteMessageModal();
+        showToast(forEveryone ? `Удалено сообщений: ${ids.length} (для всех)` : `Удалено сообщений: ${ids.length}`, 'success');
+        loadConversations();
+    } catch (err) {
+        showToast(err.message, 'error');
     }
 }
 
@@ -3138,8 +4198,11 @@ function appendChatMessageElement(m) {
     const row = document.createElement('div');
     row.id = `chat-msg-${m.id}`;
     row.className = 'chat-bubble-row ' + (isOut ? 'out' : 'in');
+    row.setAttribute('data-msg-id', m.id);
+    row.setAttribute('data-is-out', isOut ? '1' : '0');
 
     const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
+    const editedBadge = m.is_edited ? '<span class="chat-bubble-edited" title="Отредактировано">• (ред.)</span>' : '';
 
     const trimmed = (m.content || '').trim();
     const isImageFile = /\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(trimmed);
@@ -3157,15 +4220,36 @@ function appendChatMessageElement(m) {
         contentHtml = escapeHtml(m.content);
     }
 
-    row.innerHTML = `
-        <div class="chat-bubble ${isOut ? 'out' : 'in'}">
-            <div class="chat-bubble-content">${contentHtml}</div>
-            <div class="chat-bubble-footer">
-                <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
-                ${statusCheck}
-            </div>
+    const selectCol = `
+        <div class="chat-msg-select-col" style="${isChatSelectionMode ? 'display:flex;' : 'display:none;'}">
+            <input type="checkbox" class="chat-msg-checkbox" data-msg-id="${m.id}" data-is-out="${isOut ? '1' : '0'}" onchange="onChatMessageCheckboxChange()">
         </div>
     `;
+
+    if (isOut) {
+        row.innerHTML = `
+            ${selectCol}
+            <div class="chat-bubble out">
+                <div class="chat-bubble-content">${contentHtml}</div>
+                <div class="chat-bubble-footer">
+                    ${editedBadge}
+                    <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
+                    ${statusCheck}
+                </div>
+            </div>
+        `;
+    } else {
+        row.innerHTML = `
+            ${selectCol}
+            <div class="chat-bubble in">
+                <div class="chat-bubble-content">${contentHtml}</div>
+                <div class="chat-bubble-footer">
+                    ${editedBadge}
+                    <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
+                </div>
+            </div>
+        `;
+    }
 
     container.appendChild(row);
 }
@@ -3199,6 +4283,44 @@ async function handleSendMessage(e) {
     if (!content) return;
 
     const sendBtn = document.getElementById('chatSendBtn');
+
+    // Если сейчас включен режим редактирования сообщения:
+    if (editingChatMessageId) {
+        if (sendBtn) sendBtn.disabled = true;
+        isSendingMessage = true;
+        try {
+            const res = await fetch(`/api/messages/${editingChatMessageId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: content })
+            });
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || 'Ошибка редактирования сообщения');
+            }
+            const updated = await res.json();
+            const msgEl = document.getElementById(`chat-msg-${updated.id}`);
+            if (msgEl) {
+                const contentEl = msgEl.querySelector('.chat-bubble-content');
+                if (contentEl) contentEl.textContent = updated.content;
+                const footer = msgEl.querySelector('.chat-bubble-footer');
+                if (footer && !footer.querySelector('.chat-bubble-edited')) {
+                    const ed = document.createElement('span');
+                    ed.className = 'chat-bubble-edited';
+                    ed.textContent = ' • (ред.)';
+                    footer.insertBefore(ed, footer.firstChild);
+                }
+            }
+            cancelEditChatMessage();
+            showToast('Сообщение изменено', 'success');
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            if (sendBtn) sendBtn.disabled = false;
+            isSendingMessage = false;
+        }
+        return;
+    }
     if (sendBtn) sendBtn.disabled = true;
     isSendingMessage = true;
 
@@ -3297,7 +4419,7 @@ function handleIncomingSSEMessage(msg) {
     } else {
         playAudioChime(450, 750, 0.12);
         const senderName = msg.sender ? msg.sender.display_name : 'Пользователь';
-        showToast(`💬 Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
+        showToast(`Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
     }
 
     loadConversations();
@@ -3354,7 +4476,7 @@ function handleSSEEvent(event) {
         case 'new_post':
             if (event.post && event.post.user_id !== window.CURRENT_USER_ID) {
                 renderPostAtTop(event.post);
-                showToast(`Новая запись от ${event.post.user.display_name}! 🌟`, 'success');
+                showToast(`Новая запись от ${event.post.user.display_name}`, 'success');
             }
             break;
 
@@ -3363,28 +4485,80 @@ function handleSSEEvent(event) {
             if (likeCount) likeCount.textContent = event.likes_count;
             break;
 
-        case 'new_comment':
+        case 'new_comment': {
             const countEl = document.getElementById(`comment-count-${event.post_id}`);
             if (countEl) countEl.textContent = event.comments_count;
 
             const commentsList = document.getElementById(`comments-list-${event.post_id}`);
             if (commentsList && event.comment && event.comment.user_id !== window.CURRENT_USER_ID) {
                 const c = event.comment;
-                const commentEl = document.createElement('div');
-                commentEl.className = 'comment-item';
-                commentEl.innerHTML = `
-                    <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
-                    <div class="comment-bubble">
-                        <div class="comment-author-line">
-                            <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
-                            <span class="comment-time">${formatTime(c.created_at)}</span>
-                        </div>
-                        <div class="comment-text">${escapeHtml(c.content)}</div>
-                    </div>
-                `;
-                commentsList.appendChild(commentEl);
+                const postCard = document.getElementById(`post-${event.post_id}`);
+                const postOwnerId = postCard ? parseInt(postCard.getAttribute('data-owner-id') || '0') : 0;
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderCommentItemHtml(c, postOwnerId);
+                if (tempDiv.firstElementChild) {
+                    commentsList.appendChild(tempDiv.firstElementChild);
+                }
             }
             break;
+        }
+
+        case 'comment_updated': {
+            const comment = event.payload || event.comment;
+            if (comment) {
+                const textEl = document.getElementById(`comment-text-${comment.id}`);
+                if (textEl) textEl.textContent = comment.content;
+                const metaEl = document.getElementById(`comment-meta-${comment.id}`);
+                if (metaEl && !metaEl.querySelector('.edited-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'edited-badge';
+                    badge.textContent = ' • (ред.)';
+                    metaEl.appendChild(badge);
+                }
+            }
+            break;
+        }
+
+        case 'comment_deleted': {
+            const commentId = event.comment_id;
+            const commentEl = document.getElementById(`comment-item-${commentId}`);
+            if (commentEl) commentEl.remove();
+            if (event.post_id) {
+                const countEl = document.getElementById(`comment-count-${event.post_id}`);
+                if (countEl && event.comments_count !== undefined) {
+                    countEl.textContent = event.comments_count;
+                }
+            }
+            break;
+        }
+
+        case 'message_updated': {
+            const msg = event.payload || event.message;
+            if (msg) {
+                const msgEl = document.getElementById(`chat-msg-${msg.id}`);
+                if (msgEl) {
+                    const contentEl = msgEl.querySelector('.chat-bubble-content');
+                    if (contentEl) contentEl.textContent = msg.content;
+                    const footer = msgEl.querySelector('.chat-bubble-footer');
+                    if (footer && !footer.querySelector('.chat-bubble-edited')) {
+                        const ed = document.createElement('span');
+                        ed.className = 'chat-bubble-edited';
+                        ed.textContent = ' • (ред.)';
+                        footer.insertBefore(ed, footer.firstChild);
+                    }
+                }
+            }
+            break;
+        }
+
+        case 'message_deleted': {
+            const msgId = event.payload ? event.payload.message_id : event.message_id;
+            if (msgId) {
+                const msgEl = document.getElementById(`chat-msg-${msgId}`);
+                if (msgEl) msgEl.remove();
+            }
+            break;
+        }
 
         case 'new_gift':
             if (event.gift) {
@@ -3447,12 +4621,12 @@ function toggleCyberAudio() {
         startCyberAudio();
         cyberAudioPlaying = true;
         if (btn) btn.classList.add('playing');
-        showToast('🎵 Киберпанк радио включено: Synthwave Chill', 'success');
+        showToast('Киберпанк радио включено: Synthwave Chill', 'success');
     } else {
         stopCyberAudio();
         cyberAudioPlaying = false;
         if (btn) btn.classList.remove('playing');
-        showToast('Радио выключено 🔇', 'info');
+        showToast('Радио выключено', 'info');
     }
 }
 
@@ -3601,4 +4775,12 @@ function renderNewChatUsersList(users) {
         `;
         list.appendChild(item);
     });
+}
+
+
+// Initialize chat context menu
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initChatContextMenu);
+} else {
+    initChatContextMenu();
 }

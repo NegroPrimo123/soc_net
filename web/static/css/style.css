@@ -778,64 +778,89 @@ input:focus, textarea:focus, select:focus {
     background-color: var(--bg-surface);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
-    padding: 1.35rem;
-    box-shadow: var(--shadow-sm);
-    transition: border-color 0.2s ease, transform 0.2s ease;
+    padding: 1.5rem 1.6rem;
+    margin-bottom: 1.5rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
 }
 
 .post-card:hover {
-    border-color: rgba(255, 255, 255, 0.14);
+    border-color: rgba(0, 242, 254, 0.22);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), 0 0 12px rgba(0, 242, 254, 0.06);
 }
 
 .post-header {
+    position: relative;
+    z-index: 10;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 0.85rem;
+    margin-bottom: 1.25rem;
 }
 
 .author-block {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 1rem;
 }
 
 .author-avatar {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     object-fit: cover;
     background-color: var(--bg-surface-hover);
+    border: 1.5px solid rgba(0, 242, 254, 0.3);
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.12);
+    flex-shrink: 0;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.author-avatar:hover {
+    transform: scale(1.04);
+    border-color: var(--accent-neon);
+}
+
+.author-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .author-name-row {
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .author-name {
     font-weight: 700;
-    color: var(--text-pure);
-    font-size: 0.95rem;
+    color: #ffffff;
+    font-size: 1.05rem;
+    letter-spacing: 0.2px;
+    line-height: 1.2;
 }
 
 .author-handle {
-    font-size: 0.82rem;
-    color: var(--text-muted);
+    font-size: 0.86rem;
+    color: var(--text-dim);
+    line-height: 1.2;
 }
 
 .meta-line {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.78rem;
+    gap: 8px;
+    font-size: 0.82rem;
     color: var(--text-muted);
+    margin-top: 2px;
 }
 
 .edited-badge {
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     color: var(--warm-amber);
+    font-style: italic;
 }
 
 .post-owner-actions {
@@ -857,25 +882,27 @@ input:focus, textarea:focus, select:focus {
 }
 
 .post-content {
-    font-size: 1rem;
-    line-height: 1.6;
-    color: var(--text-primary);
-    margin-bottom: 1rem;
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: #f0f4f8;
+    margin: 0.75rem 0 1.25rem;
     white-space: pre-wrap;
     word-break: break-word;
+    letter-spacing: 0.15px;
 }
 
 .post-media {
-    margin-bottom: 1rem;
+    margin: 1.25rem 0;
     border-radius: var(--radius-md);
     overflow: hidden;
-    background-color: var(--bg-main);
+    background-color: #000;
     border: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
 }
 
 .post-media img {
     width: 100%;
-    max-height: 480px;
+    max-height: 520px;
     object-fit: cover;
     display: block;
 }
@@ -883,8 +910,9 @@ input:focus, textarea:focus, select:focus {
 .post-actions-bar {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    padding-top: 0.85rem;
+    gap: 1.8rem;
+    padding-top: 1rem;
+    margin-top: 0.5rem;
     border-top: 1px solid var(--border-subtle);
 }
 
@@ -1199,6 +1227,39 @@ input:focus, textarea:focus, select:focus {
 /* ==========================================
    GIFTS SYSTEM («ЦВЕТНЫЕ КАРАНДАШИ»)
 ========================================== */
+.gift-selection-grid,
+.modal-gift-card,
+#sendGiftModal .modal-card,
+#giftDetailModal .modal-card,
+.artifacts-grid,
+#profGiftsGrid,
+#vaultCatalogGrid,
+#vaultHistoryGrid,
+#vaultGiftsGrid,
+#globalShowcaseGrid,
+.vault-container,
+#profTabContentGifts {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+.gift-selection-grid::-webkit-scrollbar,
+.modal-gift-card::-webkit-scrollbar,
+#sendGiftModal .modal-card::-webkit-scrollbar,
+#giftDetailModal .modal-card::-webkit-scrollbar,
+.artifacts-grid::-webkit-scrollbar,
+#profGiftsGrid::-webkit-scrollbar,
+#vaultCatalogGrid::-webkit-scrollbar,
+#vaultHistoryGrid::-webkit-scrollbar,
+#vaultGiftsGrid::-webkit-scrollbar,
+#globalShowcaseGrid::-webkit-scrollbar,
+.vault-container::-webkit-scrollbar,
+#profTabContentGifts::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
 .artifacts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -3169,4 +3230,385 @@ input:checked + .toggle-slider:before {
 .color-dot-preset:hover {
     transform: scale(1.25);
     border-color: #fff;
+}
+
+/* ==========================================================================
+   ПОСТ: МЕНЮ 3 ТОЧКИ (KEBAB DROPDOWN MENU)
+   ========================================================================== */
+.post-kebab-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.post-kebab-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.post-kebab-btn:hover {
+    color: var(--accent-neon);
+    background: rgba(0, 242, 254, 0.08);
+    border-color: rgba(0, 242, 254, 0.25);
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+}
+
+.post-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 200px;
+    background: rgba(14, 18, 28, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65), 0 0 15px rgba(0, 242, 254, 0.12);
+    padding: 6px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: fadeInDropdown 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInDropdown {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.post-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-pure);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.post-dropdown-item:hover {
+    background: rgba(0, 242, 254, 0.12);
+    color: var(--accent-neon);
+    transform: translateX(3px);
+}
+
+.post-dropdown-item.text-danger:hover {
+    background: rgba(255, 59, 48, 0.15);
+    color: #ff4d4f;
+}
+
+.post-dropdown-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
+}
+
+/* ==========================================================================
+   КОММЕНТАРИИ: РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ
+   ========================================================================== */
+.comment-item {
+    position: relative;
+    transition: background-color 0.2s ease;
+}
+
+.comment-author-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.comment-author-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.comment-item-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0.35;
+    transition: opacity 0.2s ease;
+}
+
+.comment-item:hover .comment-item-actions {
+    opacity: 1;
+}
+
+.comment-action-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    opacity: 0.75;
+    transition: all 0.15s ease;
+}
+
+.comment-action-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(1.15);
+}
+
+.comment-edit-box {
+    margin-top: 8px;
+}
+
+.comment-edit-input {
+    width: 100%;
+    padding: 7px 12px;
+    border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid var(--accent-neon);
+    color: var(--text-pure);
+    font-size: 0.88rem;
+    outline: none;
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
+}
+
+.comment-edit-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    justify-content: flex-end;
+}
+
+/* ==========================================================================
+   ЧАТ / ЛИЧНЫЕ СООБЩЕНИЯ: ГРУППОВЫЕ ДЕЙСТВИЯ, РЕДАКТИРОВАНИЕ, УДАЛЕНИЕ
+   ========================================================================== */
+.chat-bubble-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 0.45rem;
+}
+
+.chat-bubble-row.out {
+    justify-content: flex-end;
+}
+
+.chat-bubble-row.in {
+    justify-content: flex-start;
+}
+
+.chat-msg-select-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    flex-shrink: 0;
+}
+
+.chat-msg-checkbox {
+    width: 19px;
+    height: 19px;
+    border-radius: 4px;
+    cursor: pointer;
+    accent-color: #00f2fe;
+}
+
+.chat-msg-hover-actions {
+    display: none !important;
+}
+
+.chat-bubble-row:hover .chat-msg-hover-actions {
+    display: none !important;
+}
+
+.chat-msg-act-btn {
+    background: rgba(14, 18, 28, 0.85);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-pure);
+    border-radius: var(--radius-xs);
+    padding: 3px 6px;
+    cursor: pointer;
+    font-size: 0.76rem;
+    transition: all 0.15s ease;
+}
+
+.chat-msg-act-btn:hover {
+    background: rgba(0, 242, 254, 0.15);
+    border-color: var(--accent-neon);
+    color: #fff;
+    transform: scale(1.1);
+}
+
+.chat-bubble-edited {
+    font-size: 0.68rem;
+    color: var(--warm-amber);
+    margin-left: 4px;
+    font-style: italic;
+}
+
+/* Баннер редактирования сообщения над полем ввода */
+.chat-edit-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: rgba(0, 242, 254, 0.08);
+    border-top: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--accent-neon);
+    backdrop-filter: blur(10px);
+}
+
+.chat-edit-banner-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+}
+
+.chat-edit-icon {
+    font-size: 1.1rem;
+}
+
+.chat-edit-text-wrap {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-edit-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-neon);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.chat-edit-preview {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-edit-cancel-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    transition: color 0.15s ease;
+}
+
+.chat-edit-cancel-btn:hover {
+    color: #ff4d4f;
+}
+
+/* Панель пакетных действий при выборе сообщений */
+.chat-batch-actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 18px;
+    background: rgba(14, 18, 28, 0.95);
+    border-top: 1px solid var(--border-subtle);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.45), 0 0 10px rgba(0, 242, 254, 0.1);
+    backdrop-filter: blur(16px);
+}
+
+.batch-count-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88rem;
+    color: var(--text-pure);
+}
+
+.batch-count-info strong {
+    color: var(--accent-neon);
+    font-size: 1rem;
+}
+
+.batch-btns-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ==========================================================================
+   КОНТЕКСТНОЕ МЕНЮ ЛИЧНЫХ СООБЩЕНИЙ (ПРАВЫЙ КЛИК МЫШИ)
+   ========================================================================== */
+.chat-context-menu {
+    position: fixed;
+    min-width: 180px;
+    background: rgba(14, 18, 28, 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 15px rgba(0, 242, 254, 0.15);
+    padding: 6px;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: fadeInDropdown 0.15s ease;
+}
+
+.chat-context-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-pure);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.chat-context-item:hover {
+    background: rgba(0, 242, 254, 0.12);
+    color: var(--accent-neon);
+    transform: translateX(3px);
+}
+
+.chat-context-item.text-danger:hover {
+    background: rgba(255, 77, 79, 0.15);
+    color: #ff4d4f;
+}
+
+.chat-context-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
 }
