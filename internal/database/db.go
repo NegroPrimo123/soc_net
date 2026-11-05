@@ -9,6 +9,7 @@ import (
 	"social-network/internal/config"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func InitDB(cfg *config.Config) (*sql.DB, error) {
@@ -282,6 +283,30 @@ func seed(db *sql.DB) error {
 		ON CONFLICT DO NOTHING;
 		`
 		_, _ = db.Exec(notifSQL)
+	}
+
+	// Обеспечиваем наличие пользователя Итаква (Identity V)
+	var itakwaExists bool
+	_ = db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username) = 'itakwa')").Scan(&itakwaExists)
+	if !itakwaExists {
+		itakHash, _ := bcrypt.GenerateFromPassword([]byte("123123"), bcrypt.DefaultCost)
+		_, _ = db.Exec(`
+			INSERT INTO users (
+				username, display_name, password_hash, avatar_url, banner_url, bio,
+				status_text, status_emoji, custom_rank, accent_color, avatar_frame,
+				profile_bg_effect, skills_tags, social_links, pinned_gift_id
+			) VALUES (
+				'itakwa', 'Итаква • Night Watch', $1,
+				'/uploads/ithaqua_1fb3a18e3859fc2e3465550920a07806.jpg',
+				'/uploads/ithaqua_6388aa602b3b6e36c0ccba4e32cd82dd.jpg',
+				'Ночной Дозорный (Night Watch) • Охотник Поместья Олетис (Identity V). Владыка ледяных ветров и безжалостных метелей. Тот, кто бесшумно шагает сквозь свирепую зимнюю бурю на острых ходулях, ведомый плачем замерзшей матери. «Тише... слышишь, как завывает северный ветер?»',
+				'❄️ Метель уже близко... Я слышу твой шаг.', '❄️',
+				'Ледяной Страж • Ночной Дозорный (Identity V)',
+				'#38bdf8', 'night-watch', 'arctic-blizzard',
+				'Identity V, Охотник, Ночной Дозорный, Поступь Ветра, Циклон, Метель, Олетис',
+				'{"web":"https://idv.163.com","discord":"Ithaqua#0001"}', 1
+			) ON CONFLICT DO NOTHING
+		`, string(itakHash))
 	}
 
 	if count > 0 {

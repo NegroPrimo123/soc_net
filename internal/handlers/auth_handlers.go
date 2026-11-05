@@ -69,6 +69,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
 	req.Password = strings.TrimSpace(req.Password)
 
+	// Поддержка входа по имени Итаква / ithaqua
+	if req.Username == "итаква" || req.Username == "ithaqua" {
+		req.Username = "itakwa"
+	}
+
 	user, err := h.userRepo.Authenticate(req.Username, req.Password)
 	if err != nil {
 		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})

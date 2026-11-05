@@ -315,7 +315,7 @@ func (r *UserRepository) Authenticate(username, password string) (*models.User, 
 	query := `
 	SELECT id, username, display_name, password_hash, avatar_url, bio, created_at
 	FROM users
-	WHERE LOWER(username) = LOWER($1)
+	WHERE LOWER(username) = LOWER($1) OR (LOWER($1) IN ('итаква', 'ithaqua', 'itakwa') AND LOWER(username) = 'itakwa')
 	`
 	var u models.User
 	var passwordHash string

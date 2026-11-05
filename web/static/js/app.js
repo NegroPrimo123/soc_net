@@ -2173,10 +2173,13 @@ function renderUserProfile(data) {
         }
         actionsBox.innerHTML = `
             <button class="btn btn-primary btn-sm" onclick="openEditProfileModal()">
-                <span>Оформление профиля</span>
+                <span>🎨 Оформление профиля</span>
             </button>
             <button class="btn btn-secondary btn-sm" onclick="openEditProfileModal()">
-                <span>Редактировать</span>
+                <span>✏️ Редактировать</span>
+            </button>
+            <button class="btn btn-outline btn-sm btn-logout-action" onclick="handleLogout()" style="border-color: rgba(244, 63, 94, 0.45); color: #f43f5e;" title="Выйти из аккаунта">
+                <span>🚪 Выйти</span>
             </button>
         `;
     } else {
@@ -2197,6 +2200,8 @@ function renderUserProfile(data) {
         `;
     }
 
+    handleIthaquaProfileSetup(user, data.is_owner);
+
     renderProfilePosts(data.posts);
     renderProfileGifts(data.gifts);
     renderProfileNetwork(data.followers, data.following);
@@ -2216,7 +2221,7 @@ async function toggleProfileFollow(userId) {
 }
 
 function switchProfileTab(tabName) {
-    ['Posts', 'Gifts', 'Network'].forEach(t => {
+    ['Posts', 'Gifts', 'Network', 'IdentityV'].forEach(t => {
         const btn = document.getElementById(`profTabBtn${t}`);
         const pane = document.getElementById(`profTabContent${t}`);
         const card = document.getElementById(`statCard${t}`);
@@ -5235,4 +5240,541 @@ if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initChatContextMenu);
 } else {
     initChatContextMenu();
+}
+
+
+
+// ==========================================
+// IDENTITY V & ITHAQUA (NIGHT WATCH) PROFILE LOGIC
+// ==========================================
+
+let ithaquaAudioCtx = null;
+let ithaquaWindNoiseNode = null;
+let ithaquaWindGainNode = null;
+let ithaquaWindFilterNode = null;
+let ithaquaWindLfo = null;
+let isIthaquaWindPlaying = false;
+
+let blizzardCanvasAnimId = null;
+
+function isIthaquaUser(user) {
+    if (!user) return false;
+    return user.username === 'itakwa' || user.id === 9 || (user.display_name && user.display_name.includes('Итаква'));
+}
+
+function handleIthaquaProfileSetup(user, isOwner) {
+    const isIth = isIthaquaUser(user);
+    const profileView = document.getElementById('profileView');
+    const tabBtn = document.getElementById('profTabBtnIdentityV');
+    const tabPane = document.getElementById('profTabContentIdentityV');
+
+    if (isIth) {
+        if (profileView) profileView.classList.add('ithaqua-theme-active');
+        if (tabBtn) tabBtn.style.display = 'inline-flex';
+        renderIthaquaDossier(user, isOwner);
+        startIthaquaBlizzard();
+    } else {
+        if (profileView) profileView.classList.remove('ithaqua-theme-active');
+        if (tabBtn) tabBtn.style.display = 'none';
+        if (tabPane) tabPane.style.display = 'none';
+        stopIthaquaBlizzard();
+        stopIthaquaWindSound();
+    }
+}
+
+function startIthaquaBlizzard() {
+    const banner = document.getElementById('heroBanner');
+    if (!banner) return;
+    stopIthaquaBlizzard();
+
+    let canvas = document.getElementById('blizzardCanvas');
+    if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.id = 'blizzardCanvas';
+        canvas.className = 'blizzard-canvas-overlay';
+        banner.style.position = 'relative';
+        banner.appendChild(canvas);
+    }
+
+    const ctx = canvas.getContext('2d');
+    let width = (canvas.width = banner.offsetWidth || 800);
+    let height = (canvas.height = banner.offsetHeight || 220);
+
+    const onResize = () => {
+        if (canvas && banner) {
+            width = canvas.width = banner.offsetWidth || 800;
+            height = canvas.height = banner.offsetHeight || 220;
+        }
+    };
+    window.addEventListener('resize', onResize);
+
+    const flakes = [];
+    const FLAKE_COUNT = 55;
+    for (let i = 0; i < FLAKE_COUNT; i++) {
+        flakes.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            r: Math.random() * 2.2 + 0.8,
+            speedY: Math.random() * 1.8 + 1.0,
+            speedX: Math.random() * 2.2 + 1.2,
+            alpha: Math.random() * 0.7 + 0.3,
+            isGlacial: Math.random() > 0.4
+        });
+    }
+
+    function renderBlizzard() {
+        ctx.clearRect(0, 0, width, height);
+        for (let i = 0; i < FLAKE_COUNT; i++) {
+            const f = flakes[i];
+            ctx.beginPath();
+            ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            ctx.fillStyle = f.isGlacial ? `rgba(56, 189, 248, ${f.alpha})` : `rgba(240, 249, 255, ${f.alpha})`;
+            ctx.shadowBlur = f.r > 1.8 ? 6 : 0;
+            ctx.shadowColor = '#38bdf8';
+            ctx.fill();
+
+            f.y += f.speedY;
+            f.x += f.speedX;
+
+            if (f.y > height) {
+                f.y = -5;
+                f.x = Math.random() * width;
+            }
+            if (f.x > width) {
+                f.x = -5;
+            }
+        }
+        blizzardCanvasAnimId = requestAnimationFrame(renderBlizzard);
+    }
+    renderBlizzard();
+}
+
+function stopIthaquaBlizzard() {
+    if (blizzardCanvasAnimId) {
+        cancelAnimationFrame(blizzardCanvasAnimId);
+        blizzardCanvasAnimId = null;
+    }
+    const canvas = document.getElementById('blizzardCanvas');
+    if (canvas) canvas.remove();
+}
+
+// Generative Arctic Wind Audio Synthesizer
+function toggleIthaquaWindSound() {
+    if (isIthaquaWindPlaying) {
+        stopIthaquaWindSound();
+    } else {
+        startIthaquaWindSound();
+    }
+}
+
+function startIthaquaWindSound() {
+    try {
+        const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtxClass) return;
+        if (!ithaquaAudioCtx) ithaquaAudioCtx = new AudioCtxClass();
+        if (ithaquaAudioCtx.state === 'suspended') ithaquaAudioCtx.resume();
+
+        const bufferSize = ithaquaAudioCtx.sampleRate * 3;
+        const noiseBuffer = ithaquaAudioCtx.createBuffer(1, bufferSize, ithaquaAudioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        let lastOut = 0.0;
+        for (let i = 0; i < bufferSize; i++) {
+            const white = Math.random() * 2 - 1;
+            output[i] = (lastOut + 0.02 * white) / 1.02;
+            lastOut = output[i];
+            output[i] *= 3.5;
+        }
+
+        ithaquaWindNoiseNode = ithaquaAudioCtx.createBufferSource();
+        ithaquaWindNoiseNode.buffer = noiseBuffer;
+        ithaquaWindNoiseNode.loop = true;
+
+        ithaquaWindFilterNode = ithaquaAudioCtx.createBiquadFilter();
+        ithaquaWindFilterNode.type = 'bandpass';
+        ithaquaWindFilterNode.frequency.value = 520;
+        ithaquaWindFilterNode.Q.value = 3.8;
+
+        ithaquaWindLfo = ithaquaAudioCtx.createOscillator();
+        ithaquaWindLfo.frequency.value = 0.22;
+        const lfoGain = ithaquaAudioCtx.createGain();
+        lfoGain.gain.value = 320;
+        ithaquaWindLfo.connect(lfoGain);
+        lfoGain.connect(ithaquaWindFilterNode.frequency);
+
+        ithaquaWindGainNode = ithaquaAudioCtx.createGain();
+        ithaquaWindGainNode.gain.setValueAtTime(0.001, ithaquaAudioCtx.currentTime);
+        ithaquaWindGainNode.gain.exponentialRampToValueAtTime(0.35, ithaquaAudioCtx.currentTime + 1.2);
+
+        ithaquaWindNoiseNode.connect(ithaquaWindFilterNode);
+        ithaquaWindFilterNode.connect(ithaquaWindGainNode);
+        ithaquaWindGainNode.connect(ithaquaAudioCtx.destination);
+
+        ithaquaWindLfo.start();
+        ithaquaWindNoiseNode.start();
+        isIthaquaWindPlaying = true;
+
+        updateAmbienceBtnState(true);
+        showToast('❄️ Звук северного ветра включен', 'info');
+    } catch (e) {
+        console.error('Wind audio error:', e);
+    }
+}
+
+function stopIthaquaWindSound() {
+    if (!isIthaquaWindPlaying) return;
+    try {
+        if (ithaquaWindGainNode && ithaquaAudioCtx) {
+            ithaquaWindGainNode.gain.setValueAtTime(ithaquaWindGainNode.gain.value, ithaquaAudioCtx.currentTime);
+            ithaquaWindGainNode.gain.exponentialRampToValueAtTime(0.0001, ithaquaAudioCtx.currentTime + 0.6);
+            setTimeout(() => {
+                if (ithaquaWindNoiseNode) {
+                    try { ithaquaWindNoiseNode.stop(); } catch(e){}
+                    ithaquaWindNoiseNode.disconnect();
+                    ithaquaWindNoiseNode = null;
+                }
+                if (ithaquaWindLfo) {
+                    try { ithaquaWindLfo.stop(); } catch(e){}
+                    ithaquaWindLfo.disconnect();
+                    ithaquaWindLfo = null;
+                }
+            }, 650);
+        }
+    } catch(e) {}
+    isIthaquaWindPlaying = false;
+    updateAmbienceBtnState(false);
+}
+
+function updateAmbienceBtnState(playing) {
+    const btn = document.getElementById('idvAmbienceBtn');
+    if (btn) {
+        btn.classList.toggle('playing', playing);
+        btn.innerHTML = playing ? '<span>🔊 Завывание Метели (Играет)</span>' : '<span>❄️ Зов Метели (Звуковой эффект)</span>';
+    }
+}
+
+// Renders the exclusive Identity V Hunter Dossier & Artwork Gallery
+function renderIthaquaDossier(user, isOwner) {
+    const container = document.getElementById('idvDossierContainer');
+    if (!container) return;
+
+    const arts = [
+        {
+            key: 'canon',
+            title: 'Шёпот Метели',
+            sub: 'Каноничный облик: меховой капюшон, сокрытое лицо и предостерегающий жест',
+            url: '/uploads/ithaqua_1fb3a18e3859fc2e3465550920a07806.jpg',
+            badge: 'Канон • Охотник',
+            rank: 'Ледяной Страж • Ночной Дозорный (Identity V)',
+            frame: 'night-watch',
+            effect: 'arctic-blizzard',
+            accent: '#38bdf8'
+        },
+        {
+            key: 'unmasked',
+            title: 'Безмолвие Короны',
+            sub: 'Истинный лик: обнажённый взгляд, серебряные волосы и морозный венец',
+            url: '/uploads/ithaqua_6388aa602b3b6e36c0ccba4e32cd82dd.jpg',
+            badge: 'Истинный лик • Без маски',
+            rank: 'Владыка Метели Особняка Олетис',
+            frame: 'blizzard-aura',
+            effect: 'frozen-fog',
+            accent: '#7dd3fc'
+        },
+        {
+            key: 'combat',
+            title: 'Поступь Охотника',
+            sub: 'Боевая готовность: стремительный полёт на ходулях-серпах с ледяной косой',
+            url: '/uploads/ithaqua_f292c2602f0f8c85327e7e458b25d116.jpg',
+            badge: 'Боевая стойка • Ходули',
+            rank: 'Охотник ранга Тень Ветра • Identity V',
+            frame: 'ice-spikes',
+            effect: 'arctic-blizzard',
+            accent: '#0284c7'
+        },
+        {
+            key: 'gold',
+            title: 'Золотой Солнцеворот',
+            sub: 'Церемониальное одеяние с золотой маской солнца посреди вечной мерзлоты',
+            url: '/uploads/ithaqua_ff8cc7d545cedab20da705892775673c.jpg',
+            badge: 'Золотой облик • Реликт',
+            rank: 'Золотой Солнцеворот • Ночной Дозорный',
+            frame: 'gold-frost',
+            effect: 'aurora-borealis',
+            accent: '#f59e0b'
+        }
+    ];
+
+    let quickSwitcherHtml = '';
+    const isCurrentUserIthaqua = (window.CURRENT_USER_USERNAME === 'itakwa' || (window.CURRENT_USER_DISPLAY_NAME && window.CURRENT_USER_DISPLAY_NAME.includes('Итаква')));
+    if (isOwner || isCurrentUserIthaqua) {
+        quickSwitcherHtml = `
+        <div style="margin-top: 1.25rem; padding: 1rem; background: rgba(56, 189, 248, 0.08); border: 1px dashed rgba(56, 189, 248, 0.35); border-radius: var(--radius-md);">
+            <div style="font-size: 0.82rem; font-weight: 700; color: #7dd3fc; margin-bottom: 0.6rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                ⚙️ Быстрое переключение стиля профиля Итаквы (в 1 клик):
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                ${arts.map(a => `
+                    <button type="button" class="idv-preset-btn" onclick="applyIthaquaSkinPreset('${a.key}')">
+                        <span>${a.title}</span>
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+        `;
+    }
+
+    container.innerHTML = `
+        <div class="idv-dossier-wrap">
+            <!-- Главная плашка досье -->
+            <div class="idv-hero-header-card">
+                <div class="idv-dossier-header-top">
+                    <div>
+                        <div class="idv-badge-pill">
+                            <span>❄️</span>
+                            <span>IDENTITY V • HUNTER CLASS</span>
+                        </div>
+                        <h2 style="color: #f0f9ff; font-size: 1.5rem; font-weight: 800; margin: 0.5rem 0 0.2rem 0; letter-spacing: 0.5px;">
+                            Итаква (Ithaqua / The Night Watch)
+                        </h2>
+                        <div style="color: #7dd3fc; font-size: 0.88rem; font-weight: 600;">
+                            Ночной Дозорный • Владыка Полярных Ветров и Ледяных Ходулей
+                        </div>
+                    </div>
+                    <div>
+                        <button type="button" id="idvAmbienceBtn" class="idv-ambience-btn ${isIthaquaWindPlaying ? 'playing' : ''}" onclick="toggleIthaquaWindSound()">
+                            <span>${isIthaquaWindPlaying ? '🔊 Завывание Метели (Играет)' : '❄️ Зов Метели (Звуковой эффект)'}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="idv-story-quote">
+                    «Когда деревня изгнала нас в ледяную пустошь, холод забрал мою мать. С тех пор я слышу её голос в каждом порыве бурана. Мои ходули не знают усталости, а коса не знает пощады к тем, кто тревожит наш вечный покой...»
+                </div>
+
+                ${quickSwitcherHtml}
+            </div>
+
+            <!-- Сетка характеристик и способностей -->
+            <div class="idv-stats-grid">
+                <!-- Карточка Досье -->
+                <div class="idv-stat-card">
+                    <div class="idv-stat-card-title">
+                        <span>📜</span>
+                        <span>Досье Персонажа</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Класс</span>
+                        <span class="idv-spec-value">Охотник (Hunter)</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Кодовое имя</span>
+                        <span class="idv-spec-value">Night Watch (Ночной Дозорный)</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Оружие</span>
+                        <span class="idv-spec-value">Ледяная Коса & Клинки Ходулей</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Локация</span>
+                        <span class="idv-spec-value">Полярные леса Поместья Олетис</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Характер</span>
+                        <span class="idv-spec-value">Холодный, молчаливый, неумолимый</span>
+                    </div>
+                </div>
+
+                <!-- Карточка Боевых Показателей -->
+                <div class="idv-stat-card">
+                    <div class="idv-stat-card-title">
+                        <span>⚡</span>
+                        <span>Боевые Показатели Охотника</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Скорость погони (По ветру)</span>
+                        <span class="idv-spec-value" style="color: #38bdf8;">S+ (Сверхбыстрая)</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Контроль дистанции</span>
+                        <span class="idv-spec-value" style="color: #38bdf8;">A+ (Притягивание)</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Радиус атаки косой</span>
+                        <span class="idv-spec-value">Высокий (Широкий замах)</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Преодоление препятствий</span>
+                        <span class="idv-spec-value">Прыжки на ходулях через паллеты</span>
+                    </div>
+                    <div class="idv-spec-row">
+                        <span class="idv-spec-label">Сложность освоения</span>
+                        <span class="idv-spec-value" style="color: #fbbf24;">★★★★☆ (Мастер)</span>
+                    </div>
+                </div>
+
+                <!-- Карточка Способностей -->
+                <div class="idv-stat-card">
+                    <div class="idv-stat-card-title">
+                        <span>🌪️</span>
+                        <span>Особые Навыки Охотника</span>
+                    </div>
+                    <div class="idv-skills-list">
+                        <div class="idv-skill-item">
+                            <div class="idv-skill-title">
+                                <span>🌪️</span>
+                                <span>Поступь Ветра (Wind Walker)</span>
+                            </div>
+                            <div class="idv-skill-desc">
+                                Встаёт на попутный вихрь метели, многократно ускоряя шаг на ходулях и мгновенно перемахивая через доски и окна.
+                            </div>
+                        </div>
+                        <div class="idv-skill-item">
+                            <div class="idv-skill-title">
+                                <span>❄️</span>
+                                <span>Ледяной Циклон (Glacial Tempest)</span>
+                            </div>
+                            <div class="idv-skill-desc">
+                                Призывает локальный морозный вихрь, поглощающий воздух и притягивающий убегающую жертву прямо под замах косы.
+                            </div>
+                        </div>
+                        <div class="idv-skill-item">
+                            <div class="idv-skill-title">
+                                <span>🏮</span>
+                                <span>Фонарь Скорби (Lantern of Lament)</span>
+                            </div>
+                            <div class="idv-skill-desc">
+                                Освещает морозную мглу, раскрывая замерзшие следы и силуэты выживших на снегу сквозь стены и препятствия.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Галерея всех 4 образов из Desktop\Ита -->
+            <div class="idv-gallery-section">
+                <div class="idv-gallery-header">
+                    <div>
+                        <div class="idv-gallery-title">
+                            <span>🖼️</span>
+                            <span>Галерея Обликов и Артов (High Definition)</span>
+                        </div>
+                        <p style="color: var(--text-dim); font-size: 0.82rem; margin: 0.3rem 0 0 0;">
+                            Нажмите на любой арт, чтобы детально рассмотреть его в полноэкранном режиме с функцией масштабирования (Lightbox).
+                        </p>
+                    </div>
+                </div>
+
+                <div class="idv-gallery-grid">
+                    ${arts.map(art => `
+                        <div class="idv-art-card">
+                            <div class="idv-art-thumb-wrap" onclick="openImageLightbox('${art.url}', 'Итаква • ${escapeHtml(art.title)}')">
+                                <img src="${art.url}" alt="${escapeHtml(art.title)}" class="idv-art-thumb" loading="lazy">
+                                <div class="idv-art-zoom-overlay">
+                                    <span class="idv-zoom-badge">🔍 Рассмотреть</span>
+                                </div>
+                            </div>
+                            <div class="idv-art-details">
+                                <div>
+                                    <div class="idv-art-name">${escapeHtml(art.title)}</div>
+                                    <div class="idv-art-sub">${escapeHtml(art.sub)}</div>
+                                </div>
+                                <div class="idv-art-actions">
+                                    <button type="button" class="btn btn-secondary btn-sm" style="flex: 1;" onclick="openImageLightbox('${art.url}', 'Итаква • ${escapeHtml(art.title)}')">
+                                        <span>🔍 Увеличить</span>
+                                    </button>
+                                    ${(isOwner || isCurrentUserIthaqua) ? `
+                                        <button type="button" class="btn btn-outline btn-sm" onclick="applyIthaquaSkinPreset('${art.key}')" title="Установить этот облик основным в профиле">
+                                            <span>Одеть</span>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Applies skin preset for Ithaqua
+async function applyIthaquaSkinPreset(presetKey) {
+    const presets = {
+        canon: {
+            avatar: '/uploads/ithaqua_1fb3a18e3859fc2e3465550920a07806.jpg',
+            banner: '/uploads/ithaqua_6388aa602b3b6e36c0ccba4e32cd82dd.jpg',
+            rank: 'Ледяной Страж • Ночной Дозорный (Identity V)',
+            frame: 'night-watch',
+            effect: 'arctic-blizzard',
+            accent: '#38bdf8',
+            emoji: '❄️',
+            status: '❄️ Метель уже близко... Я слышу твой шаг.'
+        },
+        unmasked: {
+            avatar: '/uploads/ithaqua_6388aa602b3b6e36c0ccba4e32cd82dd.jpg',
+            banner: '/uploads/ithaqua_f292c2602f0f8c85327e7e458b25d116.jpg',
+            rank: 'Владыка Метели Особняка Олетис',
+            frame: 'blizzard-aura',
+            effect: 'frozen-fog',
+            accent: '#7dd3fc',
+            emoji: '👑',
+            status: '👑 Без маски холод ощущается иначе.'
+        },
+        combat: {
+            avatar: '/uploads/ithaqua_f292c2602f0f8c85327e7e458b25d116.jpg',
+            banner: '/uploads/ithaqua_6388aa602b3b6e36c0ccba4e32cd82dd.jpg',
+            rank: 'Охотник ранга Тень Ветра • Identity V',
+            frame: 'ice-spikes',
+            effect: 'arctic-blizzard',
+            accent: '#0284c7',
+            emoji: '🌪️',
+            status: '🌪️ Скольжу по льду на острых ходулях.'
+        },
+        gold: {
+            avatar: '/uploads/ithaqua_ff8cc7d545cedab20da705892775673c.jpg',
+            banner: '/uploads/ithaqua_1fb3a18e3859fc2e3465550920a07806.jpg',
+            rank: 'Золотой Солнцеворот • Ночной Дозорный',
+            frame: 'gold-frost',
+            effect: 'aurora-borealis',
+            accent: '#f59e0b',
+            emoji: '✨',
+            status: '✨ Солнечный диск обманчив среди вечных снегов.'
+        }
+    };
+
+    const p = presets[presetKey];
+    if (!p) return;
+
+    try {
+        const res = await fetch('/api/users/profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                display_name: 'Итаква • Night Watch',
+                bio: 'Ночной Дозорный (Night Watch) • Охотник Поместья Олетис (Identity V). Владыка ледяных ветров и безжалостных метелей. Тот, кто бесшумно шагает сквозь свирепую зимнюю бурю на острых ходулях, ведомый плачем замерзшей матери. «Тише... слышишь, как завывает северный ветер?»',
+                avatar_url: p.avatar,
+                banner_url: p.banner,
+                custom_rank: p.rank,
+                status_emoji: p.emoji,
+                status_text: p.status,
+                accent_color: p.accent,
+                avatar_frame: p.frame,
+                profile_bg_effect: p.effect,
+                skills_tags: 'Identity V, Охотник, Ночной Дозорный, Поступь Ветра, Циклон, Метель, Олетис',
+                social_links: '{"web":"https://idv.163.com","discord":"Ithaqua#0001"}',
+                pinned_gift_id: 1
+            })
+        });
+
+        if (res.ok) {
+            showToast('❄️ Облик Итаквы успешно обновлен!', 'success');
+            if (window.CURRENT_USER_ID) {
+                loadUserProfile(window.CURRENT_USER_ID);
+            }
+        } else {
+            showToast('Ошибка смены облика', 'error');
+        }
+    } catch (e) {
+        console.error('Error applying skin:', e);
+    }
 }
