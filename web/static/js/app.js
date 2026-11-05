@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, 300);
         }
+    } else if (viewParam === 'my-profile') {
+        navigateTo('my-profile');
     } else if (userParam || viewParam === 'profile') {
         const uid = parseInt(userParam || window.CURRENT_USER_ID, 10);
         navigateTo('profile', uid);
@@ -164,11 +166,11 @@ async function submitLogin(username, password) {
             throw new Error(data.error || 'Ошибка авторизации');
         }
 
-        showToast(`Добро пожаловать, ${data.user.display_name}! 🌟`, 'success');
+        showToast(`Добро пожаловать, ${data.user.display_name}! 🚀`, 'success');
         closeAuthModal();
         setTimeout(() => {
-            window.location.reload();
-        }, 300);
+            window.location.href = '/?view=my-profile';
+        }, 200);
     } catch (err) {
         showToast(err.message === 'Failed to fetch' ? 'Ошибка связи с сервером!' : err.message, 'error');
     }
@@ -2750,23 +2752,29 @@ let currentSelectedSkills = [];
 let currentPinnedTrophyId = 0;
 
 async function openEditProfileModal() {
-    if (!currentProfileUserData) {
-        try {
-            const uid = window.CURRENT_USER_ID || 1;
-            const res = await fetch(`/api/users/${uid}/profile`);
-            if (res.ok) {
-                const data = await res.json();
-                currentProfileUserData = data.user;
-            }
-        } catch (e) {
-            console.error("Failed to load profile for edit modal:", e);
-        }
-    }
-    if (!currentProfileUserData) {
-        showToast('Пожалуйста, войдите в профиль', 'error');
+    if (!window.IS_AUTHENTICATED || !window.CURRENT_USER_ID) {
+        showToast('Пожалуйста, войдите в аккаунт для настройки профиля', 'info');
+        openAuthModal('login');
         return;
     }
-    const u = currentProfileUserData;
+
+    // Всегда загружаем профиль ТЕКУЩЕГО авторизованного пользователя, а не того, чью страницу мы смотрим!
+    let myUser = null;
+    try {
+        const res = await fetch(`/api/users/${window.CURRENT_USER_ID}/profile`);
+        if (res.ok) {
+            const data = await res.json();
+            myUser = data.user;
+        }
+    } catch (e) {
+        console.error("Failed to load user profile for edit modal:", e);
+    }
+
+    if (!myUser) {
+        showToast('Не удалось загрузить данные вашего профиля', 'error');
+        return;
+    }
+    const u = myUser;
 
     document.getElementById('editDisplayName').value = u.display_name || '';
     document.getElementById('editBio').value = u.bio || '';
@@ -3237,9 +3245,8 @@ function updateModalLivePreview() {
     const statusText = document.getElementById('editStatusText').value.trim();
 
     document.getElementById('previewDisplayName').textContent = name;
-    if (currentProfileUserData) {
-        document.getElementById('previewUsername').textContent = `@${currentProfileUserData.username}`;
-    }
+    const previewHandle = window.CURRENT_USER_USERNAME || (currentProfileUserData ? currentProfileUserData.username : 'username');
+    document.getElementById('previewUsername').textContent = `@${previewHandle}`;
 
     const previewAvatar = document.getElementById('previewAvatarImg');
     if (previewAvatar) previewAvatar.src = avatarUrl;
