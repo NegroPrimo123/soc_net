@@ -853,6 +853,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeChatContextMenu();
         closeImageLightbox();
+        closeChatSoundSettingsModal();
     }
 });
 
@@ -3922,7 +3923,7 @@ async function openChatWithUser(userId, displayName = null, username = null, ava
 
     await loadChatMessages(userId);
     const input = document.getElementById('chatMessageInput');
-    if (input) input.focus();
+    if (input) input.focus({ preventScroll: true });
 }
 
 function updateChatHeader(user) {
@@ -3943,11 +3944,12 @@ function openInterlocutorProfile() {
 }
 
 // ==========================================
-// CYBER CHAT ENHANCEMENTS: REFRESH, REACTIONS, LIGHTBOX & AUDIO FX
+// CYBER CHAT ENHANCEMENTS: REFRESH, REACTIONS, LIGHTBOX & CUSTOM AUDIO
 // ==========================================
 let lastRenderedChatDate = null;
 let currentLightboxZoom = 1.0;
 let isChatSoundEnabled = localStorage.getItem('cyber_chat_sound') !== '0';
+let chatSoundMode = localStorage.getItem('custom_chat_sound_mode') || 'default'; // 'default' or 'custom'
 
 function updateChatSoundIcon() {
     const icon = document.getElementById('chatSoundIcon');
@@ -3956,35 +3958,232 @@ function updateChatSoundIcon() {
     }
 }
 
-function toggleChatSound() {
+function openChatSoundSettingsModal() {
+    const modal = document.getElementById('chatSoundSettingsModal');
+    if (!modal) return;
+    updateSoundSettingsModalUI();
+    modal.style.display = 'flex';
+}
+
+function closeChatSoundSettingsModal() {
+    const modal = document.getElementById('chatSoundSettingsModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function toggleChatSoundModal() {
     isChatSoundEnabled = !isChatSoundEnabled;
     localStorage.setItem('cyber_chat_sound', isChatSoundEnabled ? '1' : '0');
     updateChatSoundIcon();
-    showToast(isChatSoundEnabled ? 'Кибер-звуки чата: Включены 🔊' : 'Кибер-звуки чата: Выключены 🔇', 'info');
+    updateSoundSettingsModalUI();
+    showToast(isChatSoundEnabled ? 'Звуковые сигналы чата: Включены 🔊' : 'Звуковые сигналы чата: Выключены 🔇', 'info');
     if (isChatSoundEnabled) {
-        playChatSoundFx('reaction');
+        playCurrentChatSoundPreview();
     }
+}
+
+function setChatSoundMode(mode) {
+    chatSoundMode = mode;
+    localStorage.setItem('custom_chat_sound_mode', mode);
+    updateSoundSettingsModalUI();
+    playCurrentChatSoundPreview();
+}
+
+function updateSoundSettingsModalUI() {
+    const btnToggle = document.getElementById('btnSoundModalToggle');
+    if (btnToggle) {
+        if (isChatSoundEnabled) {
+            btnToggle.className = 'btn btn-primary btn-sm';
+            btnToggle.textContent = 'Вкл 🔊';
+        } else {
+            btnToggle.className = 'btn btn-secondary btn-sm';
+            btnToggle.textContent = 'Выкл 🔇';
+        }
+    }
+
+    const btnDefault = document.getElementById('soundModeBtnDefault');
+    const btnCustom = document.getElementById('soundModeBtnCustom');
+    const customCard = document.getElementById('customSoundUploadCard');
+
+    if (btnDefault && btnCustom) {
+        btnDefault.classList.toggle('active', chatSoundMode === 'default');
+        btnCustom.classList.toggle('active', chatSoundMode === 'custom');
+    }
+
+    const customName = localStorage.getItem('custom_chat_sound_name');
+    const infoText = document.getElementById('customSoundInfoText');
+    if (infoText) {
+        if (customName) {
+            infoText.innerHTML = `<strong>Активный файл:</strong> ${escapeHtml(customName)} <span style="color:var(--accent-neon);">(обрезан до 3 сек)</span>`;
+            infoText.style.color = '#fff';
+        } else {
+            infoText.textContent = 'Файл не загружен (используется стандартный звук)';
+            infoText.style.color = 'var(--text-dim)';
+        }
+    }
+}
+
+// Convert AudioBuffer (up to 3s) to 16-bit PCM WAV Blob
+function audioBufferToWav(buffer) {
+    const numOfChan = buffer.numberOfChannels;
+    const length = buffer.length * numOfChan * 2 + 44;
+    const arrayBuffer = new ArrayBuffer(length);
+    const out = new DataView(arrayBuffer);
+    const channels = [];
+    let sample = 0;
+    let offset = 0;
+    let pos = 0;
+
+    function setUint16(data) { out.setUint16(pos, data, true); pos += 2; }
+    function setUint32(data) { out.setUint32(pos, data, true); pos += 4; }
+
+    setUint32(0x46464952); // "RIFF"
+    setUint32(length - 8);
+    setUint32(0x45564157); // "WAVE"
+    setUint32(0x20746d66); // "fmt "
+    setUint32(16);          // 16 bytes format chunk
+    setUint16(1);           // Linear PCM
+    setUint16(numOfChan);
+    setUint32(buffer.sampleRate);
+    setUint32(buffer.sampleRate * 2 * numOfChan);
+    setUint16(numOfChan * 2);
+    setUint16(16);          // 16-bit
+    setUint32(0x61746164); // "data"
+    setUint32(length - pos - 4);
+
+    for (let i = 0; i < numOfChan; i++) {
+        channels.push(buffer.getChannelData(i));
+    }
+
+    while (pos < length) {
+        for (let i = 0; i < numOfChan; i++) {
+            sample = Math.max(-1, Math.min(1, channels[i][offset]));
+            sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+            out.setInt16(pos, sample, true);
+            pos += 2;
+        }
+        offset++;
+    }
+
+    return new Blob([out.buffer], { type: 'audio/wav' });
+}
+
+// User selects custom audio file: enforces max 3.0 seconds duration!
+async function handleCustomSoundFileUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    try {
+        const arrayBuf = await file.arrayBuffer();
+        const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
+        if (!ctx) throw new Error('Web Audio API не поддерживается браузером');
+
+        const decoded = await ctx.decodeAudioData(arrayBuf);
+        const originalDuration = decoded.duration;
+        const maxDuration = 3.0; // STRICT REQUIREMENT: max 3 seconds
+        const trimDuration = Math.min(maxDuration, originalDuration);
+
+        const sampleRate = decoded.sampleRate;
+        const numberOfChannels = decoded.numberOfChannels;
+        const frameCount = Math.floor(sampleRate * trimDuration);
+
+        // Create trimmed audio buffer (strictly <= 3 seconds)
+        const trimmedBuffer = ctx.createBuffer(numberOfChannels, frameCount, sampleRate);
+        for (let channel = 0; channel < numberOfChannels; channel++) {
+            const channelData = decoded.getChannelData(channel);
+            trimmedBuffer.copyToChannel(channelData.subarray(0, frameCount), channel);
+        }
+
+        const wavBlob = audioBufferToWav(trimmedBuffer);
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const dataUrl = reader.result;
+            try {
+                localStorage.setItem('custom_chat_sound_wav', dataUrl);
+                localStorage.setItem('custom_chat_sound_name', file.name);
+                localStorage.setItem('custom_chat_sound_mode', 'custom');
+                chatSoundMode = 'custom';
+                updateSoundSettingsModalUI();
+
+                if (originalDuration > maxDuration) {
+                    showToast(`Файл "${file.name}" обрезан до первых 3.00 секунд!`, 'info');
+                } else {
+                    showToast(`Звук "${file.name}" успешно установлен!`, 'success');
+                }
+
+                playCurrentChatSoundPreview();
+            } catch (storageErr) {
+                showToast('Ошибка сохранения звука в память браузера', 'error');
+            }
+        };
+        reader.readAsDataURL(wavBlob);
+    } catch (err) {
+        showToast('Не удалось обработать аудиофайл: ' + err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function playCurrentChatSoundPreview() {
+    if (!isChatSoundEnabled) return;
+    const customWav = localStorage.getItem('custom_chat_sound_wav');
+    if (chatSoundMode === 'custom' && customWav) {
+        const audio = new Audio(customWav);
+        audio.volume = 0.9;
+        audio.play().catch(() => {});
+    } else {
+        playSynthChime(660, 990, 0.15);
+    }
+}
+
+function resetCustomChatSound() {
+    localStorage.removeItem('custom_chat_sound_wav');
+    localStorage.removeItem('custom_chat_sound_name');
+    chatSoundMode = 'default';
+    localStorage.setItem('custom_chat_sound_mode', 'default');
+    updateSoundSettingsModalUI();
+    showToast('Сброшено на стандартный кибер-звук', 'info');
+    playSynthChime(540, 880, 0.12);
+}
+
+function playSynthChime(f1 = 520, f2 = 880, dur = 0.12) {
+    try {
+        const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f1, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(f2, ctx.currentTime + dur);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + dur);
+    } catch (e) {}
 }
 
 function playChatSoundFx(type) {
     if (!isChatSoundEnabled) return;
-    try {
-        const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
-        if (!ctx) return;
 
-        if (type === 'send') {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(520, ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
-            gain.gain.setValueAtTime(0.08, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.12);
-        } else if (type === 'receive') {
+    const customWav = localStorage.getItem('custom_chat_sound_wav');
+    if (chatSoundMode === 'custom' && customWav) {
+        try {
+            const audio = new Audio(customWav);
+            audio.volume = 0.85;
+            audio.play().catch(() => {});
+            return;
+        } catch (e) {}
+    }
+
+    // Default Synthesizer Audio
+    if (type === 'send') {
+        playSynthChime(520, 880, 0.12);
+    } else if (type === 'receive') {
+        try {
+            const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
+            if (!ctx) return;
             const osc1 = ctx.createOscillator();
             const osc2 = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -3992,7 +4191,7 @@ function playChatSoundFx(type) {
             osc2.type = 'sine';
             osc1.frequency.setValueAtTime(660, ctx.currentTime);
             osc2.frequency.setValueAtTime(990, ctx.currentTime + 0.06);
-            gain.gain.setValueAtTime(0.09, ctx.currentTime);
+            gain.gain.setValueAtTime(0.08, ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
             osc1.connect(gain);
             osc2.connect(gain);
@@ -4001,20 +4200,10 @@ function playChatSoundFx(type) {
             osc2.start(ctx.currentTime + 0.06);
             osc1.stop(ctx.currentTime + 0.06);
             osc2.stop(ctx.currentTime + 0.16);
-        } else if (type === 'reaction') {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(750, ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.08);
-            gain.gain.setValueAtTime(0.08, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.08);
-        }
-    } catch (e) {}
+        } catch (e) {}
+    } else if (type === 'reaction') {
+        playSynthChime(750, 1400, 0.08);
+    }
 }
 
 function formatDateSeparator(dateStr) {
@@ -4066,15 +4255,6 @@ function resetLightboxZoom() {
     if (!img) return;
     currentLightboxZoom = 1.0;
     img.style.transform = 'scale(1.0)';
-}
-
-// Quick reply chips
-function insertQuickReply(text) {
-    const input = document.getElementById('chatMessageInput');
-    if (!input) return;
-    input.value = text;
-    input.focus();
-    handleSendMessage();
 }
 
 // Search inside open dialog
@@ -4442,7 +4622,7 @@ function appendChatMessageElement(m) {
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
 
-    // ВАЖНО: Защита от дублирования сообщений в DOM
+    // Защита от дублирования сообщений в DOM
     if (document.getElementById(`chat-msg-${m.id}`)) {
         return;
     }
@@ -4478,10 +4658,9 @@ function appendChatMessageElement(m) {
     let contentHtml = '';
 
     if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
-        // Отображаем изображение с открытием в полноэкранном лайтбоксе без перехода по ссылкам
-        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" style="max-width: 280px; max-height: 300px; object-fit: cover; border-radius: 12px; cursor: pointer; display: block;" onclick="openImageLightbox('${escapeHtml(trimmed)}', 'Фото в переписке')"></div>`;
+        // Отображаем изображение полностью, без обрезки и с удобным масштабом
+        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" class="chat-sent-image" onclick="openImageLightbox('${escapeHtml(trimmed)}', 'Фото')"></div>`;
     } else if (isUploadedPath) {
-        // Документ или другой прикрепленный файл
         const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
         contentHtml = `<a href="${escapeHtml(trimmed)}" target="_blank" download class="chat-file-attachment" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.08); border-radius: 10px; color: #fff; text-decoration: none; font-weight: 500;">📎 <span>${escapeHtml(fileName || 'Скачать файл')}</span></a>`;
     } else {
@@ -4494,21 +4673,9 @@ function appendChatMessageElement(m) {
         </div>
     `;
 
-    const hoverReactions = `
-        <div class="chat-hover-reactions-trigger">
-            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '❤️')" title="Любовь">❤️</button>
-            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '👍')" title="Класс">👍</button>
-            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '🔥')" title="Огонь">🔥</button>
-            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '⚡')" title="Молния">⚡</button>
-            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '🤖')" title="Кибер">🤖</button>
-            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '🚀')" title="Ракета">🚀</button>
-        </div>
-    `;
-
     row.innerHTML = `
         ${selectCol}
         <div class="chat-bubble-wrapper">
-            ${hoverReactions}
             <div class="chat-bubble ${isOut ? 'out' : 'in'}">
                 <div class="chat-bubble-content">${contentHtml}</div>
                 <div class="chat-bubble-footer">
@@ -4524,6 +4691,10 @@ function appendChatMessageElement(m) {
     container.appendChild(row);
     if (m.reactions && m.reactions.length > 0) {
         renderMessageReactions(m.id, m.reactions);
+    }
+    const imgEl = row.querySelector('.chat-sent-image');
+    if (imgEl && !imgEl.complete) {
+        imgEl.onload = () => scrollChatToBottom();
     }
 }
 
@@ -4628,7 +4799,7 @@ async function handleSendMessage(e) {
     } finally {
         isSendingMessage = false;
         if (sendBtn) sendBtn.disabled = false;
-        input.focus();
+        input.focus({ preventScroll: true });
     }
 }
 
