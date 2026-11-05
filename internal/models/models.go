@@ -94,32 +94,31 @@ type SendGiftRequest struct {
 
 
 
+type MessageReaction struct {
+	Emoji       string   `json:"emoji"`
+	Count       int      `json:"count"`
+	UserReacted bool     `json:"user_reacted"`
+	Users       []string `json:"users,omitempty"`
+}
+
+type ToggleReactionRequest struct {
+	Emoji string `json:"emoji"`
+}
+
 type Message struct {
-
-	ID                 int       `json:"id"`
-
-	SenderID           int       `json:"sender_id"`
-
-	ReceiverID         int       `json:"receiver_id"`
-
-	Content            string    `json:"content"`
-
-	IsRead             bool      `json:"is_read"`
-
-	IsEdited           bool      `json:"is_edited"`
-
-	DeletedForSender   bool      `json:"deleted_for_sender,omitempty"`
-
-	DeletedForReceiver bool      `json:"deleted_for_receiver,omitempty"`
-
-	CreatedAt          time.Time `json:"created_at"`
-
-	UpdatedAt          time.Time `json:"updated_at,omitempty"`
-
-	Sender             *User     `json:"sender,omitempty"`
-
-	Receiver           *User     `json:"receiver,omitempty"`
-
+	ID                 int               `json:"id"`
+	SenderID           int               `json:"sender_id"`
+	ReceiverID         int               `json:"receiver_id"`
+	Content            string            `json:"content"`
+	IsRead             bool              `json:"is_read"`
+	IsEdited           bool              `json:"is_edited"`
+	DeletedForSender   bool              `json:"deleted_for_sender,omitempty"`
+	DeletedForReceiver bool              `json:"deleted_for_receiver,omitempty"`
+	CreatedAt          time.Time         `json:"created_at"`
+	UpdatedAt          time.Time         `json:"updated_at,omitempty"`
+	Sender             *User             `json:"sender,omitempty"`
+	Receiver           *User             `json:"receiver,omitempty"`
+	Reactions          []MessageReaction `json:"reactions,omitempty"`
 }
 
 

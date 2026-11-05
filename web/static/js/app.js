@@ -801,6 +801,7 @@ let activeContextMsgId = null;
 let activeContextIsOut = false;
 
 function initChatContextMenu() {
+    updateChatSoundIcon();
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
 
@@ -851,6 +852,8 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeChatContextMenu();
+        closeImageLightbox();
+        closeChatSoundSettingsModal();
     }
 });
 
@@ -3920,7 +3923,7 @@ async function openChatWithUser(userId, displayName = null, username = null, ava
 
     await loadChatMessages(userId);
     const input = document.getElementById('chatMessageInput');
-    if (input) input.focus();
+    if (input) input.focus({ preventScroll: true });
 }
 
 function updateChatHeader(user) {
@@ -3940,6 +3943,438 @@ function openInterlocutorProfile() {
     }
 }
 
+// ==========================================
+// CYBER CHAT ENHANCEMENTS: REFRESH, REACTIONS, LIGHTBOX & CUSTOM AUDIO
+// ==========================================
+let lastRenderedChatDate = null;
+let currentLightboxZoom = 1.0;
+let isChatSoundEnabled = localStorage.getItem('cyber_chat_sound') !== '0';
+let chatSoundMode = localStorage.getItem('custom_chat_sound_mode') || 'default'; // 'default' or 'custom'
+
+function updateChatSoundIcon() {
+    const icon = document.getElementById('chatSoundIcon');
+    if (icon) {
+        icon.textContent = isChatSoundEnabled ? '🔊' : '🔇';
+    }
+}
+
+function openChatSoundSettingsModal() {
+    const modal = document.getElementById('chatSoundSettingsModal');
+    if (!modal) return;
+    updateSoundSettingsModalUI();
+    modal.style.display = 'flex';
+}
+
+function closeChatSoundSettingsModal() {
+    const modal = document.getElementById('chatSoundSettingsModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function toggleChatSoundModal() {
+    isChatSoundEnabled = !isChatSoundEnabled;
+    localStorage.setItem('cyber_chat_sound', isChatSoundEnabled ? '1' : '0');
+    updateChatSoundIcon();
+    updateSoundSettingsModalUI();
+    showToast(isChatSoundEnabled ? 'Звуковые сигналы чата: Включены 🔊' : 'Звуковые сигналы чата: Выключены 🔇', 'info');
+    if (isChatSoundEnabled) {
+        playCurrentChatSoundPreview();
+    }
+}
+
+function setChatSoundMode(mode) {
+    chatSoundMode = mode;
+    localStorage.setItem('custom_chat_sound_mode', mode);
+    updateSoundSettingsModalUI();
+    playCurrentChatSoundPreview();
+}
+
+function updateSoundSettingsModalUI() {
+    const btnToggle = document.getElementById('btnSoundModalToggle');
+    if (btnToggle) {
+        if (isChatSoundEnabled) {
+            btnToggle.className = 'btn btn-primary btn-sm';
+            btnToggle.textContent = 'Вкл 🔊';
+        } else {
+            btnToggle.className = 'btn btn-secondary btn-sm';
+            btnToggle.textContent = 'Выкл 🔇';
+        }
+    }
+
+    const btnDefault = document.getElementById('soundModeBtnDefault');
+    const btnCustom = document.getElementById('soundModeBtnCustom');
+    const customCard = document.getElementById('customSoundUploadCard');
+
+    if (btnDefault && btnCustom) {
+        btnDefault.classList.toggle('active', chatSoundMode === 'default');
+        btnCustom.classList.toggle('active', chatSoundMode === 'custom');
+    }
+
+    const customName = localStorage.getItem('custom_chat_sound_name');
+    const infoText = document.getElementById('customSoundInfoText');
+    if (infoText) {
+        if (customName) {
+            infoText.innerHTML = `<strong>Активный файл:</strong> ${escapeHtml(customName)} <span style="color:var(--accent-neon);">(обрезан до 3 сек)</span>`;
+            infoText.style.color = '#fff';
+        } else {
+            infoText.textContent = 'Файл не загружен (используется стандартный звук)';
+            infoText.style.color = 'var(--text-dim)';
+        }
+    }
+}
+
+// Convert AudioBuffer (up to 3s) to 16-bit PCM WAV Blob
+function audioBufferToWav(buffer) {
+    const numOfChan = buffer.numberOfChannels;
+    const length = buffer.length * numOfChan * 2 + 44;
+    const arrayBuffer = new ArrayBuffer(length);
+    const out = new DataView(arrayBuffer);
+    const channels = [];
+    let sample = 0;
+    let offset = 0;
+    let pos = 0;
+
+    function setUint16(data) { out.setUint16(pos, data, true); pos += 2; }
+    function setUint32(data) { out.setUint32(pos, data, true); pos += 4; }
+
+    setUint32(0x46464952); // "RIFF"
+    setUint32(length - 8);
+    setUint32(0x45564157); // "WAVE"
+    setUint32(0x20746d66); // "fmt "
+    setUint32(16);          // 16 bytes format chunk
+    setUint16(1);           // Linear PCM
+    setUint16(numOfChan);
+    setUint32(buffer.sampleRate);
+    setUint32(buffer.sampleRate * 2 * numOfChan);
+    setUint16(numOfChan * 2);
+    setUint16(16);          // 16-bit
+    setUint32(0x61746164); // "data"
+    setUint32(length - pos - 4);
+
+    for (let i = 0; i < numOfChan; i++) {
+        channels.push(buffer.getChannelData(i));
+    }
+
+    while (pos < length) {
+        for (let i = 0; i < numOfChan; i++) {
+            sample = Math.max(-1, Math.min(1, channels[i][offset]));
+            sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+            out.setInt16(pos, sample, true);
+            pos += 2;
+        }
+        offset++;
+    }
+
+    return new Blob([out.buffer], { type: 'audio/wav' });
+}
+
+// User selects custom audio file: enforces max 3.0 seconds duration!
+async function handleCustomSoundFileUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    try {
+        const arrayBuf = await file.arrayBuffer();
+        const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
+        if (!ctx) throw new Error('Web Audio API не поддерживается браузером');
+
+        const decoded = await ctx.decodeAudioData(arrayBuf);
+        const originalDuration = decoded.duration;
+        const maxDuration = 3.0; // STRICT REQUIREMENT: max 3 seconds
+        const trimDuration = Math.min(maxDuration, originalDuration);
+
+        const sampleRate = decoded.sampleRate;
+        const numberOfChannels = decoded.numberOfChannels;
+        const frameCount = Math.floor(sampleRate * trimDuration);
+
+        // Create trimmed audio buffer (strictly <= 3 seconds)
+        const trimmedBuffer = ctx.createBuffer(numberOfChannels, frameCount, sampleRate);
+        for (let channel = 0; channel < numberOfChannels; channel++) {
+            const channelData = decoded.getChannelData(channel);
+            trimmedBuffer.copyToChannel(channelData.subarray(0, frameCount), channel);
+        }
+
+        const wavBlob = audioBufferToWav(trimmedBuffer);
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const dataUrl = reader.result;
+            try {
+                localStorage.setItem('custom_chat_sound_wav', dataUrl);
+                localStorage.setItem('custom_chat_sound_name', file.name);
+                localStorage.setItem('custom_chat_sound_mode', 'custom');
+                chatSoundMode = 'custom';
+                updateSoundSettingsModalUI();
+
+                if (originalDuration > maxDuration) {
+                    showToast(`Файл "${file.name}" обрезан до первых 3.00 секунд!`, 'info');
+                } else {
+                    showToast(`Звук "${file.name}" успешно установлен!`, 'success');
+                }
+
+                playCurrentChatSoundPreview();
+            } catch (storageErr) {
+                showToast('Ошибка сохранения звука в память браузера', 'error');
+            }
+        };
+        reader.readAsDataURL(wavBlob);
+    } catch (err) {
+        showToast('Не удалось обработать аудиофайл: ' + err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function playCurrentChatSoundPreview() {
+    if (!isChatSoundEnabled) return;
+    const customWav = localStorage.getItem('custom_chat_sound_wav');
+    if (chatSoundMode === 'custom' && customWav) {
+        const audio = new Audio(customWav);
+        audio.volume = 0.9;
+        audio.play().catch(() => {});
+    } else {
+        playSynthChime(660, 990, 0.15);
+    }
+}
+
+function resetCustomChatSound() {
+    localStorage.removeItem('custom_chat_sound_wav');
+    localStorage.removeItem('custom_chat_sound_name');
+    chatSoundMode = 'default';
+    localStorage.setItem('custom_chat_sound_mode', 'default');
+    updateSoundSettingsModalUI();
+    showToast('Сброшено на стандартный кибер-звук', 'info');
+    playSynthChime(540, 880, 0.12);
+}
+
+function playSynthChime(f1 = 520, f2 = 880, dur = 0.12) {
+    try {
+        const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f1, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(f2, ctx.currentTime + dur);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + dur);
+    } catch (e) {}
+}
+
+function playChatSoundFx(type) {
+    if (!isChatSoundEnabled) return;
+
+    const customWav = localStorage.getItem('custom_chat_sound_wav');
+    if (chatSoundMode === 'custom' && customWav) {
+        try {
+            const audio = new Audio(customWav);
+            audio.volume = 0.85;
+            audio.play().catch(() => {});
+            return;
+        } catch (e) {}
+    }
+
+    // Default Synthesizer Audio
+    if (type === 'send') {
+        playSynthChime(520, 880, 0.12);
+    } else if (type === 'receive') {
+        try {
+            const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
+            if (!ctx) return;
+            const osc1 = ctx.createOscillator();
+            const osc2 = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc1.type = 'triangle';
+            osc2.type = 'sine';
+            osc1.frequency.setValueAtTime(660, ctx.currentTime);
+            osc2.frequency.setValueAtTime(990, ctx.currentTime + 0.06);
+            gain.gain.setValueAtTime(0.08, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(ctx.destination);
+            osc1.start();
+            osc2.start(ctx.currentTime + 0.06);
+            osc1.stop(ctx.currentTime + 0.06);
+            osc2.stop(ctx.currentTime + 0.16);
+        } catch (e) {}
+    } else if (type === 'reaction') {
+        playSynthChime(750, 1400, 0.08);
+    }
+}
+
+function formatDateSeparator(dateStr) {
+    if (!dateStr) return 'Сегодня';
+    const d = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (d.toDateString() === today.toDateString()) {
+        return 'Сегодня';
+    } else if (d.toDateString() === yesterday.toDateString()) {
+        return 'Вчера';
+    } else {
+        return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+}
+
+// In-app Lightbox Photo Viewer
+function openImageLightbox(src, title) {
+    const modal = document.getElementById('imageLightboxModal');
+    const img = document.getElementById('lightboxTargetImage');
+    const titleEl = document.getElementById('lightboxTitle');
+    const dlBtn = document.getElementById('lightboxDownloadBtn');
+    if (!modal || !img) return;
+
+    currentLightboxZoom = 1.0;
+    img.src = src;
+    img.style.transform = 'scale(1.0)';
+    if (titleEl) titleEl.textContent = title || 'Просмотр изображения';
+    if (dlBtn) dlBtn.href = src;
+    modal.style.display = 'flex';
+}
+
+function closeImageLightbox() {
+    const modal = document.getElementById('imageLightboxModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function zoomLightboxImage(delta) {
+    const img = document.getElementById('lightboxTargetImage');
+    if (!img) return;
+    currentLightboxZoom = Math.min(3.5, Math.max(0.4, currentLightboxZoom + delta));
+    img.style.transform = `scale(${currentLightboxZoom})`;
+}
+
+function resetLightboxZoom() {
+    const img = document.getElementById('lightboxTargetImage');
+    if (!img) return;
+    currentLightboxZoom = 1.0;
+    img.style.transform = 'scale(1.0)';
+}
+
+// Search inside open dialog
+function toggleChatSearch() {
+    const bar = document.getElementById('chatSearchInDialogBar');
+    const input = document.getElementById('chatSearchInDialogInput');
+    if (!bar) return;
+    if (bar.style.display === 'none' || !bar.style.display) {
+        bar.style.display = 'flex';
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+    } else {
+        bar.style.display = 'none';
+        if (input) input.value = '';
+        clearChatSearchHighlight();
+    }
+}
+
+function handleChatSearchInDialog(e) {
+    const q = (e.target.value || '').trim().toLowerCase();
+    const rows = document.querySelectorAll('.chat-bubble-row');
+    if (!q) {
+        clearChatSearchHighlight();
+        return;
+    }
+    let firstFound = null;
+    rows.forEach(row => {
+        const contentEl = row.querySelector('.chat-bubble-content');
+        if (!contentEl) return;
+        let origText = row.getAttribute('data-orig-text');
+        if (!origText) {
+            origText = contentEl.innerText;
+            row.setAttribute('data-orig-text', origText);
+        }
+        if (origText.toLowerCase().includes(q)) {
+            row.style.opacity = '1';
+            row.style.display = 'flex';
+            const escQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escQ})`, 'gi');
+            contentEl.innerHTML = escapeHtml(origText).replace(regex, '<span class="chat-highlight-match">$1</span>');
+            if (!firstFound) firstFound = row;
+        } else {
+            row.style.opacity = '0.3';
+        }
+    });
+    if (firstFound) {
+        firstFound.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+function clearChatSearchHighlight() {
+    const rows = document.querySelectorAll('.chat-bubble-row');
+    rows.forEach(row => {
+        row.style.opacity = '1';
+        row.style.display = 'flex';
+        const origText = row.getAttribute('data-orig-text');
+        if (origText) {
+            const contentEl = row.querySelector('.chat-bubble-content');
+            if (contentEl) contentEl.textContent = origText;
+            row.removeAttribute('data-orig-text');
+        }
+    });
+}
+
+// Reactions functions
+async function toggleMessageReaction(messageId, emoji) {
+    if (!messageId || !emoji) return;
+    playChatSoundFx('reaction');
+
+    try {
+        const res = await fetch(`/api/messages/${messageId}/reactions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emoji: emoji })
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || 'Ошибка установки реакции');
+        }
+        const data = await res.json();
+        if (data.reactions) {
+            renderMessageReactions(messageId, data.reactions);
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function renderMessageReactions(messageId, reactions) {
+    const container = document.getElementById(`chat-reactions-${messageId}`);
+    if (!container) return;
+
+    if (!reactions || reactions.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = reactions.map(r => {
+        const activeClass = r.user_reacted ? ' active' : '';
+        const userList = (r.users && r.users.length > 0) ? r.users.join(', ') : '';
+        return `
+            <div class="chat-reaction-pill${activeClass}" 
+                 onclick="toggleMessageReaction(${messageId}, '${escapeHtml(r.emoji)}')" 
+                 title="${escapeHtml(userList)}">
+                <span>${escapeHtml(r.emoji)}</span>
+                <span class="chat-reaction-count">${r.count}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function onContextReaction(emoji) {
+    if (activeContextMsgId) {
+        toggleMessageReaction(activeContextMsgId, emoji);
+        closeChatContextMenu();
+    }
+}
+
 async function loadChatMessages(userId) {
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
@@ -3951,6 +4386,7 @@ async function loadChatMessages(userId) {
         const messages = await res.json();
 
         container.innerHTML = '';
+        lastRenderedChatDate = null;
         if (!messages || messages.length === 0) {
             container.innerHTML = `
                 <div class="chat-empty-hint">
@@ -4186,13 +4622,25 @@ function appendChatMessageElement(m) {
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
 
-    // ВАЖНО: Защита от дублирования сообщений в DOM
+    // Защита от дублирования сообщений в DOM
     if (document.getElementById(`chat-msg-${m.id}`)) {
         return;
     }
 
     const hint = container.querySelector('.chat-empty-hint');
     if (hint) hint.remove();
+
+    // Разделитель дат в истории чата
+    if (m.created_at) {
+        const msgDate = new Date(m.created_at).toDateString();
+        if (msgDate !== lastRenderedChatDate) {
+            lastRenderedChatDate = msgDate;
+            const dateSep = document.createElement('div');
+            dateSep.className = 'chat-date-separator';
+            dateSep.innerHTML = `<span class="chat-date-badge">${formatDateSeparator(m.created_at)}</span>`;
+            container.appendChild(dateSep);
+        }
+    }
 
     const isOut = (m.sender_id === window.CURRENT_USER_ID);
     const row = document.createElement('div');
@@ -4210,10 +4658,9 @@ function appendChatMessageElement(m) {
     let contentHtml = '';
 
     if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
-        // Отображаем ТОЛЬКО изображение без дублирования текстовой ссылки
-        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" style="max-width: 260px; max-height: 280px; object-fit: cover; border-radius: 12px; cursor: pointer; display: block;" onclick="window.open('${escapeHtml(trimmed)}', '_blank')"></div>`;
+        // Отображаем изображение полностью, без обрезки и с удобным масштабом
+        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" class="chat-sent-image" onclick="openImageLightbox('${escapeHtml(trimmed)}', 'Фото')"></div>`;
     } else if (isUploadedPath) {
-        // Документ или другой прикрепленный файл
         const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
         contentHtml = `<a href="${escapeHtml(trimmed)}" target="_blank" download class="chat-file-attachment" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.08); border-radius: 10px; color: #fff; text-decoration: none; font-weight: 500;">📎 <span>${escapeHtml(fileName || 'Скачать файл')}</span></a>`;
     } else {
@@ -4226,10 +4673,10 @@ function appendChatMessageElement(m) {
         </div>
     `;
 
-    if (isOut) {
-        row.innerHTML = `
-            ${selectCol}
-            <div class="chat-bubble out">
+    row.innerHTML = `
+        ${selectCol}
+        <div class="chat-bubble-wrapper">
+            <div class="chat-bubble ${isOut ? 'out' : 'in'}">
                 <div class="chat-bubble-content">${contentHtml}</div>
                 <div class="chat-bubble-footer">
                     ${editedBadge}
@@ -4237,21 +4684,18 @@ function appendChatMessageElement(m) {
                     ${statusCheck}
                 </div>
             </div>
-        `;
-    } else {
-        row.innerHTML = `
-            ${selectCol}
-            <div class="chat-bubble in">
-                <div class="chat-bubble-content">${contentHtml}</div>
-                <div class="chat-bubble-footer">
-                    ${editedBadge}
-                    <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
-                </div>
-            </div>
-        `;
-    }
+            <div class="chat-reactions-row" id="chat-reactions-${m.id}"></div>
+        </div>
+    `;
 
     container.appendChild(row);
+    if (m.reactions && m.reactions.length > 0) {
+        renderMessageReactions(m.id, m.reactions);
+    }
+    const imgEl = row.querySelector('.chat-sent-image');
+    if (imgEl && !imgEl.complete) {
+        imgEl.onload = () => scrollChatToBottom();
+    }
 }
 
 function scrollChatToBottom() {
@@ -4343,7 +4787,7 @@ async function handleSendMessage(e) {
         input.value = '';
         clearChatFile();
 
-        playAudioChime(600, 800, 0.08);
+        playChatSoundFx('send');
 
         // Добавляем сообщение в интерфейс отправителя сразу
         appendChatMessageElement(msg);
@@ -4355,7 +4799,7 @@ async function handleSendMessage(e) {
     } finally {
         isSendingMessage = false;
         if (sendBtn) sendBtn.disabled = false;
-        input.focus();
+        input.focus({ preventScroll: true });
     }
 }
 
@@ -4417,7 +4861,7 @@ function handleIncomingSSEMessage(msg) {
             fetch(`/api/messages/${activeChatUserId}`).catch(() => {});
         }
     } else {
-        playAudioChime(450, 750, 0.12);
+        playChatSoundFx('receive');
         const senderName = msg.sender ? msg.sender.display_name : 'Пользователь';
         showToast(`Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
     }
@@ -4570,7 +5014,15 @@ function handleSSEEvent(event) {
             }
             break;
 
-        case 'new_message': {
+                case 'message_reaction': {
+            const data = event.payload || event;
+            if (data && data.message_id) {
+                renderMessageReactions(data.message_id, data.reactions || []);
+            }
+            break;
+        }
+
+case 'new_message': {
             const msg = event.payload || event.message;
             if (msg) handleIncomingSSEMessage(msg);
             break;

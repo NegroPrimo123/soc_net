@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoSocial — Киберпанк Социальная Сеть</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=cyber_fix_v23">
+    <link rel="stylesheet" href="/static/css/style.css?v=cyber_chat_v2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -431,6 +431,15 @@
 
 <!-- Контекстное меню личных сообщений (по правому клику мыши) -->
 <div id="chatContextMenu" class="chat-context-menu" style="display: none;">
+    <div class="chat-context-reactions">
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('❤️')" title="Любовь">❤️</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('👍')" title="Класс">👍</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('🔥')" title="Огонь">🔥</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('⚡')" title="Молния">⚡</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('🤖')" title="Кибер">🤖</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('🚀')" title="Ракета">🚀</button>
+    </div>
+    <div class="chat-context-divider"></div>
     <button type="button" class="chat-context-item" id="ctxBtnEdit" onclick="onContextEditMessage()">
         Редактировать
     </button>
@@ -465,6 +474,103 @@
             <button type="button" class="btn btn-secondary btn-block" onclick="closeDeleteMessageModal()" style="opacity: 0.75;">
                 <span>Отмена</span>
             </button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ==========================================
+     ПОЛНОЭКРАННЫЙ ПРОСМОТР ФОТО (LIGHTBOX)
+========================================== -->
+<div id="imageLightboxModal" class="image-lightbox-modal" style="display: none;" onclick="if(event.target===this)closeImageLightbox()">
+    <div class="lightbox-toolbar">
+        <div class="lightbox-title" id="lightboxTitle">Просмотр изображения</div>
+        <div class="lightbox-actions">
+            <button type="button" class="lightbox-btn" onclick="zoomLightboxImage(0.2)" title="Увеличить (+)">🔍+</button>
+            <button type="button" class="lightbox-btn" onclick="zoomLightboxImage(-0.2)" title="Уменьшить (-)">🔍−</button>
+            <button type="button" class="lightbox-btn" onclick="resetLightboxZoom()" title="Сбросить масштаб (1:1)">1:1</button>
+            <a id="lightboxDownloadBtn" href="#" download class="lightbox-btn" title="Скачать файл">📥 Скачать</a>
+            <button type="button" class="lightbox-btn lightbox-close" onclick="closeImageLightbox()" title="Закрыть (Esc)">✕</button>
+        </div>
+    </div>
+    <div class="lightbox-image-container" onclick="if(event.target===this)closeImageLightbox()">
+        <img id="lightboxTargetImage" src="" alt="Full view" class="lightbox-image">
+    </div>
+</div>
+
+
+<!-- ==========================================
+     МОДАЛЬНОЕ ОКНО НАСТРОЙКИ ЗВУКА СООБЩЕНИЙ
+========================================== -->
+<div id="chatSoundSettingsModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeChatSoundSettingsModal()">
+    <div class="modal-card" style="max-width: 480px; width: 95%; padding: 1.5rem;">
+        <button type="button" class="modal-close-btn" onclick="closeChatSoundSettingsModal()" title="Закрыть">✕</button>
+        <div class="modal-header" style="margin-bottom: 1.25rem; text-align: left;">
+            <div class="modal-header-badge" style="display: inline-block; font-size: 0.72rem; color: var(--accent-neon); background: rgba(0, 242, 254, 0.1); border: 1px solid rgba(0, 242, 254, 0.25); border-radius: 4px; padding: 2px 8px; margin-bottom: 6px; font-weight: 700;">КИБЕР-АУДИО</div>
+            <h3 style="font-size: 1.2rem; color: var(--text-pure); margin: 0;">Настройка звука сообщений</h3>
+            <p style="font-size: 0.82rem; color: var(--text-dim); margin-top: 0.35rem;">
+                Вы можете использовать стандартный кибер-сигнал или загрузить свой собственный звук.
+            </p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <!-- Включение / выключение звука -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle); border-radius: 10px;">
+                <div>
+                    <div style="font-size: 0.88rem; font-weight: 600; color: #fff;">Звук в чате</div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim);">Уведомления при отправке и получении</div>
+                </div>
+                <button type="button" class="btn btn-sm" id="btnSoundModalToggle" onclick="toggleChatSoundModal()" style="min-width: 90px;"></button>
+            </div>
+
+            <!-- Выбор источника звука -->
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-pure);">Источник звукового сигнала:</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button type="button" class="btn btn-secondary btn-sm sound-mode-btn" id="soundModeBtnDefault" onclick="setChatSoundMode('default')">
+                        ⚡ Стандартный
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm sound-mode-btn" id="soundModeBtnCustom" onclick="setChatSoundMode('custom')">
+                        🎵 Мой звук (файл)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Блок загрузки и обрезки своего звука -->
+            <div id="customSoundUploadCard" style="padding: 1rem; background: rgba(0, 242, 254, 0.04); border: 1px dashed rgba(0, 242, 254, 0.3); border-radius: 10px; display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 0.82rem; font-weight: 700; color: var(--accent-neon);">Кастомный аудиофайл</div>
+                    <span style="font-size: 0.7rem; color: var(--warm-amber); background: rgba(255, 180, 0, 0.1); border: 1px solid rgba(255, 180, 0, 0.3); padding: 2px 6px; border-radius: 4px; font-weight: 600;">Лимит: макс. 3 сек</span>
+                </div>
+
+                <div style="font-size: 0.78rem; color: var(--text-dim); line-height: 1.4;">
+                    Загрузите аудио (MP3, WAV, OGG, M4A). Если файл длится дольше 3 секунд, система автоматически оставит только первые 3 секунды.
+                </div>
+
+                <input type="file" id="customSoundFileInput" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac" style="display: none;" onchange="handleCustomSoundFileUpload(event)">
+
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('customSoundFileInput').click()">
+                        📁 Загрузить файл
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnTestCurrentSound" onclick="playCurrentChatSoundPreview()" title="Прослушать текущий звук">
+                        ▶️ Прослушать
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="resetCustomChatSound()" title="Сбросить на стандарт">
+                        ✕ Сбросить
+                    </button>
+                </div>
+
+                <div id="customSoundInfoText" style="font-size: 0.76rem; color: var(--text-dim); word-break: break-all; padding: 6px 10px; background: rgba(0,0,0,0.3); border-radius: 6px;">
+                    Файл не выбран
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeChatSoundSettingsModal()">
+                    ✕ Закрыть
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -1411,10 +1517,19 @@
                                     </div>
                                     <div class="chat-name-details">
                                         <div class="chat-user-display" id="chatInterlocutorName">...</div>
-                                        <div class="chat-user-handle" id="chatInterlocutorHandle">@...</div>
+                                        <div class="chat-name-sub">
+                                            <span class="chat-user-handle" id="chatInterlocutorHandle">@...</span>
+                                            <span class="chat-channel-badge"><span class="pulse-dot"></span> Квантовый канал</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="chat-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button type="button" class="btn btn-secondary btn-sm" id="btnToggleChatSound" onclick="openChatSoundSettingsModal()" title="Настройка звуков сообщений">
+                                        <span id="chatSoundIcon">🔊</span>
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="btnToggleChatSearch" onclick="toggleChatSearch()" title="Поиск в этом диалоге">
+                                        <span>🔍</span>
+                                    </button>
                                     <button type="button" class="btn btn-secondary btn-sm" id="btnToggleMsgSelect" onclick="toggleChatSelectionMode()" title="Выделить сообщения для групповых действий">
                                         <span>Выбрать</span>
                                     </button>
@@ -1422,6 +1537,15 @@
                                         <span>Профиль</span>
                                     </button>
                                 </div>
+                            </div>
+
+                            <!-- Инлайн-поиск по диалогу -->
+                            <div id="chatSearchInDialogBar" class="chat-search-in-dialog-bar" style="display: none;">
+                                <div class="chat-search-field-wrap">
+                                    <span class="search-icon">🔍</span>
+                                    <input type="text" id="chatSearchInDialogInput" placeholder="Поиск сообщений в переписке..." oninput="handleChatSearchInDialog(event)">
+                                </div>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="toggleChatSearch()" title="Закрыть поиск">✕</button>
                             </div>
 
                             <div class="chat-messages-container" id="chatMessagesContainer">
@@ -1464,6 +1588,8 @@
                                 </div>
                             </div>
 
+                            </div>
+
                             <form class="chat-input-bar" id="chatInputForm" onsubmit="handleSendMessage(event)">
                                 <button type="button" class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()" title="Прикрепить файл или фото с диска">📎</button>
                                 <input type="file" id="chatFileInput" style="display:none;" accept="image/*,.pdf,.doc,.docx,.txt,.zip" onchange="handleChatFileUpload(event)">
@@ -1490,7 +1616,7 @@
     window.CURRENT_SEARCH = "{{.SearchQuery}}";
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
-<script src="/static/js/app.js?v=cyber_fix_v23"></script>
+<script src="/static/js/app.js?v=cyber_chat_v2"></script>
 
 </body>
 </html>
