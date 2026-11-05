@@ -2173,10 +2173,13 @@ function renderUserProfile(data) {
         }
         actionsBox.innerHTML = `
             <button class="btn btn-primary btn-sm" onclick="openEditProfileModal()">
-                <span>Оформление профиля</span>
+                <span>🎨 Оформление профиля</span>
             </button>
             <button class="btn btn-secondary btn-sm" onclick="openEditProfileModal()">
-                <span>Редактировать</span>
+                <span>✏️ Редактировать</span>
+            </button>
+            <button class="btn btn-outline btn-sm btn-logout-action" onclick="handleLogout()" style="border-color: rgba(244, 63, 94, 0.45); color: #f43f5e;" title="Выйти из аккаунта">
+                <span>🚪 Выйти</span>
             </button>
         `;
     } else {

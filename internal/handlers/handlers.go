@@ -117,24 +117,15 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Fallback to Oleg (user 1) if not authenticated and no user_id param
+	// Если пользователь не авторизован — работаем в гостевом режиме (НЕ логиним принудительно!)
 	if currentUser == nil {
-		currentUser, _ = h.userRepo.GetByID(1, 1)
-		if currentUser != nil {
-			currentUserID = currentUser.ID
-			token, err := h.userRepo.CreateSession(currentUser.ID)
-			if err == nil {
-				http.SetCookie(w, &http.Cookie{
-					Name:     "session_token",
-					Value:    token,
-					Path:     "/",
-					Expires:  time.Now().Add(30 * 24 * time.Hour),
-					HttpOnly: true,
-					SameSite: http.SameSiteLaxMode,
-				})
-				isAuthenticated = true
-			}
+		currentUser = &models.User{
+			ID:          0,
+			Username:    "guest",
+			DisplayName: "Гость",
+			AvatarURL:   "/static/avatars/default.svg",
 		}
+		isAuthenticated = false
 	}
 
 	feedType := r.URL.Query().Get("feed_type")
