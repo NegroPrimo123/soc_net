@@ -58,6 +58,7 @@
                 <button type="button" class="btn btn-secondary btn-xs" onclick="quickLoginAs('oleg')" style="font-size: 0.72rem; padding: 3px 8px;">⚡ Олег</button>
                 <button type="button" class="btn btn-secondary btn-xs" onclick="quickLoginAs('alex')" style="font-size: 0.72rem; padding: 3px 8px;">🚀 Алексей</button>
                 <button type="button" class="btn btn-secondary btn-xs" onclick="quickLoginAs('sophia')" style="font-size: 0.72rem; padding: 3px 8px;">🌸 София</button>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="fillAndLogin('itakwa', '123123')" style="font-size: 0.72rem; padding: 3px 8px; border-color: #38bdf8; color: #7dd3fc;">❄️ Итаква (IDV)</button>
             </div>
         </div>
 
@@ -93,6 +94,10 @@
                     <button type="button" class="demo-pill" onclick="fillAndLogin('sophia', 'password123')">
                         <img src="/static/avatars/sophia.svg" alt="Sophia">
                         <span>София</span>
+                    </button>
+                    <button type="button" class="demo-pill ithaqua-demo-pill" onclick="fillAndLogin('itakwa', '123123')">
+                        <img src="/uploads/ithaqua_1fb3a18e3859fc2e3465550920a07806.jpg" alt="Итаква" style="border-radius: 50%; border: 1.5px solid #38bdf8;">
+                        <span>❄️ Итаква</span>
                     </button>
                 </div>
             </div>
@@ -636,6 +641,8 @@
                         <span class="choice-chip" onclick="setRankPreset('💾 Синтвейв Кодер')">💾 Синтвейв Кодер</span>
                         <span class="choice-chip" onclick="setRankPreset('🔥 Багхантер')">🔥 Багхантер</span>
                         <span class="choice-chip" onclick="setRankPreset('🛡️ Arasaka Solo')">🛡️ Arasaka Solo</span>
+                        <span class="choice-chip" onclick="setRankPreset('Ледяной Страж • Ночной Дозорный')">❄️ Ночной Дозорный</span>
+                        <span class="choice-chip" onclick="setRankPreset('Владыка Метели Особняка Олетис')">🌪️ Владыка Метели</span>
                     </div>
                 </div>
 
@@ -669,6 +676,8 @@
                         <span class="choice-chip" onclick="setStatusEmojiPreset('🤖')">🤖 Киборг</span>
                         <span class="choice-chip" onclick="setStatusEmojiPreset('❤️')">❤️ Влюблен</span>
                         <span class="choice-chip" onclick="setStatusEmojiPreset('💤')">💤 Сплю</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('❄️')">❄️ Метель</span>
+                        <span class="choice-chip" onclick="setStatusEmojiPreset('🌪️')">🌪️ Буран</span>
                     </div>
                 </div>
 
@@ -697,6 +706,10 @@
                         <span class="choice-chip" id="chipFrame-hex" onclick="setAvatarFrame('hex')">🛡️ Hex Cyber-Shield</span>
                         <span class="choice-chip" id="chipFrame-glitch" onclick="setAvatarFrame('glitch')">👾 Dual Glitch Holo</span>
                         <span class="choice-chip" id="chipFrame-gold" onclick="setAvatarFrame('gold')">👑 Relic Gold Aura</span>
+                        <span class="choice-chip" id="chipFrame-night-watch" onclick="setAvatarFrame('night-watch')" style="border-color: #38bdf8; color: #7dd3fc;">❄️ Венец Дозорного</span>
+                        <span class="choice-chip" id="chipFrame-blizzard-aura" onclick="setAvatarFrame('blizzard-aura')" style="border-color: #38bdf8; color: #7dd3fc;">🌪️ Вихрь Метели</span>
+                        <span class="choice-chip" id="chipFrame-ice-spikes" onclick="setAvatarFrame('ice-spikes')" style="border-color: #38bdf8; color: #7dd3fc;">⚔️ Острия Ходулей</span>
+                        <span class="choice-chip" id="chipFrame-gold-frost" onclick="setAvatarFrame('gold-frost')" style="border-color: #fbbf24; color: #fde047;">👑 Солнцеворот</span>
                     </div>
                 </div>
 
@@ -785,6 +798,9 @@
                         <div class="banner-preset-thumb" style="background-image: url('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&q=80');" title="Неоновая сетка Matrix" onclick="setBannerPreset('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&q=80')"></div>
                         <div class="banner-preset-thumb" style="background-image: url('https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80');" title="Микрочипы и квантовое ядро" onclick="setBannerPreset('https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80')"></div>
                         <div class="banner-preset-thumb" style="background-image: url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80');" title="Ретро Синтвейв 80s" onclick="setBannerPreset('https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&q=80')"></div>
+                        <div class="banner-preset-thumb" style="background-image: url('/uploads/ithaqua_6388aa602b3b6e36c0ccba4e32cd82dd.jpg');" title="Итаква • Без маски" onclick="setBannerPreset('/uploads/ithaqua_6388aa602b3b6e36c0ccba4e32cd82dd.jpg')"></div>
+                        <div class="banner-preset-thumb" style="background-image: url('/uploads/ithaqua_f292c2602f0f8c85327e7e458b25d116.jpg');" title="Итаква • Боевая стойка" onclick="setBannerPreset('/uploads/ithaqua_f292c2602f0f8c85327e7e458b25d116.jpg')"></div>
+                        <div class="banner-preset-thumb" style="background-image: url('/uploads/ithaqua_ff8cc7d545cedab20da705892775673c.jpg');" title="Итаква • Золотой венец" onclick="setBannerPreset('/uploads/ithaqua_ff8cc7d545cedab20da705892775673c.jpg')"></div>
                     </div>
                 </div>
 
@@ -809,6 +825,9 @@
                         <span class="choice-chip" id="chipEffect-scanlines" onclick="setProfileBgEffect('scanlines')">📺 CRT Scanlines</span>
                         <span class="choice-chip" id="chipEffect-hex_grid" onclick="setProfileBgEffect('hex_grid')">🕸️ Hex VR Grid</span>
                         <span class="choice-chip" id="chipEffect-cyber_dots" onclick="setProfileBgEffect('cyber_dots')">✨ Cyber Matrix Dots</span>
+                        <span class="choice-chip" id="chipEffect-arctic-blizzard" onclick="setProfileBgEffect('arctic-blizzard')" style="border-color: #38bdf8; color: #7dd3fc;">❄️ Буран Особняка</span>
+                        <span class="choice-chip" id="chipEffect-frozen-fog" onclick="setProfileBgEffect('frozen-fog')" style="border-color: #38bdf8; color: #7dd3fc;">🌫️ Морозная мгла</span>
+                        <span class="choice-chip" id="chipEffect-aurora-borealis" onclick="setProfileBgEffect('aurora-borealis')" style="border-color: #38bdf8; color: #7dd3fc;">🌌 Полярное сияние</span>
                     </div>
                     <input type="hidden" id="editProfileBgEffect" value="none">
                 </div>
@@ -1345,6 +1364,9 @@
                         <button class="tab-btn" id="profTabBtnNetwork" onclick="switchProfileTab('network')">
                             <span>Сеть контактов</span>
                         </button>
+                        <button class="tab-btn" id="profTabBtnIdentityV" onclick="switchProfileTab('identityv')" style="display: none; border-color: rgba(56, 189, 248, 0.4); color: #7dd3fc;">
+                            <span>❄️ Досье Охотника (Identity V)</span>
+                        </button>
                     </div>
 
                     <!-- Контент вкладок профиля -->
@@ -1441,6 +1463,13 @@
                                     </div>
                                     <div class="network-runners-list" id="profFollowingList"></div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Эксклюзивная вкладка: Досье Охотника Identity V (Итаква) -->
+                        <div id="profTabContentIdentityV" class="tab-pane" style="display: none;">
+                            <div id="idvDossierContainer">
+                                <!-- Рендерится через renderIthaquaDossier() в app.js -->
                             </div>
                         </div>
                     </div>
