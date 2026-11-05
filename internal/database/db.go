@@ -307,6 +307,19 @@ func seed(db *sql.DB) error {
 				'{"web":"https://idv.163.com","discord":"Ithaqua#0001"}', 1
 			) ON CONFLICT DO NOTHING
 		`, string(itakHash))
+	} else {
+		// Автоматическая защита: восстанавливаем каноничный облик Итаквы при повреждении
+		_, _ = db.Exec(`
+			UPDATE users SET
+				display_name = 'Итаква • Night Watch',
+				avatar_url = CASE WHEN avatar_url LIKE '%oleg%' OR avatar_url = '' OR avatar_url LIKE '%default%' THEN '/uploads/ithaqua_1fb3a18e3859fc2e3465550920a07806.jpg' ELSE avatar_url END,
+				banner_url = CASE WHEN banner_url = '' THEN '/uploads/ithaqua_6388aa602b3b6e36c0ccba4e32cd82dd.jpg' ELSE banner_url END,
+				custom_rank = CASE WHEN custom_rank = '' OR custom_rank LIKE '%Элитный%' THEN 'Ледяной Страж • Ночной Дозорный (Identity V)' ELSE custom_rank END,
+				avatar_frame = CASE WHEN avatar_frame = '' OR avatar_frame = 'default' THEN 'night-watch' ELSE avatar_frame END,
+				profile_bg_effect = CASE WHEN profile_bg_effect = '' OR profile_bg_effect = 'none' THEN 'arctic-blizzard' ELSE profile_bg_effect END,
+				bio = CASE WHEN bio = '' THEN 'Ночной Дозорный (Night Watch) • Охотник Поместья Олетис (Identity V). Владыка ледяных ветров и безжалостных метелей. Тот, кто бесшумно шагает сквозь свирепую зимнюю бурю на острых ходулях, ведомый плачем замерзшей матери. «Тише... слышишь, как завывает северный ветер?»' ELSE bio END
+			WHERE LOWER(username) = 'itakwa' AND (display_name LIKE '%Олег%' OR display_name = 'itakwa' OR custom_rank = '')
+		`)
 	}
 
 	if count > 0 {
