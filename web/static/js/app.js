@@ -801,6 +801,7 @@ let activeContextMsgId = null;
 let activeContextIsOut = false;
 
 function initChatContextMenu() {
+    updateChatSoundIcon();
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
 
@@ -851,6 +852,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeChatContextMenu();
+        closeImageLightbox();
     }
 });
 
@@ -3940,6 +3942,259 @@ function openInterlocutorProfile() {
     }
 }
 
+// ==========================================
+// CYBER CHAT ENHANCEMENTS: REFRESH, REACTIONS, LIGHTBOX & AUDIO FX
+// ==========================================
+let lastRenderedChatDate = null;
+let currentLightboxZoom = 1.0;
+let isChatSoundEnabled = localStorage.getItem('cyber_chat_sound') !== '0';
+
+function updateChatSoundIcon() {
+    const icon = document.getElementById('chatSoundIcon');
+    if (icon) {
+        icon.textContent = isChatSoundEnabled ? '🔊' : '🔇';
+    }
+}
+
+function toggleChatSound() {
+    isChatSoundEnabled = !isChatSoundEnabled;
+    localStorage.setItem('cyber_chat_sound', isChatSoundEnabled ? '1' : '0');
+    updateChatSoundIcon();
+    showToast(isChatSoundEnabled ? 'Кибер-звуки чата: Включены 🔊' : 'Кибер-звуки чата: Выключены 🔇', 'info');
+    if (isChatSoundEnabled) {
+        playChatSoundFx('reaction');
+    }
+}
+
+function playChatSoundFx(type) {
+    if (!isChatSoundEnabled) return;
+    try {
+        const ctx = window.audioCtx || (window.AudioContext ? new AudioContext() : null);
+        if (!ctx) return;
+
+        if (type === 'send') {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(520, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+            gain.gain.setValueAtTime(0.08, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.12);
+        } else if (type === 'receive') {
+            const osc1 = ctx.createOscillator();
+            const osc2 = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc1.type = 'triangle';
+            osc2.type = 'sine';
+            osc1.frequency.setValueAtTime(660, ctx.currentTime);
+            osc2.frequency.setValueAtTime(990, ctx.currentTime + 0.06);
+            gain.gain.setValueAtTime(0.09, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(ctx.destination);
+            osc1.start();
+            osc2.start(ctx.currentTime + 0.06);
+            osc1.stop(ctx.currentTime + 0.06);
+            osc2.stop(ctx.currentTime + 0.16);
+        } else if (type === 'reaction') {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(750, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.08, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.08);
+        }
+    } catch (e) {}
+}
+
+function formatDateSeparator(dateStr) {
+    if (!dateStr) return 'Сегодня';
+    const d = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (d.toDateString() === today.toDateString()) {
+        return 'Сегодня';
+    } else if (d.toDateString() === yesterday.toDateString()) {
+        return 'Вчера';
+    } else {
+        return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+}
+
+// In-app Lightbox Photo Viewer
+function openImageLightbox(src, title) {
+    const modal = document.getElementById('imageLightboxModal');
+    const img = document.getElementById('lightboxTargetImage');
+    const titleEl = document.getElementById('lightboxTitle');
+    const dlBtn = document.getElementById('lightboxDownloadBtn');
+    if (!modal || !img) return;
+
+    currentLightboxZoom = 1.0;
+    img.src = src;
+    img.style.transform = 'scale(1.0)';
+    if (titleEl) titleEl.textContent = title || 'Просмотр изображения';
+    if (dlBtn) dlBtn.href = src;
+    modal.style.display = 'flex';
+}
+
+function closeImageLightbox() {
+    const modal = document.getElementById('imageLightboxModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function zoomLightboxImage(delta) {
+    const img = document.getElementById('lightboxTargetImage');
+    if (!img) return;
+    currentLightboxZoom = Math.min(3.5, Math.max(0.4, currentLightboxZoom + delta));
+    img.style.transform = `scale(${currentLightboxZoom})`;
+}
+
+function resetLightboxZoom() {
+    const img = document.getElementById('lightboxTargetImage');
+    if (!img) return;
+    currentLightboxZoom = 1.0;
+    img.style.transform = 'scale(1.0)';
+}
+
+// Quick reply chips
+function insertQuickReply(text) {
+    const input = document.getElementById('chatMessageInput');
+    if (!input) return;
+    input.value = text;
+    input.focus();
+    handleSendMessage();
+}
+
+// Search inside open dialog
+function toggleChatSearch() {
+    const bar = document.getElementById('chatSearchInDialogBar');
+    const input = document.getElementById('chatSearchInDialogInput');
+    if (!bar) return;
+    if (bar.style.display === 'none' || !bar.style.display) {
+        bar.style.display = 'flex';
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+    } else {
+        bar.style.display = 'none';
+        if (input) input.value = '';
+        clearChatSearchHighlight();
+    }
+}
+
+function handleChatSearchInDialog(e) {
+    const q = (e.target.value || '').trim().toLowerCase();
+    const rows = document.querySelectorAll('.chat-bubble-row');
+    if (!q) {
+        clearChatSearchHighlight();
+        return;
+    }
+    let firstFound = null;
+    rows.forEach(row => {
+        const contentEl = row.querySelector('.chat-bubble-content');
+        if (!contentEl) return;
+        let origText = row.getAttribute('data-orig-text');
+        if (!origText) {
+            origText = contentEl.innerText;
+            row.setAttribute('data-orig-text', origText);
+        }
+        if (origText.toLowerCase().includes(q)) {
+            row.style.opacity = '1';
+            row.style.display = 'flex';
+            const escQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escQ})`, 'gi');
+            contentEl.innerHTML = escapeHtml(origText).replace(regex, '<span class="chat-highlight-match">$1</span>');
+            if (!firstFound) firstFound = row;
+        } else {
+            row.style.opacity = '0.3';
+        }
+    });
+    if (firstFound) {
+        firstFound.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+function clearChatSearchHighlight() {
+    const rows = document.querySelectorAll('.chat-bubble-row');
+    rows.forEach(row => {
+        row.style.opacity = '1';
+        row.style.display = 'flex';
+        const origText = row.getAttribute('data-orig-text');
+        if (origText) {
+            const contentEl = row.querySelector('.chat-bubble-content');
+            if (contentEl) contentEl.textContent = origText;
+            row.removeAttribute('data-orig-text');
+        }
+    });
+}
+
+// Reactions functions
+async function toggleMessageReaction(messageId, emoji) {
+    if (!messageId || !emoji) return;
+    playChatSoundFx('reaction');
+
+    try {
+        const res = await fetch(`/api/messages/${messageId}/reactions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emoji: emoji })
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || 'Ошибка установки реакции');
+        }
+        const data = await res.json();
+        if (data.reactions) {
+            renderMessageReactions(messageId, data.reactions);
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function renderMessageReactions(messageId, reactions) {
+    const container = document.getElementById(`chat-reactions-${messageId}`);
+    if (!container) return;
+
+    if (!reactions || reactions.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = reactions.map(r => {
+        const activeClass = r.user_reacted ? ' active' : '';
+        const userList = (r.users && r.users.length > 0) ? r.users.join(', ') : '';
+        return `
+            <div class="chat-reaction-pill${activeClass}" 
+                 onclick="toggleMessageReaction(${messageId}, '${escapeHtml(r.emoji)}')" 
+                 title="${escapeHtml(userList)}">
+                <span>${escapeHtml(r.emoji)}</span>
+                <span class="chat-reaction-count">${r.count}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function onContextReaction(emoji) {
+    if (activeContextMsgId) {
+        toggleMessageReaction(activeContextMsgId, emoji);
+        closeChatContextMenu();
+    }
+}
+
 async function loadChatMessages(userId) {
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
@@ -3951,6 +4206,7 @@ async function loadChatMessages(userId) {
         const messages = await res.json();
 
         container.innerHTML = '';
+        lastRenderedChatDate = null;
         if (!messages || messages.length === 0) {
             container.innerHTML = `
                 <div class="chat-empty-hint">
@@ -4194,6 +4450,18 @@ function appendChatMessageElement(m) {
     const hint = container.querySelector('.chat-empty-hint');
     if (hint) hint.remove();
 
+    // Разделитель дат в истории чата
+    if (m.created_at) {
+        const msgDate = new Date(m.created_at).toDateString();
+        if (msgDate !== lastRenderedChatDate) {
+            lastRenderedChatDate = msgDate;
+            const dateSep = document.createElement('div');
+            dateSep.className = 'chat-date-separator';
+            dateSep.innerHTML = `<span class="chat-date-badge">${formatDateSeparator(m.created_at)}</span>`;
+            container.appendChild(dateSep);
+        }
+    }
+
     const isOut = (m.sender_id === window.CURRENT_USER_ID);
     const row = document.createElement('div');
     row.id = `chat-msg-${m.id}`;
@@ -4210,8 +4478,8 @@ function appendChatMessageElement(m) {
     let contentHtml = '';
 
     if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
-        // Отображаем ТОЛЬКО изображение без дублирования текстовой ссылки
-        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" style="max-width: 260px; max-height: 280px; object-fit: cover; border-radius: 12px; cursor: pointer; display: block;" onclick="window.open('${escapeHtml(trimmed)}', '_blank')"></div>`;
+        // Отображаем изображение с открытием в полноэкранном лайтбоксе без перехода по ссылкам
+        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" style="max-width: 280px; max-height: 300px; object-fit: cover; border-radius: 12px; cursor: pointer; display: block;" onclick="openImageLightbox('${escapeHtml(trimmed)}', 'Фото в переписке')"></div>`;
     } else if (isUploadedPath) {
         // Документ или другой прикрепленный файл
         const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
@@ -4226,10 +4494,22 @@ function appendChatMessageElement(m) {
         </div>
     `;
 
-    if (isOut) {
-        row.innerHTML = `
-            ${selectCol}
-            <div class="chat-bubble out">
+    const hoverReactions = `
+        <div class="chat-hover-reactions-trigger">
+            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '❤️')" title="Любовь">❤️</button>
+            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '👍')" title="Класс">👍</button>
+            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '🔥')" title="Огонь">🔥</button>
+            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '⚡')" title="Молния">⚡</button>
+            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '🤖')" title="Кибер">🤖</button>
+            <button type="button" class="hover-react-btn" onclick="toggleMessageReaction(${m.id}, '🚀')" title="Ракета">🚀</button>
+        </div>
+    `;
+
+    row.innerHTML = `
+        ${selectCol}
+        <div class="chat-bubble-wrapper">
+            ${hoverReactions}
+            <div class="chat-bubble ${isOut ? 'out' : 'in'}">
                 <div class="chat-bubble-content">${contentHtml}</div>
                 <div class="chat-bubble-footer">
                     ${editedBadge}
@@ -4237,21 +4517,14 @@ function appendChatMessageElement(m) {
                     ${statusCheck}
                 </div>
             </div>
-        `;
-    } else {
-        row.innerHTML = `
-            ${selectCol}
-            <div class="chat-bubble in">
-                <div class="chat-bubble-content">${contentHtml}</div>
-                <div class="chat-bubble-footer">
-                    ${editedBadge}
-                    <span class="chat-bubble-time">${formatTime(m.created_at)}</span>
-                </div>
-            </div>
-        `;
-    }
+            <div class="chat-reactions-row" id="chat-reactions-${m.id}"></div>
+        </div>
+    `;
 
     container.appendChild(row);
+    if (m.reactions && m.reactions.length > 0) {
+        renderMessageReactions(m.id, m.reactions);
+    }
 }
 
 function scrollChatToBottom() {
@@ -4343,7 +4616,7 @@ async function handleSendMessage(e) {
         input.value = '';
         clearChatFile();
 
-        playAudioChime(600, 800, 0.08);
+        playChatSoundFx('send');
 
         // Добавляем сообщение в интерфейс отправителя сразу
         appendChatMessageElement(msg);
@@ -4417,7 +4690,7 @@ function handleIncomingSSEMessage(msg) {
             fetch(`/api/messages/${activeChatUserId}`).catch(() => {});
         }
     } else {
-        playAudioChime(450, 750, 0.12);
+        playChatSoundFx('receive');
         const senderName = msg.sender ? msg.sender.display_name : 'Пользователь';
         showToast(`Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
     }
@@ -4570,7 +4843,15 @@ function handleSSEEvent(event) {
             }
             break;
 
-        case 'new_message': {
+                case 'message_reaction': {
+            const data = event.payload || event;
+            if (data && data.message_id) {
+                renderMessageReactions(data.message_id, data.reactions || []);
+            }
+            break;
+        }
+
+case 'new_message': {
             const msg = event.payload || event.message;
             if (msg) handleIncomingSSEMessage(msg);
             break;

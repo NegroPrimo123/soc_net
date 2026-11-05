@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoSocial — Киберпанк Социальная Сеть</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=cyber_fix_v23">
+    <link rel="stylesheet" href="/static/css/style.css?v=cyber_chat_refresh_v1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -431,6 +431,15 @@
 
 <!-- Контекстное меню личных сообщений (по правому клику мыши) -->
 <div id="chatContextMenu" class="chat-context-menu" style="display: none;">
+    <div class="chat-context-reactions">
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('❤️')" title="Любовь">❤️</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('👍')" title="Класс">👍</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('🔥')" title="Огонь">🔥</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('⚡')" title="Молния">⚡</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('🤖')" title="Кибер">🤖</button>
+        <button type="button" class="ctx-reaction-btn" onclick="onContextReaction('🚀')" title="Ракета">🚀</button>
+    </div>
+    <div class="chat-context-divider"></div>
     <button type="button" class="chat-context-item" id="ctxBtnEdit" onclick="onContextEditMessage()">
         Редактировать
     </button>
@@ -466,6 +475,26 @@
                 <span>Отмена</span>
             </button>
         </div>
+    </div>
+</div>
+
+
+<!-- ==========================================
+     ПОЛНОЭКРАННЫЙ ПРОСМОТР ФОТО (LIGHTBOX)
+========================================== -->
+<div id="imageLightboxModal" class="image-lightbox-modal" style="display: none;" onclick="if(event.target===this)closeImageLightbox()">
+    <div class="lightbox-toolbar">
+        <div class="lightbox-title" id="lightboxTitle">Просмотр изображения</div>
+        <div class="lightbox-actions">
+            <button type="button" class="lightbox-btn" onclick="zoomLightboxImage(0.2)" title="Увеличить (+)">🔍+</button>
+            <button type="button" class="lightbox-btn" onclick="zoomLightboxImage(-0.2)" title="Уменьшить (-)">🔍−</button>
+            <button type="button" class="lightbox-btn" onclick="resetLightboxZoom()" title="Сбросить масштаб (1:1)">1:1</button>
+            <a id="lightboxDownloadBtn" href="#" download class="lightbox-btn" title="Скачать файл">📥 Скачать</a>
+            <button type="button" class="lightbox-btn lightbox-close" onclick="closeImageLightbox()" title="Закрыть (Esc)">✕</button>
+        </div>
+    </div>
+    <div class="lightbox-image-container" onclick="if(event.target===this)closeImageLightbox()">
+        <img id="lightboxTargetImage" src="" alt="Full view" class="lightbox-image">
     </div>
 </div>
 
@@ -1411,10 +1440,19 @@
                                     </div>
                                     <div class="chat-name-details">
                                         <div class="chat-user-display" id="chatInterlocutorName">...</div>
-                                        <div class="chat-user-handle" id="chatInterlocutorHandle">@...</div>
+                                        <div class="chat-name-sub">
+                                            <span class="chat-user-handle" id="chatInterlocutorHandle">@...</span>
+                                            <span class="chat-channel-badge"><span class="pulse-dot"></span> Квантовый канал</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="chat-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button type="button" class="btn btn-secondary btn-sm" id="btnToggleChatSound" onclick="toggleChatSound()" title="Включить/выключить кибер-звуки чата">
+                                        <span id="chatSoundIcon">🔊</span>
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="btnToggleChatSearch" onclick="toggleChatSearch()" title="Поиск в этом диалоге">
+                                        <span>🔍</span>
+                                    </button>
                                     <button type="button" class="btn btn-secondary btn-sm" id="btnToggleMsgSelect" onclick="toggleChatSelectionMode()" title="Выделить сообщения для групповых действий">
                                         <span>Выбрать</span>
                                     </button>
@@ -1422,6 +1460,15 @@
                                         <span>Профиль</span>
                                     </button>
                                 </div>
+                            </div>
+
+                            <!-- Инлайн-поиск по диалогу -->
+                            <div id="chatSearchInDialogBar" class="chat-search-in-dialog-bar" style="display: none;">
+                                <div class="chat-search-field-wrap">
+                                    <span class="search-icon">🔍</span>
+                                    <input type="text" id="chatSearchInDialogInput" placeholder="Поиск сообщений в переписке..." oninput="handleChatSearchInDialog(event)">
+                                </div>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="toggleChatSearch()" title="Закрыть поиск">✕</button>
                             </div>
 
                             <div class="chat-messages-container" id="chatMessagesContainer">
@@ -1464,6 +1511,16 @@
                                 </div>
                             </div>
 
+                            <!-- Быстрые кибер-ответы (chips) -->
+                            <div class="chat-quick-chips-bar" id="chatQuickChipsBar">
+                                <div class="quick-chip" onclick="insertQuickReply('👋 Привет!')">👋 Привет!</div>
+                                <div class="quick-chip" onclick="insertQuickReply('⚡ На связи')">⚡ На связи</div>
+                                <div class="quick-chip" onclick="insertQuickReply('🤝 Принято!')">🤝 Принято!</div>
+                                <div class="quick-chip" onclick="insertQuickReply('🚀 В работе')">🚀 В работе</div>
+                                <div class="quick-chip" onclick="insertQuickReply('🔥 Огонь!')">🔥 Огонь!</div>
+                                <div class="quick-chip" onclick="insertQuickReply('🦾 Кибер-респект')">🦾 Кибер-респект</div>
+                            </div>
+
                             <form class="chat-input-bar" id="chatInputForm" onsubmit="handleSendMessage(event)">
                                 <button type="button" class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()" title="Прикрепить файл или фото с диска">📎</button>
                                 <input type="file" id="chatFileInput" style="display:none;" accept="image/*,.pdf,.doc,.docx,.txt,.zip" onchange="handleChatFileUpload(event)">
@@ -1490,7 +1547,7 @@
     window.CURRENT_SEARCH = "{{.SearchQuery}}";
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
-<script src="/static/js/app.js?v=cyber_fix_v23"></script>
+<script src="/static/js/app.js?v=cyber_chat_refresh_v1"></script>
 
 </body>
 </html>

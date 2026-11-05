@@ -162,6 +162,17 @@ func migrate(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, receiver_id, created_at ASC);
 	CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
 
+	-- Реакции на личные сообщения (Message Reactions)
+	CREATE TABLE IF NOT EXISTS message_reactions (
+		id SERIAL PRIMARY KEY,
+		message_id INT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		emoji VARCHAR(32) NOT NULL,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		UNIQUE(message_id, user_id, emoji)
+	);
+	CREATE INDEX IF NOT EXISTS idx_message_reactions_msg_id ON message_reactions(message_id);
+
 	-- Таблица системы уведомлений с поддержкой группировки событий
 	CREATE TABLE IF NOT EXISTS notifications (
 		id SERIAL PRIMARY KEY,
