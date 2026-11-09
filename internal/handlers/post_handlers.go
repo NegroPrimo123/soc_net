@@ -199,8 +199,11 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Content = strings.TrimSpace(req.Content)
-	if req.Content == "" && (req.ImageURL == nil || strings.TrimSpace(*req.ImageURL) == "") {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "текст или фото не могут быть пустыми"})
+	hasContent := req.Content != ""
+	hasImage := req.ImageURL != nil && strings.TrimSpace(*req.ImageURL) != ""
+	hasMusic := req.MusicURL != nil && strings.TrimSpace(*req.MusicURL) != ""
+	if !hasContent && !hasImage && !hasMusic {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "публикация не может быть полностью пустой"})
 		return
 	}
 

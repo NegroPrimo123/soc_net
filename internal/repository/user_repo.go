@@ -403,10 +403,10 @@ func (r *UserRepository) DeleteSession(token string) error {
 
 func (r *UserRepository) GetUserMusic(userID int) ([]models.UserMusic, error) {
 	query := `
-	SELECT id, user_id, url, title, COALESCE(artist, ''), created_at
+	SELECT id, user_id, url, title, COALESCE(artist, ''), COALESCE(position, 0), created_at
 	FROM user_music
 	WHERE user_id = $1
-	ORDER BY id DESC
+	ORDER BY position ASC, id DESC
 	`
 	rows, err := r.db.Query(query, userID)
 	if err != nil {
@@ -417,7 +417,7 @@ func (r *UserRepository) GetUserMusic(userID int) ([]models.UserMusic, error) {
 	var tracks []models.UserMusic
 	for rows.Next() {
 		var m models.UserMusic
-		if err := rows.Scan(&m.ID, &m.UserID, &m.URL, &m.Title, &m.Artist, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.UserID, &m.URL, &m.Title, &m.Artist, &m.Position, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		tracks = append(tracks, m)
@@ -429,20 +429,23 @@ func (r *UserRepository) GetUserMusic(userID int) ([]models.UserMusic, error) {
 }
 
 func (r *UserRepository) AddUserMusic(userID int, url, title, artist string) (*models.UserMusic, error) {
+	// Сдвигаем текущие позиции существующих треков
+	_, _ = r.db.Exec("UPDATE user_music SET position = position + 1 WHERE user_id = $1", userID)
+
 	query := `
-	INSERT INTO user_music (user_id, url, title, artist)
-	VALUES ($1, $2, $3, $4)
-	RETURNING id, user_id, url, title, artist, created_at
+	INSERT INTO user_music (user_id, url, title, artist, position)
+	VALUES ($1, $2, $3, $4, 0)
+	RETURNING id, user_id, url, title, artist, position, created_at
 	`
 	var m models.UserMusic
 	err := r.db.QueryRow(query, userID, url, title, artist).Scan(
-		&m.ID, &m.UserID, &m.URL, &m.Title, &m.Artist, &m.CreatedAt,
+		&m.ID, &m.UserID, &m.URL, &m.Title, &m.Artist, &m.Position, &m.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("add user music: %w", err)
 	}
 
-	// Обновляем users: последний добавленный трек становится лицевым (отображается в профиле)
+	// Новый трек на позиции 0 становится лицевым
 	_, _ = r.db.Exec(`
 	UPDATE users SET music_url = $1, music_title = $2, music_artist = $3
 	WHERE id = $4
@@ -451,19 +454,57 @@ func (r *UserRepository) AddUserMusic(userID int, url, title, artist string) (*m
 	return &m, nil
 }
 
+func (r *UserRepository) ReorderUserMusic(userID int, trackIDs []int) ([]models.UserMusic, error) {
+	if len(trackIDs) == 0 {
+		return r.GetUserMusic(userID)
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	for pos, id := range trackIDs {
+		_, err := tx.Exec("UPDATE user_music SET position = $1 WHERE id = $2 AND user_id = $3", pos, id, userID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Первый трек (trackIDs[0]) теперь лицевой трек профиля
+	var frontURL, frontTitle, frontArtist string
+	err = tx.QueryRow(`
+		SELECT url, title, COALESCE(artist, '')
+		FROM user_music
+		WHERE id = $1 AND user_id = $2
+	`, trackIDs[0], userID).Scan(&frontURL, &frontTitle, &frontArtist)
+	if err == nil {
+		_, _ = tx.Exec(`
+			UPDATE users SET music_url = $1, music_title = $2, music_artist = $3 WHERE id = $4
+		`, frontURL, frontTitle, frontArtist, userID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return r.GetUserMusic(userID)
+}
+
 func (r *UserRepository) DeleteUserMusic(musicID, userID int) error {
 	_, err := r.db.Exec("DELETE FROM user_music WHERE id = $1 AND user_id = $2", musicID, userID)
 	if err != nil {
 		return fmt.Errorf("delete user music: %w", err)
 	}
 
-	// Находим самый последний оставшийся трек и обновляем users
+	// Обновляем лицевой трек на верхний оставшийся (position ASC, id DESC)
 	var latest models.UserMusic
 	err = r.db.QueryRow(`
 	SELECT url, title, COALESCE(artist, '')
 	FROM user_music
 	WHERE user_id = $1
-	ORDER BY id DESC
+	ORDER BY position ASC, id DESC
 	LIMIT 1
 	`, userID).Scan(&latest.URL, &latest.Title, &latest.Artist)
 

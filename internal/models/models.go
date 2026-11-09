@@ -340,7 +340,12 @@ type UserMusic struct {
 	URL       string    `json:"url"`
 	Title     string    `json:"title"`
 	Artist    string    `json:"artist"`
+	Position  int       `json:"position"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type ReorderUserMusicRequest struct {
+	TrackIDs []int `json:"track_ids"`
 }
 
 type AddUserMusicRequest struct {

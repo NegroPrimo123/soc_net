@@ -368,3 +368,28 @@ func (h *Handler) DeleteUserMusic(w http.ResponseWriter, r *http.Request) {
 		"playlist": tracks,
 	})
 }
+
+func (h *Handler) ReorderUserMusic(w http.ResponseWriter, r *http.Request) {
+	authUser := h.getUserFromRequest(r)
+	if authUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "не авторизован"})
+		return
+	}
+
+	var req models.ReorderUserMusicRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "неверный payload"})
+		return
+	}
+
+	tracks, err := h.userRepo.ReorderUserMusic(authUser.ID, req.TrackIDs)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"playlist": tracks,
+	})
+}

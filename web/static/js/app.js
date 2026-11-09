@@ -484,6 +484,7 @@ function openEditPostModal(postId, clickedBtn) {
         return;
     }
     closeAllPostDropdowns();
+    closeAllMusicMenus();
 
     let postEl = null;
     if (clickedBtn && clickedBtn.closest) {
@@ -530,6 +531,38 @@ function openEditPostModal(postId, clickedBtn) {
         if (photoImg) photoImg.src = '';
         if (previewWrap) previewWrap.style.display = 'none';
         if (btnLabel) btnLabel.textContent = 'Прикрепить фото';
+    }
+
+    // Заполняем секцию прикрепленного аудиофайла
+    const mUrlInput = document.getElementById('editPostMusicUrl');
+    const mTitleInput = document.getElementById('editPostMusicTitle');
+    const mArtistInput = document.getElementById('editPostMusicArtist');
+    const mTitlePreview = document.getElementById('editPostMusicTitlePreview');
+    const mArtistPreview = document.getElementById('editPostMusicArtistPreview');
+    const mPreviewCard = document.getElementById('editPostMusicPreviewCard');
+    const mAddBox = document.getElementById('editPostMusicAddBtnBox');
+
+    const musicCard = postEl.querySelector('.post-music-card');
+    if (musicCard) {
+        const mUrl = musicCard.getAttribute('data-music-url') || '';
+        const mTitle = musicCard.getAttribute('data-music-title') || 'Аудиозапись';
+        const mArtist = musicCard.getAttribute('data-music-artist') || '';
+
+        if (mUrlInput) mUrlInput.value = mUrl;
+        if (mTitleInput) mTitleInput.value = mTitle;
+        if (mArtistInput) mArtistInput.value = mArtist;
+
+        if (mTitlePreview) mTitlePreview.textContent = mTitle;
+        if (mArtistPreview) mArtistPreview.textContent = mArtist;
+        if (mPreviewCard) mPreviewCard.style.display = 'flex';
+        if (mAddBox) mAddBox.style.display = 'none';
+    } else {
+        if (mUrlInput) mUrlInput.value = '';
+        if (mTitleInput) mTitleInput.value = '';
+        if (mArtistInput) mArtistInput.value = '';
+
+        if (mPreviewCard) mPreviewCard.style.display = 'none';
+        if (mAddBox) mAddBox.style.display = 'block';
     }
 
     if (modal) modal.style.display = 'flex';
@@ -596,18 +629,128 @@ async function handleEditPostPhotoUpload(e) {
     }
 }
 
+
+// Управление аудиозаписью при редактировании поста
+async function handleEditPostAudioUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудио для публикации... 🎵', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) throw new Error('Ошибка при загрузке аудиофайла');
+        const data = await res.json();
+
+        const cleanTitle = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        const artist = window.CURRENT_USER_DISPLAY_NAME || 'Автор';
+
+        const mUrlInput = document.getElementById('editPostMusicUrl');
+        const mTitleInput = document.getElementById('editPostMusicTitle');
+        const mArtistInput = document.getElementById('editPostMusicArtist');
+        const mTitlePreview = document.getElementById('editPostMusicTitlePreview');
+        const mArtistPreview = document.getElementById('editPostMusicArtistPreview');
+        const mPreviewCard = document.getElementById('editPostMusicPreviewCard');
+        const mAddBox = document.getElementById('editPostMusicAddBtnBox');
+
+        if (mUrlInput) mUrlInput.value = data.url;
+        if (mTitleInput) mTitleInput.value = cleanTitle || 'Аудиозапись';
+        if (mArtistInput) mArtistInput.value = artist;
+
+        if (mTitlePreview) mTitlePreview.textContent = cleanTitle || 'Аудиозапись';
+        if (mArtistPreview) mArtistPreview.textContent = artist;
+        if (mPreviewCard) mPreviewCard.style.display = 'flex';
+        if (mAddBox) mAddBox.style.display = 'none';
+
+        showToast('Новый аудиофайл прикреплен! Нажмите «Сохранить изменения» 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function removeEditPostAudio() {
+    const mUrlInput = document.getElementById('editPostMusicUrl');
+    const mTitleInput = document.getElementById('editPostMusicTitle');
+    const mArtistInput = document.getElementById('editPostMusicArtist');
+    const mPreviewCard = document.getElementById('editPostMusicPreviewCard');
+    const mAddBox = document.getElementById('editPostMusicAddBtnBox');
+
+    if (mUrlInput) mUrlInput.value = '';
+    if (mTitleInput) mTitleInput.value = '';
+    if (mArtistInput) mArtistInput.value = '';
+
+    if (mPreviewCard) mPreviewCard.style.display = 'none';
+    if (mAddBox) mAddBox.style.display = 'block';
+
+    showToast('Аудиофайл откреплен от публикации. Нажмите «Сохранить изменения»', 'info');
+}
+
+async function quickRemovePostMusic(postId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    closeAllMusicMenus();
+
+    if (!confirm('Удалить аудиозапись из этой публикации?')) return;
+
+    try {
+        const card = document.querySelector(`[id="post-${postId}"]`);
+        const contentEl = card ? card.querySelector('.post-content') : null;
+        const content = contentEl ? contentEl.innerText.trim() : '';
+        const imgEl = card ? card.querySelector('.post-media img') : null;
+        const imageUrl = imgEl ? (imgEl.getAttribute('src') || '') : '';
+
+        const res = await fetch(`/api/posts/${postId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: content,
+                image_url: imageUrl,
+                music_url: '',
+                music_title: '',
+                music_artist: ''
+            })
+        });
+
+        if (!res.ok) throw new Error('Ошибка при удалении аудиозаписи');
+        
+        document.querySelectorAll(`[id="post-${postId}"]`).forEach(postCard => {
+            const m = postCard.querySelector('.post-music-card');
+            if (m) m.remove();
+        });
+
+        showToast('Аудиозапись удалена из публикации', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
 async function saveEditedPostModal() {
     const idInput = document.getElementById('editPostId');
     const contentInput = document.getElementById('editPostContentInput');
     const imgUrlInput = document.getElementById('editPostImageUrl');
+    const musicUrlInput = document.getElementById('editPostMusicUrl');
+    const musicTitleInput = document.getElementById('editPostMusicTitle');
+    const musicArtistInput = document.getElementById('editPostMusicArtist');
     const saveBtn = document.getElementById('btnSaveEditedPost');
 
     if (!idInput || !idInput.value) return;
     const postId = parseInt(idInput.value);
     const content = contentInput ? contentInput.value.trim() : '';
     const imageUrl = imgUrlInput ? imgUrlInput.value.trim() : '';
+    const musicUrl = musicUrlInput ? musicUrlInput.value.trim() : '';
+    const musicTitle = musicTitleInput ? musicTitleInput.value.trim() : '';
+    const musicArtist = musicArtistInput ? musicArtistInput.value.trim() : '';
 
-    if (!content && !imageUrl) {
+    if (!content && !imageUrl && !musicUrl) {
         showToast('Публикация не может быть полностью пустой', 'error');
         return;
     }
@@ -617,7 +760,10 @@ async function saveEditedPostModal() {
     try {
         const payload = {
             content: content,
-            image_url: imageUrl
+            image_url: imageUrl,
+            music_url: musicUrl,
+            music_title: musicTitle,
+            music_artist: musicArtist
         };
 
         const res = await fetch(`/api/posts/${postId}`, {
@@ -633,7 +779,7 @@ async function saveEditedPostModal() {
 
         const post = await res.json();
 
-        // Обновляем текст и медиа во ВСЕХ карточках этого поста на странице (в ленте и в профиле)
+        // Обновляем текст, медиа и музыку во ВСЕХ карточках этого поста на странице
         const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
         allCards.forEach(postCard => {
             const contentEl = postCard.querySelector('.post-content');
@@ -663,6 +809,67 @@ async function saveEditedPostModal() {
                 mediaBox.remove();
             }
 
+            // Обновляем музыкальную карточку
+            let musicCard = postCard.querySelector('.post-music-card');
+            if (post.music_url) {
+                const pTitle = post.music_title || 'Аудиозапись';
+                const pArtist = post.music_artist || 'Исполнитель';
+                const newMusicHtml = `
+                    <div class="post-music-card" id="post-music-${post.id}" data-music-url="${escapeHtml(post.music_url)}" data-music-title="${escapeHtml(pTitle)}" data-music-artist="${escapeHtml(pArtist)}">
+                        <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(post.music_url)}', title: '${escapeHtml(pTitle)}', artist: '${escapeHtml(pArtist)}', elementId: 'post-music-${post.id}'}, event)" title="Воспроизвести">
+                            <span class="music-play-icon">▶️</span>
+                        </button>
+                        <div class="post-music-info">
+                            <div class="post-music-title">${escapeHtml(pTitle)}</div>
+                            <div class="post-music-artist">${escapeHtml(pArtist)}</div>
+                        </div>
+                        <div class="post-music-actions-wrap">
+                            <button type="button" class="post-music-menu-btn" onclick="togglePostMusicMenu(event, ${post.id})" title="Опции (скачать / отправить)">
+                                <span class="music-dots-icon">⋮</span>
+                            </button>
+                            <div class="post-music-dropdown" id="postMusicMenu-${post.id}" style="display: none;">
+                                <button type="button" class="post-music-action-item" onclick="openEditPostModal(${post.id}, this)">
+                                    <span class="action-icon">🔄</span>
+                                    <span>Заменить / изменить трек</span>
+                                </button>
+                                <button type="button" class="post-music-action-item text-danger" onclick="quickRemovePostMusic(${post.id}, event)">
+                                    <span class="action-icon">🗑️</span>
+                                    <span>Удалить трек из поста</span>
+                                </button>
+                                <div class="post-dropdown-divider" style="margin: 4px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
+                                <button type="button" class="post-music-action-item" onclick="downloadAudioTrack('${escapeHtml(post.music_url)}', '${escapeHtml(pTitle)}', event)">
+                                    <span class="action-icon">📥</span>
+                                    <span>Скачать файл</span>
+                                </button>
+                                <button type="button" class="post-music-action-item" onclick="openShareAudioModal('${escapeHtml(post.music_url)}', '${escapeHtml(pTitle)}', '${escapeHtml(pArtist)}', event)">
+                                    <span class="action-icon">💬</span>
+                                    <span>Отправить в сообщения</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                if (musicCard) {
+                    musicCard.outerHTML = newMusicHtml;
+                } else {
+                    const temp = document.createElement('div');
+                    temp.innerHTML = newMusicHtml;
+                    const cardEl = temp.firstElementChild;
+                    if (mediaBox) {
+                        postCard.insertBefore(cardEl, mediaBox);
+                    } else {
+                        const actionsBar = postCard.querySelector('.post-actions-bar');
+                        if (actionsBar) {
+                            postCard.insertBefore(cardEl, actionsBar);
+                        } else {
+                            postCard.appendChild(cardEl);
+                        }
+                    }
+                }
+            } else if (musicCard) {
+                musicCard.remove();
+            }
+
             const metaLine = postCard.querySelector('.meta-line');
             if (metaLine && !metaLine.querySelector('.edited-badge')) {
                 const badge = document.createElement('span');
@@ -673,7 +880,7 @@ async function saveEditedPostModal() {
         });
 
         closeEditPostModal();
-        showToast('Публикация обновлена', 'success');
+        showToast('Публикация успешно обновлена!', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
@@ -686,6 +893,7 @@ async function saveEditedPostModal() {
 // ==========================================
 function openSharePostModal(postId) {
     closeAllPostDropdowns();
+    closeAllMusicMenus();
     const modal = document.getElementById('sharePostModal');
     const idInput = document.getElementById('sharePostId');
     const urlInput = document.getElementById('sharePostUrlInput');
@@ -1326,6 +1534,7 @@ function togglePostDropdown(postId, event) {
 
     const isShown = (menu.style.display === 'flex');
     closeAllPostDropdowns();
+    closeAllMusicMenus();
     if (!isShown) {
         menu.style.display = 'flex';
         const card = menu.closest('.post-card');
@@ -1344,11 +1553,13 @@ function closeAllPostDropdowns() {
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.post-kebab-wrap')) {
         closeAllPostDropdowns();
+    closeAllMusicMenus();
     }
 });
 
 function downloadPostImage(imageUrl) {
     closeAllPostDropdowns();
+    closeAllMusicMenus();
     if (!imageUrl) return;
     const a = document.createElement('a');
     a.href = imageUrl;
@@ -1362,6 +1573,7 @@ function downloadPostImage(imageUrl) {
 
 function copyPostText(postId, clickedBtn) {
     closeAllPostDropdowns();
+    closeAllMusicMenus();
     let contentEl = null;
     if (clickedBtn && clickedBtn.closest) {
         const card = clickedBtn.closest('.post-card');
@@ -1534,7 +1746,8 @@ function createPostElement(post) {
         rawContent = '';
     }
 
-        let postMusicHtml = '';
+    const isOwner = (window.IS_AUTHENTICATED && (window.CURRENT_USER_ID == post.user_id || (post.user && window.CURRENT_USER_ID == post.user.id)));
+    let postMusicHtml = '';
     if (post.music_url) {
         const pTitle = post.music_title || 'Аудиозапись';
         const pArtist = post.music_artist || (post.user ? post.user.display_name : 'Исполнитель');
@@ -1552,6 +1765,17 @@ function createPostElement(post) {
                         <span class="music-dots-icon">⋮</span>
                     </button>
                     <div class="post-music-dropdown" id="postMusicMenu-${post.id}" style="display: none;">
+                        ${isOwner ? `
+                            <button type="button" class="post-music-action-item" onclick="openEditPostModal(${post.id}, this)">
+                                <span class="action-icon">🔄</span>
+                                <span>Заменить / изменить трек</span>
+                            </button>
+                            <button type="button" class="post-music-action-item text-danger" onclick="quickRemovePostMusic(${post.id}, event)">
+                                <span class="action-icon">🗑️</span>
+                                <span>Удалить трек из поста</span>
+                            </button>
+                            <div class="post-dropdown-divider" style="margin: 4px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
+                        ` : ''}
                         <button type="button" class="post-music-action-item" onclick="downloadAudioTrack('${escapeHtml(post.music_url)}', '${escapeHtml(pTitle)}', event)">
                             <span class="action-icon">📥</span>
                             <span>Скачать файл</span>
@@ -1585,7 +1809,6 @@ function createPostElement(post) {
         commentsHtml = post.comments.map(c => renderCommentItemHtml(c, post.user_id)).join('');
     }
 
-    const isOwner = (window.IS_AUTHENTICATED && (window.CURRENT_USER_ID == post.user_id || (post.user && window.CURRENT_USER_ID == post.user.id)));
     const postMenuHtml = `
         <div class="post-kebab-wrap">
             <button type="button" class="post-kebab-btn" onclick="togglePostDropdown(${post.id}, event)" title="Действия с постом">
@@ -2077,28 +2300,9 @@ function renderUserProfile(data) {
         }
     }
 
-    // Главный кибер-экспонат профиля (Pinned Trophy)
+    // Экспонат удален из профиля по запросу пользователя
     const trophyWrap = document.getElementById('heroPinnedTrophyWrap');
-    if (trophyWrap) {
-        const pinnedId = user.pinned_gift_id || 0;
-        const giftKeys = Object.keys(GIFT_SPECS);
-        const pinnedType = (pinnedId > 0 && pinnedId <= giftKeys.length) ? giftKeys[pinnedId - 1] : null;
-        if (pinnedType && GIFT_SPECS[pinnedType]) {
-            const spec = GIFT_SPECS[pinnedType];
-            const imgEl = document.getElementById('heroPinnedTrophyImg');
-            const titleEl = document.getElementById('heroPinnedTrophyTitle');
-            const rarityEl = document.getElementById('heroPinnedTrophyRarity');
-            if (imgEl) imgEl.src = spec.png;
-            if (titleEl) titleEl.textContent = spec.title;
-            if (rarityEl) {
-                rarityEl.textContent = spec.rarity;
-                rarityEl.className = 'artifact-rarity-pill ' + (spec.badgeClass || '');
-            }
-            trophyWrap.style.display = 'inline-flex';
-        } else {
-            trophyWrap.style.display = 'none';
-        }
-    }
+    if (trophyWrap) trophyWrap.remove();
 
     // Стек технологий и тегов (Skills Tags)
     const skillsContainer = document.getElementById('heroSkillsContainer');
@@ -6441,7 +6645,25 @@ function togglePostMusicMenu(event, postId) {
         event.preventDefault();
         event.stopPropagation();
     }
-    const menu = document.getElementById(`postMusicMenu-${postId}`);
+    let menu = null;
+    if (event) {
+        const target = event.currentTarget || event.target;
+        const wrap = target ? target.closest('.post-music-actions-wrap') : null;
+        if (wrap) {
+            menu = wrap.querySelector('.post-music-dropdown');
+        }
+    }
+    if (!menu) {
+        const allMenus = document.querySelectorAll(`[id="postMusicMenu-${postId}"]`);
+        for (const m of allMenus) {
+            const vp = m.closest('.view-panel');
+            if (!vp || vp.style.display !== 'none') {
+                menu = m;
+                break;
+            }
+        }
+        if (!menu && allMenus.length > 0) menu = allMenus[0];
+    }
     if (!menu) return;
     const isShown = (menu.style.display === 'block');
     closeAllMusicMenus();
@@ -6744,14 +6966,23 @@ function renderProfileMusicList(tracks, isOwner) {
     container.innerHTML = tracks.map((track, idx) => {
         const isFront = (idx === 0);
         return `
-            <div class="profile-music-item ${isFront ? 'is-front-track' : ''}">
+            <div class="profile-music-item ${isFront ? 'is-front-track' : ''} ${isOwner ? 'is-draggable' : ''}" 
+                 data-music-id="${track.id}" 
+                 data-music-url="${escapeHtml(track.url)}" 
+                 data-music-title="${escapeHtml(track.title)}" 
+                 data-music-artist="${escapeHtml(track.artist || '')}" 
+                 ${isOwner ? 'draggable="true"' : ''}>
+                ${isOwner ? `
+                <div class="profile-item-drag-handle" title="Зажмите и перетащите, чтобы изменить порядок треков (первый станет лицевым)">
+                    ⠿
+                </div>` : ''}
                 <button type="button" class="profile-item-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(track.url)}', title: '${escapeHtml(track.title)}', artist: '${escapeHtml(track.artist)}', source: 'profile-modal'}, event)" title="Воспроизвести">
                     <span>▶️</span>
                 </button>
                 <div class="profile-item-info">
                     <div class="profile-item-title-row">
                         <strong class="profile-item-title">${escapeHtml(track.title)}</strong>
-                        ${isFront ? '<span class="chip-front-track">⭐ Лицевой</span>' : ''}
+                        <span class="chip-front-track" style="${isFront ? '' : 'display: none;'}">⭐ Лицевой</span>
                     </div>
                     <span class="profile-item-artist">${escapeHtml(track.artist || 'Аудиозапись')}</span>
                 </div>
@@ -6767,6 +6998,109 @@ function renderProfileMusicList(tracks, isOwner) {
             </div>
         `;
     }).join('');
+
+    if (isOwner) {
+        initProfileMusicDragAndDrop(container);
+    }
+}
+
+let draggedMusicItem = null;
+
+function initProfileMusicDragAndDrop(container) {
+    const items = container.querySelectorAll('.profile-music-item.is-draggable');
+    items.forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            draggedMusicItem = item;
+            item.classList.add('is-dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', item.dataset.musicId);
+        });
+
+        item.addEventListener('dragend', () => {
+            draggedMusicItem = null;
+            item.classList.remove('is-dragging');
+            container.querySelectorAll('.profile-music-item').forEach(el => el.classList.remove('drag-over'));
+            updateProfileMusicOrderAfterDrag(container);
+        });
+
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (!draggedMusicItem || draggedMusicItem === item) return;
+
+            const rect = item.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            if (e.clientY < midpoint) {
+                container.insertBefore(draggedMusicItem, item);
+            } else {
+                container.insertBefore(draggedMusicItem, item.nextSibling);
+            }
+        });
+
+        item.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            if (draggedMusicItem && draggedMusicItem !== item) {
+                item.classList.add('drag-over');
+            }
+        });
+
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('drag-over');
+        });
+
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            item.classList.remove('drag-over');
+        });
+    });
+}
+
+async function updateProfileMusicOrderAfterDrag(container) {
+    const allItems = Array.from(container.querySelectorAll('.profile-music-item'));
+    if (allItems.length === 0) return;
+
+    // Обновляем визуальный бейдж лицевого трека на первом элементе
+    allItems.forEach((el, idx) => {
+        const isFront = (idx === 0);
+        el.classList.toggle('is-front-track', isFront);
+        const badge = el.querySelector('.chip-front-track');
+        if (badge) badge.style.display = isFront ? 'inline-block' : 'none';
+    });
+
+    const trackIDs = allItems.map(el => parseInt(el.dataset.musicId)).filter(id => !isNaN(id) && id > 0);
+    if (trackIDs.length === 0) return;
+
+    // Мгновенно обновляем лицевой трек на странице профиля в hero-карточке
+    const frontEl = allItems[0];
+    const frontUrl = frontEl.dataset.musicUrl;
+    const frontTitle = frontEl.dataset.musicTitle;
+    const frontArtist = frontEl.dataset.musicArtist;
+
+    const mTitle = document.getElementById('heroMusicTitle');
+    const mArtist = document.getElementById('heroMusicArtist');
+    const mCard = document.getElementById('heroMusicCard');
+    if (mTitle) mTitle.textContent = frontTitle || 'Аудиозапись';
+    if (mArtist) mArtist.textContent = frontArtist || '';
+    if (mCard) {
+        mCard.setAttribute('data-music-url', frontUrl);
+        mCard.setAttribute('data-music-title', frontTitle || 'Аудиозапись');
+        mCard.setAttribute('data-music-artist', frontArtist || '');
+    }
+
+    try {
+        const res = await fetch('/api/users/music/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ track_ids: trackIDs })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            currentViewedUserMusic = data.playlist || [];
+            showToast(`Порядок обновлен! Лицевой трек: ${frontTitle} ⭐`, 'success');
+        }
+    } catch (err) {
+        console.error('Error reordering music:', err);
+    }
 }
 
 async function handleQuickUploadMusicToProfile(e) {

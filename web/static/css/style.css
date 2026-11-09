@@ -5284,7 +5284,7 @@ input:checked + .toggle-slider:before {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 240, 255, 0.2);
     backdrop-filter: blur(14px);
     padding: 6px;
-    z-index: 100;
+    z-index: 1000;
     display: none;
     animation: fadeInDown 0.18s ease-out;
 }
@@ -5477,4 +5477,49 @@ input:checked + .toggle-slider:before {
     height: 32px;
     border-radius: 50%;
     object-fit: cover;
+}
+
+
+/* Drag & Drop Reordering for Profile Music List */
+.profile-music-item.is-draggable {
+    cursor: grab;
+    user-select: none;
+    transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.profile-music-item.is-draggable:active {
+    cursor: grabbing;
+}
+.profile-music-item.is-dragging {
+    opacity: 0.35;
+    transform: scale(0.97);
+    border: 1px dashed #00f0ff !important;
+    background: rgba(0, 240, 255, 0.08) !important;
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.35) !important;
+}
+.profile-music-item.drag-over {
+    border-top: 3px solid #00f0ff !important;
+    background: rgba(0, 240, 255, 0.12) !important;
+}
+.profile-item-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    color: rgba(255, 255, 255, 0.38);
+    cursor: grab;
+    padding: 0 6px;
+    margin-right: 2px;
+    user-select: none;
+    transition: all 0.2s ease;
+}
+.profile-item-drag-handle:hover {
+    color: #00f0ff;
+    transform: scale(1.15);
+}
+.post-music-action-item.text-danger {
+    color: #ff4d4f;
+}
+.post-music-action-item.text-danger:hover {
+    background: rgba(255, 77, 79, 0.15);
+    color: #ff7875;
 }

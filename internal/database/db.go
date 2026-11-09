@@ -115,9 +115,11 @@ func migrate(db *sql.DB) error {
 		url TEXT NOT NULL,
 		title VARCHAR(255) NOT NULL,
 		artist VARCHAR(255) DEFAULT '',
+		position INT NOT NULL DEFAULT 0,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 	);
-	CREATE INDEX IF NOT EXISTS idx_user_music_user_id ON user_music(user_id, id DESC);
+	ALTER TABLE user_music ADD COLUMN IF NOT EXISTS position INT DEFAULT 0;
+	CREATE INDEX IF NOT EXISTS idx_user_music_user_id ON user_music(user_id, position ASC, id DESC);
 
 	INSERT INTO user_music (user_id, url, title, artist)
 	SELECT id, music_url, music_title, music_artist

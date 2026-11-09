@@ -43,6 +43,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/users/follow", h.ToggleFollow)
 	mux.HandleFunc("GET /api/users/{id}/music", h.GetUserMusic)
 	mux.HandleFunc("POST /api/users/music", h.AddUserMusic)
+	mux.HandleFunc("POST /api/users/music/reorder", h.ReorderUserMusic)
 	mux.HandleFunc("DELETE /api/users/music/{id}", h.DeleteUserMusic)
 	mux.HandleFunc("POST /api/users/music/{id}/delete", h.DeleteUserMusic)
 
