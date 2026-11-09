@@ -101,6 +101,14 @@ func migrate(db *sql.DB) error {
 	ALTER TABLE posts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 	ALTER TABLE posts ADD COLUMN IF NOT EXISTS likes_count INT DEFAULT 0;
 	ALTER TABLE posts ADD COLUMN IF NOT EXISTS comments_count INT DEFAULT 0;
+	ALTER TABLE posts ADD COLUMN IF NOT EXISTS music_url TEXT DEFAULT '';
+	ALTER TABLE posts ADD COLUMN IF NOT EXISTS music_title VARCHAR(255) DEFAULT '';
+	ALTER TABLE posts ADD COLUMN IF NOT EXISTS music_artist VARCHAR(255) DEFAULT '';
+
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS music_url TEXT DEFAULT '';
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS music_title VARCHAR(255) DEFAULT '';
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS music_artist VARCHAR(255) DEFAULT '';
+
 
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT DEFAULT '';
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';
@@ -158,6 +166,10 @@ func migrate(db *sql.DB) error {
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_for_sender BOOLEAN DEFAULT FALSE;
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_for_receiver BOOLEAN DEFAULT FALSE;
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_url TEXT DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_title VARCHAR(255) DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_artist VARCHAR(255) DEFAULT '';
+
 	CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
 	CREATE INDEX IF NOT EXISTS idx_messages_receiver_id ON messages(receiver_id);
 	CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, receiver_id, created_at ASC);
@@ -201,6 +213,36 @@ func migrate(db *sql.DB) error {
 
 	UPDATE posts p SET comments_count = (SELECT count(1) FROM comments c WHERE c.post_id = p.id)
 	WHERE p.comments_count = 0 AND EXISTS (SELECT 1 FROM comments c WHERE c.post_id = p.id);
+
+	UPDATE users SET
+		music_url = CASE 
+			WHEN LOWER(username) = 'oleg' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/cyber_neon_drift.wav'
+			WHEN LOWER(username) = 'sophia' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/lofi_midnight_rain.wav'
+			WHEN LOWER(username) = 'alex' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/retro_arcade_pulse.wav'
+			WHEN LOWER(username) = 'itakwa' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/ithaqua_night_watch.wav'
+			ELSE music_url
+		END,
+		music_title = CASE 
+			WHEN LOWER(username) = 'oleg' AND (music_title = '' OR music_title IS NULL) THEN 'Neon Drift (Synthwave 2077)'
+			WHEN LOWER(username) = 'sophia' AND (music_title = '' OR music_title IS NULL) THEN 'Midnight Rain (Lofi Beats)'
+			WHEN LOWER(username) = 'alex' AND (music_title = '' OR music_title IS NULL) THEN 'Arcade Pulse (Chiptune)'
+			WHEN LOWER(username) = 'itakwa' AND (music_title = '' OR music_title IS NULL) THEN 'Whispering Blizzard (Gothic Ambient)'
+			ELSE music_title
+		END,
+		music_artist = CASE 
+			WHEN LOWER(username) = 'oleg' AND (music_artist = '' OR music_artist IS NULL) THEN 'Олег Кибер-Пилот'
+			WHEN LOWER(username) = 'sophia' AND (music_artist = '' OR music_artist IS NULL) THEN 'Sophia'
+			WHEN LOWER(username) = 'alex' AND (music_artist = '' OR music_artist IS NULL) THEN 'Alex NetRunner'
+			WHEN LOWER(username) = 'itakwa' AND (music_artist = '' OR music_artist IS NULL) THEN 'Итаква • Night Watch'
+			ELSE music_artist
+		END
+	WHERE LOWER(username) IN ('oleg', 'sophia', 'alex', 'itakwa') AND (music_url = '' OR music_url IS NULL);
+
+	UPDATE posts SET 
+		music_url = '/static/audio/cyber_neon_drift.wav',
+		music_title = 'Neon Drift (Synthwave 2077)',
+		music_artist = 'Олег Кибер-Пилот'
+	WHERE id = 1 AND (music_url = '' OR music_url IS NULL);
 
 	-- Полнотекстовый поиск с морфологией и триграммами (FTS + pg_trgm)
 	CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -316,6 +358,9 @@ func seed(db *sql.DB) error {
 				banner_url = CASE WHEN banner_url = '' THEN '/uploads/ithaqua_6388aa602b3b6e36c0ccba4e32cd82dd.jpg' ELSE banner_url END,
 				custom_rank = CASE WHEN custom_rank = '' OR custom_rank LIKE '%Элитный%' THEN 'Ледяной Страж • Ночной Дозорный (Identity V)' ELSE custom_rank END,
 				avatar_frame = CASE WHEN avatar_frame = '' OR avatar_frame = 'default' THEN 'night-watch' ELSE avatar_frame END,
+				music_url = CASE WHEN music_url = '' OR music_url IS NULL THEN '/static/audio/ithaqua_night_watch.wav' ELSE music_url END,
+				music_title = CASE WHEN music_title = '' OR music_title IS NULL THEN 'Whispering Blizzard (Gothic Ambient)' ELSE music_title END,
+				music_artist = CASE WHEN music_artist = '' OR music_artist IS NULL THEN 'Итаква • Night Watch' ELSE music_artist END,
 				profile_bg_effect = CASE WHEN profile_bg_effect = '' OR profile_bg_effect = 'none' THEN 'arctic-blizzard' ELSE profile_bg_effect END,
 				bio = CASE WHEN bio = '' THEN 'Ночной Дозорный (Night Watch) • Охотник Поместья Олетис (Identity V). Владыка ледяных ветров и безжалостных метелей. Тот, кто бесшумно шагает сквозь свирепую зимнюю бурю на острых ходулях, ведомый плачем замерзшей матери. «Тише... слышишь, как завывает северный ветер?»' ELSE bio END
 			WHERE LOWER(username) = 'itakwa' AND (display_name LIKE '%Олег%' OR display_name = 'itakwa' OR custom_rank = '')
@@ -362,6 +407,39 @@ func seed(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+
+	// Установка начальных музыкальных треков для пользователей
+	_, _ = db.Exec(`
+		UPDATE users SET
+			music_url = CASE 
+				WHEN LOWER(username) = 'oleg' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/cyber_neon_drift.wav'
+				WHEN LOWER(username) = 'sophia' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/lofi_midnight_rain.wav'
+				WHEN LOWER(username) = 'alex' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/retro_arcade_pulse.wav'
+				WHEN LOWER(username) = 'itakwa' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/ithaqua_night_watch.wav'
+				ELSE music_url
+			END,
+			music_title = CASE 
+				WHEN LOWER(username) = 'oleg' AND (music_title = '' OR music_title IS NULL) THEN 'Neon Drift (Synthwave 2077)'
+				WHEN LOWER(username) = 'sophia' AND (music_title = '' OR music_title IS NULL) THEN 'Midnight Rain (Lofi Beats)'
+				WHEN LOWER(username) = 'alex' AND (music_title = '' OR music_title IS NULL) THEN 'Arcade Pulse (Chiptune)'
+				WHEN LOWER(username) = 'itakwa' AND (music_title = '' OR music_title IS NULL) THEN 'Whispering Blizzard (Gothic Ambient)'
+				ELSE music_title
+			END,
+			music_artist = CASE 
+				WHEN LOWER(username) = 'oleg' AND (music_artist = '' OR music_artist IS NULL) THEN 'Олег Кибер-Пилот'
+				WHEN LOWER(username) = 'sophia' AND (music_artist = '' OR music_artist IS NULL) THEN 'Sophia'
+				WHEN LOWER(username) = 'alex' AND (music_artist = '' OR music_artist IS NULL) THEN 'Alex NetRunner'
+				WHEN LOWER(username) = 'itakwa' AND (music_artist = '' OR music_artist IS NULL) THEN 'Итаква • Night Watch'
+				ELSE music_artist
+			END
+		WHERE LOWER(username) IN ('oleg', 'sophia', 'alex', 'itakwa');
+
+		UPDATE posts SET 
+			music_url = '/static/audio/cyber_neon_drift.wav',
+			music_title = 'Neon Drift (Synthwave 2077)',
+			music_artist = 'Олег Кибер-Пилот'
+		WHERE id = 1 AND (music_url = '' OR music_url IS NULL);
+	`)
 
 	log.Println("Initial sample data seeded successfully.")
 	return nil

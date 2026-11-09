@@ -147,7 +147,7 @@ func TestForbiddenOnForeignResource(t *testing.T) {
 	mux, _, postRepo, _, _, _, tokenUser2 := setupTestApp(t)
 
 	// Создаем тестовый пост от имени Пользователя 1 (Олег)
-	post, err := postRepo.CreatePost(1, "Пост автора Олег для проверки прав", "")
+	post, err := postRepo.CreatePost(1, "Пост автора Олег для проверки прав", "", "", "", "")
 	if err != nil {
 		t.Fatalf("Failed to create post: %v", err)
 	}

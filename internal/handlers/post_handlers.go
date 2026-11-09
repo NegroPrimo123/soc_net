@@ -1,9 +1,6 @@
 package handlers
 
-
-
 import (
-
 	"encoding/json"
 
 	"fmt"
@@ -14,15 +11,10 @@ import (
 
 	"strings"
 
-
-
 	"social-network/internal/events"
 
 	"social-network/internal/models"
-
 )
-
-
 
 func (h *Handler) GetFeed(w http.ResponseWriter, r *http.Request) {
 
@@ -44,8 +36,6 @@ func (h *Handler) GetFeed(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	feedType := r.URL.Query().Get("feed_type")
 
 	if feedType == "" {
@@ -58,8 +48,6 @@ func (h *Handler) GetFeed(w http.ResponseWriter, r *http.Request) {
 
 	tagQuery := strings.TrimSpace(r.URL.Query().Get("tag"))
 
-
-
 	limit := 10
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
@@ -71,8 +59,6 @@ func (h *Handler) GetFeed(w http.ResponseWriter, r *http.Request) {
 		}
 
 	}
-
-
 
 	offset := 0
 
@@ -94,8 +80,6 @@ func (h *Handler) GetFeed(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	posts, err := h.postRepo.GetFeed(currentUserID, feedType, searchQuery, tagQuery, limit, offset)
 
 	if err != nil {
@@ -106,21 +90,15 @@ func (h *Handler) GetFeed(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	if posts == nil {
 
 		posts = []models.Post{}
 
 	}
 
-
-
 	respondJSON(w, http.StatusOK, posts)
 
 }
-
-
 
 func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
@@ -134,8 +112,6 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	var req models.CreatePostRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -146,11 +122,9 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	req.Content = strings.TrimSpace(req.Content)
 
-	if req.Content == "" && req.ImageURL == "" {
+	if req.Content == "" && req.ImageURL == "" && req.MusicURL == "" {
 
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "публикация не может быть пустой"})
 
@@ -160,9 +134,7 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	req.ImageURL = strings.TrimSpace(req.ImageURL)
 
-
-
-	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL)
+	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist)
 
 	if err != nil {
 
@@ -172,8 +144,6 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	// Рассылка real-time события всем подключенным клиентам через SSE
 
 	if h.hub != nil {
@@ -182,13 +152,9 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	respondJSON(w, http.StatusCreated, post)
 
 }
-
-
 
 func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
@@ -202,8 +168,6 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	postID, err := strconv.Atoi(pathParts[2])
 
 	if err != nil {
@@ -213,8 +177,6 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	authUser := h.getUserFromRequest(r)
 
@@ -226,8 +188,6 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	var req models.UpdatePostRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -238,15 +198,13 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	req.Content = strings.TrimSpace(req.Content)
 	if req.Content == "" && (req.ImageURL == nil || strings.TrimSpace(*req.ImageURL) == "") {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "текст или фото не могут быть пустыми"})
 		return
 	}
 
-	post, err := h.postRepo.UpdatePost(postID, authUser.ID, req.Content, req.ImageURL)
+	post, err := h.postRepo.UpdatePost(postID, authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist)
 
 	if err != nil {
 
@@ -256,13 +214,9 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	respondJSON(w, http.StatusOK, post)
 
 }
-
-
 
 func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 
@@ -276,8 +230,6 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	postID, err := strconv.Atoi(pathParts[2])
 
 	if err != nil {
@@ -287,8 +239,6 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	authUser := h.getUserFromRequest(r)
 
@@ -300,8 +250,6 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	if err := h.postRepo.DeletePost(postID, authUser.ID); err != nil {
 
 		respondJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
@@ -310,13 +258,9 @@ func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 
 }
-
-
 
 func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 
@@ -330,8 +274,6 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	postID, err := strconv.Atoi(pathParts[2])
 
 	if err != nil {
@@ -342,8 +284,6 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	var req models.ToggleLikeRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -353,8 +293,6 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	userID := req.UserID
 
@@ -372,8 +310,6 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	isLiked, count, err := h.postRepo.ToggleLike(userID, postID)
 
 	if err != nil {
@@ -383,8 +319,6 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	// Отправка уведомления автору поста
 
@@ -406,14 +340,13 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 
 				h.hub.Broadcast(events.EventNotification, map[string]interface{}{
 
-					"user_id":     post.UserID,
+					"user_id": post.UserID,
 
 					"action_type": "like",
 
-					"actor":       authUser,
+					"actor": authUser,
 
-					"title":       fmt.Sprintf("%s оценил(а) вашу публикацию", actorName),
-
+					"title": fmt.Sprintf("%s оценил(а) вашу публикацию", actorName),
 				})
 
 			}
@@ -422,37 +355,29 @@ func (h *Handler) ToggleLike(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	if h.hub != nil {
 
 		h.hub.Broadcast(events.EventLikeUpdate, map[string]interface{}{
 
-			"post_id":     postID,
+			"post_id": postID,
 
 			"likes_count": count,
 
-			"user_id":     userID,
+			"user_id": userID,
 
-			"is_liked":    isLiked,
-
+			"is_liked": isLiked,
 		})
 
 	}
 
-
-
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 
-		"is_liked":    isLiked,
+		"is_liked": isLiked,
 
 		"likes_count": count,
-
 	})
 
 }
-
-
 
 func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
@@ -466,8 +391,6 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	postID, err := strconv.Atoi(pathParts[2])
 
 	if err != nil {
@@ -477,8 +400,6 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	var req models.CreateCommentRequest
 
@@ -490,8 +411,6 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	req.Content = strings.TrimSpace(req.Content)
 
 	if req.Content == "" {
@@ -501,8 +420,6 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	userID := req.UserID
 
@@ -520,8 +437,6 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	comment, err := h.postRepo.CreateComment(postID, userID, req.Content)
 
 	if err != nil {
@@ -531,8 +446,6 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	// Отправка уведомления автору поста
 
@@ -554,14 +467,13 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 				h.hub.Broadcast(events.EventNotification, map[string]interface{}{
 
-					"user_id":     post.UserID,
+					"user_id": post.UserID,
 
 					"action_type": "comment",
 
-					"actor":       authUser,
+					"actor": authUser,
 
-					"title":       fmt.Sprintf("%s прокомментировал(а) вашу запись", actorName),
-
+					"title": fmt.Sprintf("%s прокомментировал(а) вашу запись", actorName),
 				})
 
 			}
@@ -570,8 +482,6 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	if h.hub != nil {
 
 		h.hub.Broadcast(events.EventNewComment, map[string]interface{}{
@@ -579,18 +489,13 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 			"post_id": postID,
 
 			"comment": comment,
-
 		})
 
 	}
 
-
-
 	respondJSON(w, http.StatusCreated, comment)
 
 }
-
-
 
 func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 
@@ -603,8 +508,6 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	targetIDStr := r.PathValue("id")
 
@@ -629,8 +532,6 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	var req models.UpdateCommentRequest
 
@@ -652,8 +553,6 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	comment, err := h.postRepo.UpdateComment(commentID, currentUser.ID, req.Content)
 
 	if err != nil {
@@ -664,8 +563,6 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	if h.hub != nil {
 
 		h.hub.Broadcast(events.EventCommentUpdated, map[string]interface{}{
@@ -673,18 +570,13 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 			"comment": comment,
 
 			"post_id": comment.PostID,
-
 		})
 
 	}
 
-
-
 	respondJSON(w, http.StatusOK, comment)
 
 }
-
-
 
 func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 
@@ -697,8 +589,6 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-
-
 
 	targetIDStr := r.PathValue("id")
 
@@ -724,8 +614,6 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	postID, err := h.postRepo.DeleteComment(commentID, currentUser.ID)
 
 	if err != nil {
@@ -736,31 +624,24 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-
-
 	if h.hub != nil {
 
 		h.hub.Broadcast(events.EventCommentDeleted, map[string]interface{}{
 
 			"comment_id": commentID,
 
-			"post_id":    postID,
-
+			"post_id": postID,
 		})
 
 	}
 
-
-
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 
-		"success":    true,
+		"success": true,
 
-		"post_id":    postID,
+		"post_id": postID,
 
 		"comment_id": commentID,
-
 	})
 
 }
-

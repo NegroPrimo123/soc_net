@@ -441,7 +441,10 @@ async function createPost() {
             body: JSON.stringify({
                 user_id: window.CURRENT_USER_ID,
                 content: content,
-                image_url: imageUrl
+                image_url: imageUrl,
+                music_url: musicUrl,
+                music_title: musicTitle,
+                music_artist: musicArtist
             })
         });
 
@@ -454,6 +457,7 @@ async function createPost() {
         textarea.value = '';
         handleComposerInput();
         clearComposerFile();
+        clearComposerMusic();
         const imageBox = document.getElementById('composerImageBox');
         if (imageBox) imageBox.style.display = 'none';
 
@@ -1530,6 +1534,26 @@ function createPostElement(post) {
         rawContent = '';
     }
 
+        let postMusicHtml = '';
+    if (post.music_url) {
+        const pTitle = post.music_title || 'Аудиозапись';
+        const pArtist = post.music_artist || (post.user ? post.user.display_name : 'Исполнитель');
+        postMusicHtml = `
+            <div class="post-music-card" id="post-music-${post.id}" data-music-url="${escapeHtml(post.music_url)}" data-music-title="${escapeHtml(pTitle)}" data-music-artist="${escapeHtml(pArtist)}">
+                <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(post.music_url)}', title: '${escapeHtml(pTitle)}', artist: '${escapeHtml(pArtist)}', elementId: 'post-music-${post.id}'}, event)" title="Слушать">
+                    <span class="music-play-icon">▶️</span>
+                </button>
+                <div class="post-music-info">
+                    <div class="post-music-title">${escapeHtml(pTitle)}</div>
+                    <div class="post-music-artist">${escapeHtml(pArtist)}</div>
+                </div>
+                <div class="post-music-eq">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+            </div>
+        `;
+    }
+
     let mediaHtml = '';
     if (finalImageUrl) {
         mediaHtml = `
@@ -1611,6 +1635,7 @@ function createPostElement(post) {
             </div>
         </div>
 
+        ${postMusicHtml}
         ${mediaHtml}
 
         <div class="post-actions-bar">
@@ -2087,6 +2112,26 @@ function renderUserProfile(data) {
     }
 
     // Контакты и социальные сети (Social Links)
+    // Музыкальный плеер профиля
+    const musicWrap = document.getElementById('heroMusicPlayerWrap');
+    if (musicWrap) {
+        if (user.music_url) {
+            musicWrap.style.display = 'block';
+            const mTitle = document.getElementById('heroMusicTitle');
+            const mArtist = document.getElementById('heroMusicArtist');
+            const mCard = document.getElementById('heroMusicCard');
+            if (mTitle) mTitle.textContent = user.music_title || 'Аудиозапись';
+            if (mArtist) mArtist.textContent = user.music_artist || user.display_name;
+            if (mCard) {
+                mCard.setAttribute('data-music-url', user.music_url);
+                mCard.setAttribute('data-music-title', user.music_title || 'Аудиозапись');
+                mCard.setAttribute('data-music-artist', user.music_artist || user.display_name);
+            }
+        } else {
+            musicWrap.style.display = 'none';
+        }
+    }
+
     const socialContainer = document.getElementById('heroSocialContainer');
     if (socialContainer) {
         socialContainer.innerHTML = '';
@@ -2812,6 +2857,15 @@ async function openEditProfileModal() {
     // Главный экспонат
     initTrophyGrid(u.pinned_gift_id || 0);
 
+    // Музыка профиля
+    const musicUrlInput = document.getElementById('editMusicUrl');
+    const musicTitleInput = document.getElementById('editMusicTitle');
+    const musicArtistInput = document.getElementById('editMusicArtist');
+    if (musicUrlInput) musicUrlInput.value = u.music_url || '';
+    if (musicTitleInput) musicTitleInput.value = u.music_title || '';
+    if (musicArtistInput) musicArtistInput.value = u.music_artist || '';
+    updateModalMusicPreviewState();
+
     switchCustomTab('profile');
     updateModalLivePreview();
 
@@ -2825,7 +2879,7 @@ function closeEditProfileModal() {
 }
 
 function switchCustomTab(tabKey) {
-    const tabs = ['profile', 'status', 'avatar', 'theme', 'skills', 'social', 'trophy'];
+    const tabs = ['profile', 'status', 'avatar', 'theme', 'skills', 'social', 'trophy', 'music'];
     tabs.forEach(t => {
         const btn = document.getElementById(`tabCustom${capitalize(t)}`);
         const pane = document.getElementById(`customPane${capitalize(t)}`);
@@ -3330,6 +3384,9 @@ async function handleProfileUpdate(e) {
         web: (document.getElementById('editSocialWeb')?.value || '').trim()
     };
     const pinnedGiftId = parseInt(document.getElementById('editPinnedGiftId')?.value || '0', 10) || 0;
+    const musicUrl = (document.getElementById('editMusicUrl')?.value || '').trim();
+    const musicTitle = (document.getElementById('editMusicTitle')?.value || '').trim();
+    const musicArtist = (document.getElementById('editMusicArtist')?.value || '').trim();
 
     const saveBtn = document.getElementById('btnSaveProfile');
     if (saveBtn) {
@@ -3354,7 +3411,10 @@ async function handleProfileUpdate(e) {
                 profile_bg_effect: profileBgEffect,
                 skills_tags: skillsTags,
                 social_links: JSON.stringify(socialLinksObj),
-                pinned_gift_id: pinnedGiftId
+                pinned_gift_id: pinnedGiftId,
+                music_url: musicUrl,
+                music_title: musicTitle,
+                music_artist: musicArtist
             })
         });
 
@@ -3500,7 +3560,10 @@ async function createProfilePost() {
             body: JSON.stringify({
                 user_id: window.CURRENT_USER_ID,
                 content: content,
-                image_url: imageUrl
+                image_url: imageUrl,
+                music_url: musicUrl,
+                music_title: musicTitle,
+                music_artist: musicArtist
             })
         });
 
@@ -4669,8 +4732,36 @@ function appendChatMessageElement(m) {
     const isUploadedPath = trimmed.startsWith('/uploads/');
     let contentHtml = '';
 
-    if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
-        // Отображаем изображение полностью, без обрезки и с удобным масштабом
+    const isAudioFile = /\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(trimmed);
+    const audioUrl = m.audio_url || (isAudioFile ? trimmed : '');
+
+    let audioHtml = '';
+    if (audioUrl) {
+        const audioTitle = m.audio_title || (isAudioFile ? trimmed.split('/').pop().replace(/^\d+_/, '') : 'Аудиозапись');
+        const audioArtist = m.audio_artist || (isOut ? 'Вы' : (activeChatUserData ? activeChatUserData.display_name : 'Собеседник'));
+        audioHtml = `
+            <div class="chat-audio-card" id="chat-audio-${m.id}" data-audio-url="${escapeHtml(audioUrl)}" data-audio-title="${escapeHtml(audioTitle)}" data-audio-artist="${escapeHtml(audioArtist)}">
+                <button type="button" class="chat-audio-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(audioUrl)}', title: '${escapeHtml(audioTitle)}', artist: '${escapeHtml(audioArtist)}', elementId: 'chat-audio-${m.id}'}, event)" title="Слушать аудио">
+                    <span class="chat-audio-icon">▶️</span>
+                </button>
+                <div class="chat-audio-info">
+                    <div class="chat-audio-title">${escapeHtml(audioTitle)}</div>
+                    <div class="chat-audio-artist">${escapeHtml(audioArtist)}</div>
+                </div>
+                <div class="chat-audio-wave">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+            </div>
+        `;
+    }
+
+    if (audioHtml) {
+        if (trimmed && trimmed !== audioUrl) {
+            contentHtml = audioHtml + `<div class="chat-text-after-audio" style="margin-top: 4px;">${escapeHtml(trimmed)}</div>`;
+        } else {
+            contentHtml = audioHtml;
+        }
+    } else if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
         contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" class="chat-sent-image" onclick="openImageLightbox('${escapeHtml(trimmed)}', 'Фото')"></div>`;
     } else if (isUploadedPath) {
         const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
@@ -4736,7 +4827,12 @@ async function handleSendMessage(e) {
     if (currentChatAttachmentUrl) {
         content = content ? `${content}\n${currentChatAttachmentUrl}` : currentChatAttachmentUrl;
     }
-    if (!content) return;
+
+    let audioUrl = pendingChatAudio ? pendingChatAudio.url : '';
+    let audioTitle = pendingChatAudio ? pendingChatAudio.title : '';
+    let audioArtist = pendingChatAudio ? pendingChatAudio.artist : '';
+
+    if (!content && !audioUrl) return;
 
     const sendBtn = document.getElementById('chatSendBtn');
 
@@ -4786,7 +4882,10 @@ async function handleSendMessage(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 receiver_id: activeChatUserId,
-                content: content
+                content: content,
+                audio_url: audioUrl,
+                audio_title: audioTitle,
+                audio_artist: audioArtist
             })
         });
 
@@ -4798,6 +4897,7 @@ async function handleSendMessage(e) {
         const msg = await res.json();
         input.value = '';
         clearChatFile();
+        clearChatAudioAttachment();
 
         playChatSoundFx('send');
 
@@ -5784,4 +5884,509 @@ async function applyIthaquaSkinPreset(presetKey) {
     } catch (e) {
         console.error('Error applying skin:', e);
     }
+}
+
+
+// ============================================================================
+// GLOBAL CYBERPUNK MUSIC SYSTEM & AUDIO ENGINE
+// ============================================================================
+
+let currentComposerAudioUrl = '';
+let currentComposerAudioTitle = '';
+let currentComposerAudioArtist = '';
+
+let pendingChatAudio = null;
+
+class GlobalMusicPlayer {
+    constructor() {
+        this.audio = new Audio();
+        this.isPlaying = false;
+        this.currentTrack = null;
+        this.playlist = [
+            {
+                url: '/static/audio/cyber_neon_drift.wav',
+                title: 'Neon Drift (Synthwave 2077)',
+                artist: 'Олег Кибер-Пилот',
+                source: 'preset'
+            },
+            {
+                url: '/static/audio/ithaqua_night_watch.wav',
+                title: 'Whispering Blizzard (Gothic Ambient)',
+                artist: 'Итаква • Night Watch',
+                source: 'preset'
+            },
+            {
+                url: '/static/audio/lofi_midnight_rain.wav',
+                title: 'Midnight Rain (Lofi Beats)',
+                artist: 'Sophia',
+                source: 'preset'
+            },
+            {
+                url: '/static/audio/retro_arcade_pulse.wav',
+                title: 'Arcade Pulse (Chiptune)',
+                artist: 'Alex NetRunner',
+                source: 'preset'
+            }
+        ];
+        this.currentIndex = 0;
+    }
+
+    init() {
+        this.audio.addEventListener('timeupdate', () => {
+            if (this.audio.duration) {
+                const percent = (this.audio.currentTime / this.audio.duration) * 100;
+                const bar = document.getElementById('headerMusicProgressBar');
+                if (bar) bar.style.width = `${percent}%`;
+            }
+        });
+
+        this.audio.addEventListener('play', () => {
+            this.isPlaying = true;
+            this.updateUIState();
+        });
+
+        this.audio.addEventListener('pause', () => {
+            this.isPlaying = false;
+            this.updateUIState();
+        });
+
+        this.audio.addEventListener('ended', () => {
+            this.nextTrack();
+        });
+
+        this.audio.addEventListener('error', (e) => {
+            console.error('Audio playback error:', e);
+            this.isPlaying = false;
+            this.updateUIState();
+        });
+
+        this.collectPageTracks();
+    }
+
+    collectPageTracks() {
+        // Добавляем треки из постов в ленте
+        document.querySelectorAll('.post-music-card').forEach(card => {
+            const url = card.getAttribute('data-music-url');
+            const title = card.getAttribute('data-music-title') || 'Аудиозапись';
+            const artist = card.getAttribute('data-music-artist') || 'Исполнитель';
+            if (url && !this.playlist.some(t => t.url === url)) {
+                this.playlist.push({ url, title, artist, elementId: card.id, source: 'post' });
+            }
+        });
+
+        // Добавляем трек из профиля
+        const profileCard = document.getElementById('heroMusicCard');
+        if (profileCard) {
+            const url = profileCard.getAttribute('data-music-url');
+            const title = profileCard.getAttribute('data-music-title') || 'Трек профиля';
+            const artist = profileCard.getAttribute('data-music-artist') || 'Профиль';
+            if (url && !this.playlist.some(t => t.url === url)) {
+                this.playlist.unshift({ url, title, artist, elementId: 'heroMusicCard', source: 'profile' });
+            }
+        }
+    }
+
+    playTrack(trackData, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        if (!trackData || !trackData.url) return;
+
+        // Если уже играет этот же трек: переключаем play/pause
+        if (this.currentTrack && this.currentTrack.url === trackData.url) {
+            this.togglePlay();
+            return;
+        }
+
+        // Регистрируем трек в плейлисте, если его там еще нет
+        let existingIdx = this.playlist.findIndex(t => t.url === trackData.url);
+        if (existingIdx === -1) {
+            this.playlist.push(trackData);
+            this.currentIndex = this.playlist.length - 1;
+        } else {
+            this.currentIndex = existingIdx;
+        }
+
+        this.currentTrack = trackData;
+        this.audio.src = trackData.url;
+        this.audio.currentTime = 0;
+        
+        const playPromise = this.audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(err => {
+                console.warn('Autoplay prevented or audio load failed:', err);
+                showToast('Нажмите в любом месте для запуска звука', 'info');
+            });
+        }
+
+        this.updateHeaderTrackInfo(trackData);
+        this.updateUIState();
+    }
+
+    togglePlay() {
+        if (!this.currentTrack) {
+            // Если трек еще не выбран, запускаем первый трек из плейлиста или со страницы
+            this.collectPageTracks();
+            if (this.playlist.length > 0) {
+                this.playTrack(this.playlist[0]);
+                return;
+            }
+        }
+
+        if (this.audio.paused) {
+            this.audio.play().catch(e => console.warn(e));
+        } else {
+            this.audio.pause();
+        }
+    }
+
+    nextTrack() {
+        this.collectPageTracks();
+        if (this.playlist.length === 0) return;
+        this.currentIndex = (this.currentIndex + 1) % this.playlist.length;
+        const next = this.playlist[this.currentIndex];
+        this.playTrack(next);
+        showToast(`Следующий трек: ${next.title}`, 'info');
+    }
+
+    prevTrack() {
+        if (this.audio.currentTime > 3.0) {
+            this.audio.currentTime = 0;
+            return;
+        }
+        this.collectPageTracks();
+        if (this.playlist.length === 0) return;
+        this.currentIndex = (this.currentIndex - 1 + this.playlist.length) % this.playlist.length;
+        const prev = this.playlist[this.currentIndex];
+        this.playTrack(prev);
+        showToast(`Предыдущий трек: ${prev.title}`, 'info');
+    }
+
+    handleProgressClick(event) {
+        const container = document.getElementById('headerMusicProgressContainer');
+        if (!container || !this.audio.duration) return;
+        const rect = container.getBoundingClientRect();
+        const clickX = event.clientX - rect.left;
+        const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+        this.audio.currentTime = ratio * this.audio.duration;
+    }
+
+    updateHeaderTrackInfo(track) {
+        const titleEl = document.getElementById('headerMusicTitle');
+        const artistEl = document.getElementById('headerMusicArtist');
+        if (titleEl) titleEl.textContent = track.title || 'Аудиозапись';
+        if (artistEl) artistEl.textContent = track.artist || 'GoSocial Player';
+    }
+
+    updateUIState() {
+        const playerHeader = document.getElementById('headerMusicPlayer');
+        const playIcon = document.getElementById('headerPlayIcon');
+
+        if (playerHeader) {
+            playerHeader.classList.toggle('is-playing', this.isPlaying);
+        }
+        if (playIcon) {
+            playIcon.textContent = this.isPlaying ? '⏸️' : '▶️';
+        }
+
+        // Синхронизация кнопки в профиле
+        const heroPlayIcon = document.getElementById('heroProfilePlayIcon');
+        const heroCard = document.getElementById('heroMusicCard');
+        if (heroPlayIcon && heroCard) {
+            const heroUrl = heroCard.getAttribute('data-music-url');
+            const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === heroUrl);
+            heroPlayIcon.textContent = isThisPlaying ? '⏸️' : '▶️';
+            heroCard.classList.toggle('is-active-playing', isThisPlaying);
+        }
+
+        // Синхронизация карточек постов
+        document.querySelectorAll('.post-music-card').forEach(card => {
+            const url = card.getAttribute('data-music-url');
+            const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === url);
+            const icon = card.querySelector('.music-play-icon');
+            if (icon) icon.textContent = isThisPlaying ? '⏸️' : '▶️';
+            card.classList.toggle('is-active-playing', isThisPlaying);
+        });
+
+        // Синхронизация сообщений чата
+        document.querySelectorAll('.chat-audio-card').forEach(card => {
+            const url = card.getAttribute('data-audio-url');
+            const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === url);
+            const icon = card.querySelector('.chat-audio-icon');
+            if (icon) icon.textContent = isThisPlaying ? '⏸️' : '▶️';
+            card.classList.toggle('is-active-playing', isThisPlaying);
+        });
+    }
+}
+
+window.musicPlayer = new GlobalMusicPlayer();
+document.addEventListener('DOMContentLoaded', () => {
+    window.musicPlayer.init();
+});
+
+// ==========================================
+// COMPOSER MUSIC LOGIC
+// ==========================================
+function toggleComposerMusicBox() {
+    const box = document.getElementById('composerMusicBox');
+    if (!box) return;
+    const isHidden = (box.style.display === 'none' || !box.style.display);
+    box.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+        expandComposer();
+    }
+}
+
+async function handleComposerAudioUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудиофайла на сервер...', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка загрузки аудио');
+        }
+        const data = await res.json();
+        const cleanName = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        setComposerMusicPreset(data.url, cleanName, window.CURRENT_USER_DISPLAY_NAME || 'Автор');
+        showToast('Аудиофайл успешно прикреплен! 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function setComposerMusicPreset(url, title, artist) {
+    currentComposerAudioUrl = url;
+    currentComposerAudioTitle = title;
+    currentComposerAudioArtist = artist;
+
+    const urlInput = document.getElementById('composerMusicUrl');
+    const titleInput = document.getElementById('composerMusicTitle');
+    const artistInput = document.getElementById('composerMusicArtist');
+    if (urlInput) urlInput.value = url;
+    if (titleInput) titleInput.value = title;
+    if (artistInput) artistInput.value = artist;
+
+    const preview = document.getElementById('composerMusicPreview');
+    const pTitle = document.getElementById('composerPreviewTitle');
+    const pArtist = document.getElementById('composerPreviewArtist');
+    if (pTitle) pTitle.textContent = title;
+    if (pArtist) pArtist.textContent = artist;
+    if (preview) preview.style.display = 'block';
+
+    const box = document.getElementById('composerMusicBox');
+    if (box) box.style.display = 'none';
+}
+
+function updateComposerMusicState() {
+    const url = document.getElementById('composerMusicUrl')?.value.trim();
+    const title = document.getElementById('composerMusicTitle')?.value.trim() || 'Аудиозапись';
+    const artist = document.getElementById('composerMusicArtist')?.value.trim() || 'Исполнитель';
+
+    if (url) {
+        setComposerMusicPreset(url, title, artist);
+    } else {
+        clearComposerMusic();
+    }
+}
+
+function clearComposerMusic() {
+    currentComposerAudioUrl = '';
+    currentComposerAudioTitle = '';
+    currentComposerAudioArtist = '';
+
+    const urlInput = document.getElementById('composerMusicUrl');
+    const titleInput = document.getElementById('composerMusicTitle');
+    const artistInput = document.getElementById('composerMusicArtist');
+    if (urlInput) urlInput.value = '';
+    if (titleInput) titleInput.value = '';
+    if (artistInput) artistInput.value = '';
+
+    const preview = document.getElementById('composerMusicPreview');
+    if (preview) preview.style.display = 'none';
+}
+
+function previewComposerAudio(e) {
+    if (e) e.stopPropagation();
+    if (!currentComposerAudioUrl) return;
+    window.musicPlayer.playTrack({
+        url: currentComposerAudioUrl,
+        title: currentComposerAudioTitle || 'Аудиозапись',
+        artist: currentComposerAudioArtist || 'Предпросмотр',
+        source: 'composer'
+    });
+}
+
+// ==========================================
+// PROFILE MUSIC LOGIC
+// ==========================================
+async function handleProfileMusicUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка музыки профиля...', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка загрузки аудио');
+        }
+        const data = await res.json();
+        const cleanName = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        setProfileMusicPreset(data.url, cleanName, window.CURRENT_USER_DISPLAY_NAME || 'Профиль');
+        showToast('Музыка профиля прикреплена! 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function setProfileMusicPreset(url, title, artist) {
+    const urlInput = document.getElementById('editMusicUrl');
+    const titleInput = document.getElementById('editMusicTitle');
+    const artistInput = document.getElementById('editMusicArtist');
+    if (urlInput) urlInput.value = url;
+    if (titleInput) titleInput.value = title;
+    if (artistInput) artistInput.value = artist;
+    updateModalMusicPreviewState();
+}
+
+function clearProfileMusicPreset() {
+    const urlInput = document.getElementById('editMusicUrl');
+    const titleInput = document.getElementById('editMusicTitle');
+    const artistInput = document.getElementById('editMusicArtist');
+    if (urlInput) urlInput.value = '';
+    if (titleInput) titleInput.value = '';
+    if (artistInput) artistInput.value = '';
+    updateModalMusicPreviewState();
+}
+
+function updateModalMusicPreviewState() {
+    const url = document.getElementById('editMusicUrl')?.value.trim();
+    const title = document.getElementById('editMusicTitle')?.value.trim() || 'Аудиозапись';
+    const artist = document.getElementById('editMusicArtist')?.value.trim() || 'Исполнитель';
+    const wrap = document.getElementById('modalMusicPreviewWrap');
+    const pTitle = document.getElementById('modalPreviewTitle');
+    const pArtist = document.getElementById('modalPreviewArtist');
+
+    if (url && wrap) {
+        wrap.style.display = 'block';
+        if (pTitle) pTitle.textContent = title;
+        if (pArtist) pArtist.textContent = artist;
+    } else if (wrap) {
+        wrap.style.display = 'none';
+    }
+}
+
+function previewModalAudio(e) {
+    if (e) e.stopPropagation();
+    const url = document.getElementById('editMusicUrl')?.value.trim();
+    const title = document.getElementById('editMusicTitle')?.value.trim() || 'Музыка профиля';
+    const artist = document.getElementById('editMusicArtist')?.value.trim() || 'Предпросмотр';
+    if (!url) return;
+    window.musicPlayer.playTrack({ url, title, artist, source: 'modal' });
+}
+
+function toggleHeroProfileMusic(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    const card = document.getElementById('heroMusicCard');
+    if (!card) return;
+    const url = card.getAttribute('data-music-url');
+    const title = card.getAttribute('data-music-title') || 'Трек профиля';
+    const artist = card.getAttribute('data-music-artist') || 'Профиль';
+    if (!url) return;
+    window.musicPlayer.playTrack({ url, title, artist, elementId: 'heroMusicCard', source: 'profile' });
+}
+
+// ==========================================
+// CHAT AUDIO MESSAGES LOGIC
+// ==========================================
+function toggleChatMusicDrawer() {
+    const drawer = document.getElementById('chatMusicDrawer');
+    if (!drawer) return;
+    const isHidden = (drawer.style.display === 'none' || !drawer.style.display);
+    drawer.style.display = isHidden ? 'flex' : 'none';
+}
+
+async function handleChatAudioUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудио в чат...', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка загрузки аудио');
+        }
+        const data = await res.json();
+        const cleanName = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        attachChatMusicPreset(data.url, cleanName, window.CURRENT_USER_DISPLAY_NAME || 'Вы');
+        showToast('Аудио прикреплено к сообщению! 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function attachChatMusicPreset(url, title, artist) {
+    pendingChatAudio = { url, title, artist };
+    const preview = document.getElementById('chatAudioPreview');
+    const pTitle = document.getElementById('chatAudioPreviewTitle');
+    const pArtist = document.getElementById('chatAudioPreviewArtist');
+    if (pTitle) pTitle.textContent = title;
+    if (pArtist) pArtist.textContent = artist;
+    if (preview) preview.style.display = 'block';
+
+    const drawer = document.getElementById('chatMusicDrawer');
+    if (drawer) drawer.style.display = 'none';
+
+    const input = document.getElementById('chatMessageInput');
+    if (input) input.focus();
+}
+
+function clearChatAudioAttachment() {
+    pendingChatAudio = null;
+    const preview = document.getElementById('chatAudioPreview');
+    if (preview) preview.style.display = 'none';
+}
+
+function previewChatAudio(e) {
+    if (e) e.stopPropagation();
+    if (!pendingChatAudio) return;
+    window.musicPlayer.playTrack({
+        url: pendingChatAudio.url,
+        title: pendingChatAudio.title || 'Аудиосообщение',
+        artist: pendingChatAudio.artist || 'Чат',
+        source: 'chat-preview'
+    });
 }
