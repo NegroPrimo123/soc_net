@@ -276,8 +276,14 @@ function initComposer() {
             if (item.kind === 'file' && item.type.startsWith('image/')) {
                 const blob = item.getAsFile();
                 if (blob) {
-                    expandComposer();
-                    uploadSingleFile(blob);
+                    const profView = document.getElementById('profileView');
+                    const isProfileActive = profView && profView.style.display !== 'none' && document.activeElement && (document.activeElement.id === 'profPostContent' || document.activeElement.closest('#profComposerCard'));
+                    if (isProfileActive) {
+                        uploadProfSingleImage(blob);
+                    } else {
+                        expandComposer();
+                        uploadSingleFile(blob);
+                    }
                 }
             }
         }
@@ -3658,6 +3664,9 @@ async function handleProfileUpdate(e) {
 // СОЗДАНИЕ ПОСТА В ПРОФИЛЕ С ФОТО
 // ==========================================
 let currentProfUploadedImageUrl = '';
+let currentProfAudioUrl = '';
+let currentProfAudioTitle = '';
+let currentProfAudioArtist = '';
 
 function toggleProfImageBox() {
     const box = document.getElementById('profImageBox');
@@ -3665,6 +3674,16 @@ function toggleProfImageBox() {
     box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
     if (box.style.display === 'block') {
         const inp = document.getElementById('profImageUrl');
+        if (inp) inp.focus();
+    }
+}
+
+function toggleProfMusicBox() {
+    const box = document.getElementById('profMusicBox');
+    if (!box) return;
+    box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+    if (box.style.display === 'block') {
+        const inp = document.getElementById('profMusicTitle');
         if (inp) inp.focus();
     }
 }
@@ -3691,9 +3710,12 @@ function updateProfImagePreview() {
     }
 }
 
-async function handleProfComposerFileUpload(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
+async function uploadProfSingleImage(file) {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Пожалуйста, войдите в аккаунт для загрузки файлов 🔐', 'error');
+        openAuthModal('login');
+        return;
+    }
 
     if (file.size > 30 * 1024 * 1024) {
         showToast('Размер файла не должен превышать 30 МБ', 'error');
@@ -3703,7 +3725,7 @@ async function handleProfComposerFileUpload(e) {
     const formData = new FormData();
     formData.append('file', file);
 
-    showToast('Загрузка фото...', 'info');
+    showToast('Загрузка фото в профиль...', 'info');
 
     try {
         const res = await fetch('/api/upload', {
@@ -3740,6 +3762,16 @@ async function handleProfComposerFileUpload(e) {
     }
 }
 
+async function handleProfComposerFileUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+        await uploadProfSingleImage(file);
+    } finally {
+        e.target.value = '';
+    }
+}
+
 function clearProfComposerFile() {
     currentProfUploadedImageUrl = '';
     const fileInput = document.getElementById('profFileInput');
@@ -3752,22 +3784,130 @@ function clearProfComposerFile() {
     if (previewImg) previewImg.src = '';
 }
 
+async function handleProfComposerAudioUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудиофайла на сервер...', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка загрузки аудио');
+        }
+        const data = await res.json();
+        const cleanName = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        setProfComposerMusicPreset(data.url, cleanName, window.CURRENT_USER_DISPLAY_NAME || 'Автор');
+        showToast('Аудиофайл успешно прикреплен! 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function setProfComposerMusicPreset(url, title, artist) {
+    currentProfAudioUrl = url;
+    currentProfAudioTitle = title;
+    currentProfAudioArtist = artist;
+
+    const urlInput = document.getElementById('profMusicUrl');
+    const titleInput = document.getElementById('profMusicTitle');
+    const artistInput = document.getElementById('profMusicArtist');
+    if (urlInput) urlInput.value = url;
+    if (titleInput) titleInput.value = title;
+    if (artistInput) artistInput.value = artist;
+
+    const preview = document.getElementById('profMusicPreview');
+    const pTitle = document.getElementById('profPreviewTitle');
+    const pArtist = document.getElementById('profPreviewArtist');
+    if (pTitle) pTitle.textContent = title;
+    if (pArtist) pArtist.textContent = artist;
+    if (preview) preview.style.display = 'block';
+
+    const box = document.getElementById('profMusicBox');
+    if (box) box.style.display = 'none';
+}
+
+function updateProfMusicState() {
+    const url = document.getElementById('profMusicUrl')?.value.trim();
+    const title = document.getElementById('profMusicTitle')?.value.trim() || 'Аудиозапись';
+    const artist = document.getElementById('profMusicArtist')?.value.trim() || 'Исполнитель';
+
+    if (url) {
+        setProfComposerMusicPreset(url, title, artist);
+    } else {
+        clearProfComposerMusic();
+    }
+}
+
+function clearProfComposerMusic() {
+    currentProfAudioUrl = '';
+    currentProfAudioTitle = '';
+    currentProfAudioArtist = '';
+
+    const urlInput = document.getElementById('profMusicUrl');
+    const titleInput = document.getElementById('profMusicTitle');
+    const artistInput = document.getElementById('profMusicArtist');
+    if (urlInput) urlInput.value = '';
+    if (titleInput) titleInput.value = '';
+    if (artistInput) artistInput.value = '';
+
+    const preview = document.getElementById('profMusicPreview');
+    if (preview) preview.style.display = 'none';
+}
+
+function previewProfComposerAudio(e) {
+    if (e) e.stopPropagation();
+    if (!currentProfAudioUrl) return;
+    window.musicPlayer.playTrack({
+        url: currentProfAudioUrl,
+        title: currentProfAudioTitle || 'Аудиозапись',
+        artist: currentProfAudioArtist || 'Предпросмотр',
+        source: 'prof-composer'
+    });
+}
+
 async function createProfilePost() {
     const textarea = document.getElementById('profPostContent');
     let content = textarea ? textarea.value.trim() : '';
     const urlInput = document.getElementById('profImageUrl');
-    const imageUrl = currentProfUploadedImageUrl || (urlInput ? urlInput.value.trim() : '');
+    let imageUrl = currentProfUploadedImageUrl || (urlInput ? urlInput.value.trim() : '');
 
-    const musicUrl = '';
-    const musicTitle = '';
-    const musicArtist = '';
+    const profMusicUrlEl = document.getElementById('profMusicUrl');
+    const profMusicTitleEl = document.getElementById('profMusicTitle');
+    const profMusicArtistEl = document.getElementById('profMusicArtist');
 
-    if (imageUrl && content === imageUrl) {
+    let musicUrl = currentProfAudioUrl || (profMusicUrlEl ? profMusicUrlEl.value.trim() : '');
+    let musicTitle = currentProfAudioTitle || (profMusicTitleEl ? profMusicTitleEl.value.trim() : '') || (musicUrl ? 'Аудиозапись' : '');
+    let musicArtist = currentProfAudioArtist || (profMusicArtistEl ? profMusicArtistEl.value.trim() : '') || (musicUrl ? (window.CURRENT_USER_DISPLAY_NAME || 'Автор') : '');
+
+    // Авто-детекция ссылки на картинку из текста
+    const imagePattern = /^https?:\/\/[^\s]+\.(jpeg|jpg|gif|png|webp)(\?[^\s]*)?$/i;
+    if (!imageUrl && imagePattern.test(content)) {
+        imageUrl = content;
+        content = '';
+    } else if (imageUrl && content === imageUrl) {
         content = '';
     }
 
-    if (!content && !imageUrl) {
-        showToast('Введите текст публикации или прикрепите фото', 'error');
+    // Авто-детекция ссылки на аудио из текста
+    const audioPattern = /^https?:\/\/[^\s]+\.(mp3|wav|ogg|m4a)(\?[^\s]*)?$/i;
+    if (!musicUrl && audioPattern.test(content)) {
+        musicUrl = content;
+        musicTitle = 'Аудиозапись';
+        musicArtist = window.CURRENT_USER_DISPLAY_NAME || 'Автор';
+        content = '';
+    }
+
+    if (!content && !imageUrl && !musicUrl) {
+        showToast('Введите текст публикации, прикрепите фото или аудиозапись', 'error');
         return;
     }
 
@@ -3790,6 +3930,12 @@ async function createProfilePost() {
 
         if (textarea) textarea.value = '';
         clearProfComposerFile();
+        clearProfComposerMusic();
+        const pBox = document.getElementById('profMusicBox');
+        if (pBox) pBox.style.display = 'none';
+        const imgBox = document.getElementById('profImageBox');
+        if (imgBox) imgBox.style.display = 'none';
+
         showToast('Запись опубликована в ваш профиль', 'success');
 
         const profPosts = document.getElementById('profPostsContainer');
@@ -6273,6 +6419,9 @@ let currentComposerAudioArtist = '';
 
 let pendingChatAudio = null;
 
+const HEADER_PLAY_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon" style="margin-left: 2px;"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+const HEADER_PAUSE_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor"/></svg>';
+
 class GlobalMusicPlayer {
     constructor() {
         this.audio = new Audio();
@@ -6414,6 +6563,10 @@ class GlobalMusicPlayer {
             playerHeader.style.display = 'none';
             playerHeader.classList.remove('is-active', 'is-playing');
         }
+        const vinyl = document.getElementById('headerMusicVinyl');
+        if (vinyl) {
+            vinyl.style.animationPlayState = 'paused';
+        }
         this.updateUIState();
     }
 
@@ -6486,7 +6639,11 @@ class GlobalMusicPlayer {
             }
         }
         if (playIcon) {
-            playIcon.textContent = this.isPlaying ? '⏸️' : '▶️';
+            playIcon.innerHTML = this.isPlaying ? HEADER_PAUSE_SVG : HEADER_PLAY_SVG;
+        }
+        const vinyl = document.getElementById('headerMusicVinyl');
+        if (vinyl) {
+            vinyl.style.animationPlayState = this.isPlaying ? 'running' : 'paused';
         }
 
         // Синхронизация кнопки в профиле

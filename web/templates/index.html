@@ -1090,28 +1090,49 @@
                 {{end}}
             </div>
 
-            <!-- ГЛОБАЛЬНЫЙ МУЗЫКАЛЬНЫЙ ПЛЕЕР В ШАПКЕ (скрыт по умолчанию, появляется ТОЛЬКО когда играет трек) -->
+            <!-- ГЛОБАЛЬНЫЙ МУЗЫКАЛЬНЫЙ ПЛЕЕР В ШАПКЕ (стильный киберпанк плеер, активируется при воспроизведении трека) -->
             <div class="header-music-player" id="headerMusicPlayer" style="display: none;">
-                <div class="header-music-disc-wrap" onclick="window.musicPlayer.togglePlay()" title="Play / Pause">
-                    <span class="header-disc-icon" id="headerDiscIcon">💿</span>
-                    <div class="header-eq-bars" id="headerEqBars">
-                        <span></span><span></span><span></span><span></span>
+                <!-- Стильная виниловая пластинка с неоновой втулкой и плавным вращением -->
+                <div class="header-music-vinyl-wrap" onclick="window.musicPlayer.togglePlay()" title="Воспроизведение / Пауза">
+                    <div class="header-music-vinyl" id="headerMusicVinyl">
+                        <div class="header-vinyl-ring"></div>
+                        <div class="header-vinyl-spindle"></div>
+                        <div class="header-vinyl-sheen"></div>
                     </div>
                 </div>
-                <div class="header-music-meta" id="headerMusicMeta" onclick="window.musicPlayer.togglePlay()" title="Play / Pause">
+
+                <!-- Метаданные трека: название и автор -->
+                <div class="header-music-meta" id="headerMusicMeta" onclick="window.musicPlayer.togglePlay()" title="Воспроизведение / Пауза">
                     <div class="header-track-title-wrap">
                         <span class="header-track-title" id="headerMusicTitle">Аудиозапись</span>
                     </div>
-                    <div class="header-track-artist" id="headerMusicArtist">GoSocial</div>
+                    <div class="header-track-subrow">
+                        <span class="header-track-artist" id="headerMusicArtist">GoSocial</span>
+                        <div class="header-eq-bars" id="headerEqBars">
+                            <span></span><span></span><span></span><span></span>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Векторные SVG элементы управления -->
                 <div class="header-music-controls">
-                    <button type="button" class="header-music-btn" id="headerPrevBtn" onclick="window.musicPlayer.prevTrack()" title="Предыдущий трек">⏮️</button>
-                    <button type="button" class="header-music-btn header-music-play-btn" id="headerPlayBtn" onclick="window.musicPlayer.togglePlay()" title="Воспроизведение / Пауза">
-                        <span id="headerPlayIcon">▶️</span>
+                    <button type="button" class="header-music-btn header-music-step-btn" id="headerPrevBtn" onclick="window.musicPlayer.prevTrack()" title="Предыдущий трек">
+                        <svg viewBox="0 0 24 24" class="header-ctrl-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" fill="currentColor"/></svg>
                     </button>
-                    <button type="button" class="header-music-btn" id="headerNextBtn" onclick="window.musicPlayer.nextTrack()" title="Следующий трек">⏭️</button>
-                    <button type="button" class="header-music-btn header-music-close-btn" onclick="window.musicPlayer.closePlayer(event)" title="Закрыть плеер" style="font-size: 0.85rem; opacity: 0.6; margin-left: 2px;">✕</button>
+                    <button type="button" class="header-music-btn header-music-play-btn" id="headerPlayBtn" onclick="window.musicPlayer.togglePlay()" title="Воспроизведение / Пауза">
+                        <span id="headerPlayIcon" class="header-play-icon-wrap">
+                            <svg viewBox="0 0 24 24" class="header-ctrl-icon" style="margin-left: 2px;"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+                        </span>
+                    </button>
+                    <button type="button" class="header-music-btn header-music-step-btn" id="headerNextBtn" onclick="window.musicPlayer.nextTrack()" title="Следующий трек">
+                        <svg viewBox="0 0 24 24" class="header-ctrl-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" fill="currentColor"/></svg>
+                    </button>
+                    <button type="button" class="header-music-btn header-music-close-btn" onclick="window.musicPlayer.closePlayer(event)" title="Закрыть плеер">
+                        <svg viewBox="0 0 24 24" class="header-ctrl-icon"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>
+                    </button>
                 </div>
+
+                <!-- Неоновый прогресс-бар трека -->
                 <div class="header-music-progress-container" id="headerMusicProgressContainer" onclick="window.musicPlayer.handleProgressClick(event)" title="Перемотать трек">
                     <div class="header-music-progress-bar" id="headerMusicProgressBar"></div>
                 </div>
@@ -1555,7 +1576,7 @@
                     <div class="profile-tab-panes">
                         <!-- Вкладка записей -->
                         <div id="profTabContentPosts" class="tab-pane active">
-                            <!-- Блок постинга в свой профиль с поддержкой фото -->
+                            <!-- Блок постинга в свой профиль с поддержкой фото и музыки -->
                             <div id="profComposerCard" class="post-composer-card" style="display: none; margin-bottom: 1.25rem;">
                                 <div class="composer-header-row">
                                     <img id="profComposerAvatar" src="{{.CurrentUser.AvatarURL}}" alt="user" class="mini-avatar">
@@ -1576,6 +1597,20 @@
                                     </div>
                                 </div>
 
+                                <!-- Превью выбранной музыки для профиля -->
+                                <div id="profMusicPreview" class="composer-music-preview" style="display: none; margin-top: 0.75rem;">
+                                    <div class="composer-music-preview-card">
+                                        <button type="button" class="preview-music-play-btn" onclick="previewProfComposerAudio(event)" title="Прослушать">
+                                            <span id="profPreviewPlayIcon">▶️</span>
+                                        </button>
+                                        <div class="preview-music-info">
+                                            <span id="profPreviewTitle" class="preview-music-title">Название трека</span>
+                                            <span id="profPreviewArtist" class="preview-music-artist">Исполнитель</span>
+                                        </div>
+                                        <button type="button" class="upload-remove-btn" onclick="clearProfComposerMusic()" title="Удалить аудио">✕</button>
+                                    </div>
+                                </div>
+
                                 <!-- Поле для ввода прямой ссылки на фото -->
                                 <div class="composer-image-input-box" id="profImageBox" style="display: none; margin-top: 0.6rem;">
                                     <div class="image-input-row">
@@ -1585,18 +1620,42 @@
                                     </div>
                                 </div>
 
+                                <!-- Блок выбора музыки в композере профиля -->
+                                <div class="composer-music-input-box" id="profMusicBox" style="display: none; margin-top: 0.6rem;">
+                                    <div class="music-input-header">
+                                        <span class="music-box-title">🎵 Прикрепить музыку к посту профиля</span>
+                                        <button type="button" class="btn btn-secondary btn-xs" onclick="toggleProfMusicBox()">✕ Скрыть</button>
+                                    </div>
+                                    <div class="music-input-fields">
+                                        <div class="music-field-row">
+                                            <input type="text" id="profMusicTitle" placeholder="Название трека (напр. Neon Drift)" oninput="updateProfMusicState()">
+                                            <input type="text" id="profMusicArtist" placeholder="Исполнитель (напр. Олег)" oninput="updateProfMusicState()">
+                                        </div>
+                                        <div class="music-source-row">
+                                            <input type="text" id="profMusicUrl" placeholder="URL аудиофайла (.mp3, .wav) или загрузите свой файл" oninput="updateProfMusicState()">
+                                            <button type="button" class="btn btn-outline btn-xs" onclick="document.getElementById('profAudioFileInput').click()">📁 Загрузить файл</button>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="composer-actions-bar" style="margin-top: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
                                     <div class="composer-left-tools">
                                         <!-- Кнопка загрузки фото с диска -->
                                         <button type="button" class="tool-btn btn-attach-disk" onclick="document.getElementById('profFileInput').click()" title="Загрузить фото с компьютера">
-                                            <span>Фото</span>
+                                            <span>📷 Фото</span>
                                         </button>
-                                        <input type="file" id="profFileInput" style="display: none;" accept="image/*" onchange="handleProfComposerFileUpload(event)">
+                                        <input type="file" id="profFileInput" style="display: none;" accept="image/*,.jpg,.jpeg,.png,.webp,.gif" onchange="handleProfComposerFileUpload(event)">
 
-                                        <!-- Кнопка ссылки -->
+                                        <!-- Кнопка ссылки на фото -->
                                         <button type="button" class="tool-btn" onclick="toggleProfImageBox()" title="Прикрепить фото по ссылке">
-                                            <span>Ссылка</span>
+                                            <span>🔗 Ссылка</span>
                                         </button>
+
+                                        <!-- Кнопка прикрепления музыки -->
+                                        <button type="button" class="tool-btn btn-attach-music" onclick="toggleProfMusicBox()" title="Прикрепить музыку к посту профиля">
+                                            <span>🎵 Музыка</span>
+                                        </button>
+                                        <input type="file" id="profAudioFileInput" style="display: none;" accept="audio/*,.mp3,.wav,.ogg,.m4a" onchange="handleProfComposerAudioUpload(event)">
                                     </div>
 
                                     <div class="composer-right-actions">
