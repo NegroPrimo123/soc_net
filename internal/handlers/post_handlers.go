@@ -100,6 +100,34 @@ func (h *Handler) GetFeed(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (h *Handler) GetPost(w http.ResponseWriter, r *http.Request) {
+	targetIDStr := r.PathValue("id")
+	if targetIDStr == "" {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 3 {
+			targetIDStr = parts[2]
+		}
+	}
+	postID, err := strconv.Atoi(targetIDStr)
+	if err != nil || postID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "неверный ID поста"})
+		return
+	}
+
+	currentUserID := 0
+	if currentUser := h.getUserFromRequest(r); currentUser != nil {
+		currentUserID = currentUser.ID
+	}
+
+	post, err := h.postRepo.GetPostByID(postID, currentUserID)
+	if err != nil || post == nil {
+		respondJSON(w, http.StatusNotFound, map[string]string{"error": "пост не найден"})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, post)
+}
+
 func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	authUser := h.getUserFromRequest(r)

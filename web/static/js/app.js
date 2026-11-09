@@ -16,6 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const userParam = urlParams.get('user');
     const sendGiftParam = urlParams.get('send_gift');
     const giftDetailParam = urlParams.get('gift_detail');
+    const postParam = urlParams.get('post');
+    if (postParam) {
+        setTimeout(() => navigateToPost(parseInt(postParam, 10)), 350);
+    }
 
     if (viewParam === 'showcase') {
         navigateTo('showcase');
@@ -4926,6 +4930,99 @@ async function executeBatchDelete(forEveryone) {
     }
 }
 
+
+function formatChatMessageText(text) {
+    if (!text) return '';
+
+    // Проверяем наличие ссылки на публикацию: ?post=123 или /?post=123
+    const postMatch = text.match(/(?:https?:\/\/[^\s<]+)?\/?\?post=(\d+)/i);
+    let repostCardHtml = '';
+    let sharedPostId = null;
+
+    if (postMatch) {
+        sharedPostId = parseInt(postMatch[1], 10);
+        let snippet = '';
+        const snippetMatch = text.match(/Поделился публикацией:\s*(?:"([^"]+)"|'([^']+)'|([^?\n\r]+))/i);
+        if (snippetMatch) {
+            snippet = (snippetMatch[1] || snippetMatch[2] || snippetMatch[3] || '').trim();
+        }
+
+        repostCardHtml = `
+            <div class="chat-repost-card" onclick="navigateToPost(${sharedPostId}, event)" title="Нажмите, чтобы открыть публикацию">
+                <div class="chat-repost-header">
+                    <span style="display: inline-flex; align-items: center; gap: 6px;">
+                        <span>📌</span> <span>Публикация #${sharedPostId}</span>
+                    </span>
+                    <span class="chat-repost-arrow">Перейти ↗</span>
+                </div>
+                ${snippet ? `<div class="chat-repost-snippet">${escapeHtml(snippet)}</div>` : ''}
+            </div>
+        `;
+    }
+
+    let escaped = escapeHtml(text);
+
+    // Превращаем внутренние ссылки на публикации в кликабельные кнопки перехода
+    escaped = escaped.replace(/(https?:\/\/[^\s<]+|\/)\?post=(\d+)/gi, (match, prefix, pid) => {
+        return `<a href="/?post=${pid}" class="chat-post-link" onclick="event.preventDefault(); event.stopPropagation(); navigateToPost(${pid}, event);" title="Перейти к публикации #${pid}">${match}</a>`;
+    });
+
+    // Обычные внешние ссылки
+    escaped = escaped.replace(/(https?:\/\/[^\s<]+)/gi, (match) => {
+        if (match.includes('chat-post-link') || match.includes('navigateToPost')) return match;
+        return `<a href="${match}" target="_blank" rel="noopener noreferrer" class="chat-external-link" onclick="event.stopPropagation()">${match}</a>`;
+    });
+
+    escaped = escaped.replace(/\n/g, '<br>');
+    return escaped + repostCardHtml;
+}
+
+async function navigateToPost(postId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    if (!postId) return;
+
+    navigateTo('feed');
+
+    try {
+        history.pushState(null, '', `/?post=${postId}`);
+    } catch (_) {}
+
+    let postEl = document.getElementById(`post-${postId}`);
+
+    if (!postEl) {
+        try {
+            const res = await fetch(`/api/posts/${postId}`);
+            if (res.ok) {
+                const post = await res.json();
+                const container = document.getElementById('postsContainer');
+                if (container) {
+                    postEl = createPostElement(post);
+                    container.insertBefore(postEl, container.firstChild);
+                }
+            }
+        } catch (e) {
+            console.error('Error fetching post:', e);
+        }
+    }
+
+    if (postEl) {
+        setTimeout(() => {
+            postEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            postEl.classList.remove('post-card-highlighted');
+            void postEl.offsetWidth;
+            postEl.classList.add('post-card-highlighted');
+            setTimeout(() => {
+                postEl.classList.remove('post-card-highlighted');
+            }, 3500);
+        }, 180);
+    } else {
+        showToast('Публикация не найдена или была удалена', 'error');
+    }
+}
+
 function buildChatMessageBubbleHtml(m, isOut) {
     const trimmed = (m.content || '').trim();
     const isImageFile = /\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(trimmed);
@@ -4956,7 +5053,7 @@ function buildChatMessageBubbleHtml(m, isOut) {
     let contentHtml = '';
     if (audioHtml) {
         if (trimmed && trimmed !== audioUrl) {
-            contentHtml = audioHtml + `<div class="chat-text-after-audio" style="margin-top: 4px;">${escapeHtml(trimmed)}</div>`;
+            contentHtml = audioHtml + `<div class="chat-text-after-audio" style="margin-top: 4px;">${formatChatMessageText(trimmed)}</div>`;
         } else {
             contentHtml = audioHtml;
         }
@@ -4966,7 +5063,7 @@ function buildChatMessageBubbleHtml(m, isOut) {
         const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
         contentHtml = `<a href="${escapeHtml(trimmed)}" target="_blank" download class="chat-file-attachment" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.08); border-radius: 10px; color: #fff; text-decoration: none; font-weight: 500;">📎 <span>${escapeHtml(fileName || 'Скачать файл')}</span></a>`;
     } else {
-        contentHtml = escapeHtml(m.content || '');
+        contentHtml = formatChatMessageText(m.content || '');
     }
     return contentHtml;
 }

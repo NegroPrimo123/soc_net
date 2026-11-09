@@ -5523,3 +5523,87 @@ input:checked + .toggle-slider:before {
     background: rgba(255, 77, 79, 0.15);
     color: #ff7875;
 }
+
+/* ==========================================
+   DIRECT MESSAGES: REPOST / POST LINK CARDS & HIGHLIGHT
+   ========================================== */
+.chat-repost-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 10px 14px;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.32);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    text-align: left;
+    user-select: none;
+}
+.chat-repost-card:hover {
+    background: rgba(0, 240, 255, 0.16);
+    border-color: #00f0ff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 240, 255, 0.25);
+}
+.chat-repost-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #00f0ff;
+}
+.chat-repost-arrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: rgba(0, 240, 255, 0.18);
+    color: #fff;
+    font-size: 0.76rem;
+    font-weight: 600;
+    border: 1px solid rgba(0, 240, 255, 0.4);
+}
+.chat-repost-snippet {
+    font-size: 0.86rem;
+    color: rgba(255, 255, 255, 0.88);
+    line-height: 1.4;
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.chat-post-link {
+    color: #00f0ff !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+.chat-post-link:hover {
+    color: #fff !important;
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+.post-card.post-card-highlighted {
+    animation: postTargetHighlight 3.5s ease-out forwards;
+}
+@keyframes postTargetHighlight {
+    0% {
+        box-shadow: 0 0 0 3px #00f0ff, 0 0 40px rgba(0, 240, 255, 0.75);
+        border-color: #00f0ff !important;
+        transform: scale(1.02);
+    }
+    35% {
+        box-shadow: 0 0 0 2px #00f0ff, 0 0 25px rgba(0, 240, 255, 0.45);
+        transform: scale(1.01);
+    }
+    100% {
+        box-shadow: none;
+        border-color: var(--border-subtle);
+        transform: scale(1);
+    }
+}

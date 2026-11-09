@@ -23,6 +23,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 
 	// Feed & Posts API
 	mux.HandleFunc("GET /api/feed", h.GetFeed)
+	mux.HandleFunc("GET /api/posts/{id}", h.GetPost)
 	mux.HandleFunc("POST /api/posts", h.CreatePost)
 	mux.HandleFunc("PUT /api/posts/{id}", h.UpdatePost)
 	mux.HandleFunc("POST /api/posts/{id}/edit", h.UpdatePost)
