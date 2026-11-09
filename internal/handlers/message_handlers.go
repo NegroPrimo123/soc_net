@@ -188,12 +188,25 @@ func (h *Handler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Content = strings.TrimSpace(req.Content)
-	if req.Content == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "текст сообщения не может быть пустым"})
+	if req.AudioURL != nil {
+		trimmedAudio := strings.TrimSpace(*req.AudioURL)
+		req.AudioURL = &trimmedAudio
+	}
+	if req.AudioTitle != nil {
+		trimmedTitle := strings.TrimSpace(*req.AudioTitle)
+		req.AudioTitle = &trimmedTitle
+	}
+	if req.AudioArtist != nil {
+		trimmedArtist := strings.TrimSpace(*req.AudioArtist)
+		req.AudioArtist = &trimmedArtist
+	}
+
+	if req.Content == "" && (req.AudioURL != nil && *req.AudioURL == "") {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "сообщение не может быть пустым"})
 		return
 	}
 
-	msg, err := h.messageRepo.UpdateMessage(msgID, currentUser.ID, req.Content)
+	msg, err := h.messageRepo.UpdateMessage(msgID, currentUser.ID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist)
 	if err != nil {
 		respondJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 		return

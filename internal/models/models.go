@@ -112,7 +112,10 @@ type Message struct {
 }
 
 type UpdateMessageRequest struct {
-	Content string `json:"content"`
+	Content     string  `json:"content"`
+	AudioURL    *string `json:"audio_url,omitempty"`
+	AudioTitle  *string `json:"audio_title,omitempty"`
+	AudioArtist *string `json:"audio_artist,omitempty"`
 }
 
 type DeleteMessageRequest struct {

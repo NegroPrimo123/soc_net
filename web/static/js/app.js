@@ -4696,21 +4696,38 @@ let pendingBatchDelete = false;
 function startEditChatMessage(msgId) {
     const msgEl = document.getElementById(`chat-msg-${msgId}`);
     if (!msgEl) return;
-    const contentEl = msgEl.querySelector('.chat-bubble-content');
-    if (!contentEl) return;
-    const text = contentEl.textContent.trim();
 
     editingChatMessageId = msgId;
+
+    const rawText = msgEl.getAttribute('data-raw-content') ?? '';
+    const audioUrl = msgEl.getAttribute('data-audio-url') || '';
+    const audioTitle = msgEl.getAttribute('data-audio-title') || 'Аудиозапись';
+    const audioArtist = msgEl.getAttribute('data-audio-artist') || '';
+
     const banner = document.getElementById('chatEditBanner');
     const preview = document.getElementById('chatEditPreviewText');
     const input = document.getElementById('chatMessageInput');
 
-    if (preview) preview.textContent = text;
+    if (preview) {
+        let previewDesc = rawText;
+        if (audioUrl) {
+            previewDesc = (rawText ? (rawText + ' ') : '') + `🎵 [${audioTitle}]`;
+        }
+        preview.textContent = previewDesc || 'Редактирование аудио';
+    }
     if (banner) banner.style.display = 'flex';
+
     if (input) {
-        input.value = text;
+        input.value = rawText;
         input.focus();
         input.select();
+    }
+
+    // Обработка аудиофайла в режиме редактирования:
+    if (audioUrl) {
+        attachChatMusicPreset(audioUrl, audioTitle, audioArtist);
+    } else {
+        clearChatAudioAttachment();
     }
 }
 
@@ -4720,6 +4737,8 @@ function cancelEditChatMessage() {
     const input = document.getElementById('chatMessageInput');
     if (banner) banner.style.display = 'none';
     if (input) input.value = '';
+    clearChatFile();
+    clearChatAudioAttachment();
 }
 
 function openDeleteMessageModal(msgId, isOut) {
@@ -4895,6 +4914,88 @@ async function executeBatchDelete(forEveryone) {
     }
 }
 
+function buildChatMessageBubbleHtml(m, isOut) {
+    const trimmed = (m.content || '').trim();
+    const isImageFile = /\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(trimmed);
+    const isUploadedPath = trimmed.startsWith('/uploads/');
+    const isAudioFile = /\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(trimmed);
+    const audioUrl = m.audio_url || (isAudioFile ? trimmed : '');
+
+    let audioHtml = '';
+    if (audioUrl) {
+        const audioTitle = m.audio_title || (isAudioFile ? trimmed.split('/').pop().replace(/^\d+_/, '') : 'Аудиозапись');
+        const audioArtist = m.audio_artist || (isOut ? (window.CURRENT_USER_DISPLAY_NAME || 'Вы') : (activeInterlocutorData ? activeInterlocutorData.display_name : 'Собеседник'));
+        audioHtml = `
+            <div class="chat-audio-card" id="chat-audio-${m.id}" data-audio-url="${escapeHtml(audioUrl)}" data-audio-title="${escapeHtml(audioTitle)}" data-audio-artist="${escapeHtml(audioArtist)}">
+                <button type="button" class="chat-audio-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(audioUrl)}', title: '${escapeHtml(audioTitle)}', artist: '${escapeHtml(audioArtist)}', elementId: 'chat-audio-${m.id}'}, event)" title="Слушать аудио">
+                    <span class="chat-audio-icon">▶️</span>
+                </button>
+                <div class="chat-audio-info">
+                    <div class="chat-audio-title">${escapeHtml(audioTitle)}</div>
+                    <div class="chat-audio-artist">${escapeHtml(audioArtist)}</div>
+                </div>
+                <div class="chat-audio-wave">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+            </div>
+        `;
+    }
+
+    let contentHtml = '';
+    if (audioHtml) {
+        if (trimmed && trimmed !== audioUrl) {
+            contentHtml = audioHtml + `<div class="chat-text-after-audio" style="margin-top: 4px;">${escapeHtml(trimmed)}</div>`;
+        } else {
+            contentHtml = audioHtml;
+        }
+    } else if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
+        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" class="chat-sent-image" onclick="openImageLightbox('${escapeHtml(trimmed)}', 'Фото')"></div>`;
+    } else if (isUploadedPath) {
+        const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
+        contentHtml = `<a href="${escapeHtml(trimmed)}" target="_blank" download class="chat-file-attachment" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.08); border-radius: 10px; color: #fff; text-decoration: none; font-weight: 500;">📎 <span>${escapeHtml(fileName || 'Скачать файл')}</span></a>`;
+    } else {
+        contentHtml = escapeHtml(m.content || '');
+    }
+    return contentHtml;
+}
+
+function setChatMessageRowData(row, m, isOut) {
+    const trimmed = (m.content || '').trim();
+    const isAudioFile = /\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(trimmed);
+    const audioUrl = m.audio_url || (isAudioFile ? trimmed : '');
+    const audioTitle = m.audio_title || (isAudioFile ? trimmed.split('/').pop().replace(/^\d+_/, '') : '');
+    const audioArtist = m.audio_artist || '';
+    const rawText = (trimmed === audioUrl) ? '' : (m.content || '');
+
+    row.setAttribute('data-msg-id', m.id);
+    row.setAttribute('data-is-out', isOut ? '1' : '0');
+    row.setAttribute('data-raw-content', rawText);
+    row.setAttribute('data-audio-url', audioUrl);
+    row.setAttribute('data-audio-title', audioTitle);
+    row.setAttribute('data-audio-artist', audioArtist);
+}
+
+function updateChatMessageDOM(m) {
+    const row = document.getElementById(`chat-msg-${m.id}`);
+    if (!row) return;
+
+    const isOut = (row.getAttribute('data-is-out') === '1') || (m.sender_id === window.CURRENT_USER_ID);
+    setChatMessageRowData(row, m, isOut);
+
+    const contentEl = row.querySelector('.chat-bubble-content');
+    if (contentEl) {
+        contentEl.innerHTML = buildChatMessageBubbleHtml(m, isOut);
+    }
+
+    const footer = row.querySelector('.chat-bubble-footer');
+    if (footer && !footer.querySelector('.chat-bubble-edited')) {
+        const ed = document.createElement('span');
+        ed.className = 'chat-bubble-edited';
+        ed.textContent = ' • (ред.)';
+        footer.insertBefore(ed, footer.firstChild);
+    }
+}
+
 function appendChatMessageElement(m) {
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
@@ -4923,54 +5024,13 @@ function appendChatMessageElement(m) {
     const row = document.createElement('div');
     row.id = `chat-msg-${m.id}`;
     row.className = 'chat-bubble-row ' + (isOut ? 'out' : 'in');
-    row.setAttribute('data-msg-id', m.id);
-    row.setAttribute('data-is-out', isOut ? '1' : '0');
+
+    setChatMessageRowData(row, m, isOut);
 
     const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
     const editedBadge = m.is_edited ? '<span class="chat-bubble-edited" title="Отредактировано">• (ред.)</span>' : '';
 
-    const trimmed = (m.content || '').trim();
-    const isImageFile = /\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(trimmed);
-    const isUploadedPath = trimmed.startsWith('/uploads/');
-    let contentHtml = '';
-
-    const isAudioFile = /\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(trimmed);
-    const audioUrl = m.audio_url || (isAudioFile ? trimmed : '');
-
-    let audioHtml = '';
-    if (audioUrl) {
-        const audioTitle = m.audio_title || (isAudioFile ? trimmed.split('/').pop().replace(/^\d+_/, '') : 'Аудиозапись');
-        const audioArtist = m.audio_artist || (isOut ? 'Вы' : (activeChatUserData ? activeChatUserData.display_name : 'Собеседник'));
-        audioHtml = `
-            <div class="chat-audio-card" id="chat-audio-${m.id}" data-audio-url="${escapeHtml(audioUrl)}" data-audio-title="${escapeHtml(audioTitle)}" data-audio-artist="${escapeHtml(audioArtist)}">
-                <button type="button" class="chat-audio-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(audioUrl)}', title: '${escapeHtml(audioTitle)}', artist: '${escapeHtml(audioArtist)}', elementId: 'chat-audio-${m.id}'}, event)" title="Слушать аудио">
-                    <span class="chat-audio-icon">▶️</span>
-                </button>
-                <div class="chat-audio-info">
-                    <div class="chat-audio-title">${escapeHtml(audioTitle)}</div>
-                    <div class="chat-audio-artist">${escapeHtml(audioArtist)}</div>
-                </div>
-                <div class="chat-audio-wave">
-                    <span></span><span></span><span></span><span></span>
-                </div>
-            </div>
-        `;
-    }
-
-    if (audioHtml) {
-        if (trimmed && trimmed !== audioUrl) {
-            contentHtml = audioHtml + `<div class="chat-text-after-audio" style="margin-top: 4px;">${escapeHtml(trimmed)}</div>`;
-        } else {
-            contentHtml = audioHtml;
-        }
-    } else if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
-        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" class="chat-sent-image" onclick="openImageLightbox('${escapeHtml(trimmed)}', 'Фото')"></div>`;
-    } else if (isUploadedPath) {
-        const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
-        contentHtml = `<a href="${escapeHtml(trimmed)}" target="_blank" download class="chat-file-attachment" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.08); border-radius: 10px; color: #fff; text-decoration: none; font-weight: 500;">📎 <span>${escapeHtml(fileName || 'Скачать файл')}</span></a>`;
-    } else {
-        contentHtml = escapeHtml(m.content);
-    }
+    const contentHtml = buildChatMessageBubbleHtml(m, isOut);
 
     const selectCol = `
         <div class="chat-msg-select-col" style="${isChatSelectionMode ? 'display:flex;' : 'display:none;'}">
@@ -5040,33 +5100,28 @@ async function handleSendMessage(e) {
 
     // Если сейчас включен режим редактирования сообщения:
     if (editingChatMessageId) {
+        const msgIdToEdit = editingChatMessageId;
         if (sendBtn) sendBtn.disabled = true;
         isSendingMessage = true;
         try {
-            const res = await fetch(`/api/messages/${editingChatMessageId}`, {
+            const res = await fetch(`/api/messages/${msgIdToEdit}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: content })
+                body: JSON.stringify({
+                    content: content,
+                    audio_url: audioUrl,
+                    audio_title: audioTitle,
+                    audio_artist: audioArtist
+                })
             });
             if (!res.ok) {
                 const errData = await res.json();
                 throw new Error(errData.error || 'Ошибка редактирования сообщения');
             }
             const updated = await res.json();
-            const msgEl = document.getElementById(`chat-msg-${updated.id}`);
-            if (msgEl) {
-                const contentEl = msgEl.querySelector('.chat-bubble-content');
-                if (contentEl) contentEl.textContent = updated.content;
-                const footer = msgEl.querySelector('.chat-bubble-footer');
-                if (footer && !footer.querySelector('.chat-bubble-edited')) {
-                    const ed = document.createElement('span');
-                    ed.className = 'chat-bubble-edited';
-                    ed.textContent = ' • (ред.)';
-                    footer.insertBefore(ed, footer.firstChild);
-                }
-            }
+            updateChatMessageDOM(updated);
             cancelEditChatMessage();
-            showToast('Сообщение изменено', 'success');
+            showToast('Сообщение изменено ✨', 'success');
         } catch (err) {
             showToast(err.message, 'error');
         } finally {
@@ -5314,18 +5369,7 @@ function handleSSEEvent(event) {
         case 'message_updated': {
             const msg = event.payload || event.message;
             if (msg) {
-                const msgEl = document.getElementById(`chat-msg-${msg.id}`);
-                if (msgEl) {
-                    const contentEl = msgEl.querySelector('.chat-bubble-content');
-                    if (contentEl) contentEl.textContent = msg.content;
-                    const footer = msgEl.querySelector('.chat-bubble-footer');
-                    if (footer && !footer.querySelector('.chat-bubble-edited')) {
-                        const ed = document.createElement('span');
-                        ed.className = 'chat-bubble-edited';
-                        ed.textContent = ' • (ред.)';
-                        footer.insertBefore(ed, footer.firstChild);
-                    }
-                }
+                updateChatMessageDOM(msg);
             }
             break;
         }

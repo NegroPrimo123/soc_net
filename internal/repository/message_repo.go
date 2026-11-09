@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"time"
+	"strings"
 
 	"github.com/lib/pq"
 
@@ -314,36 +315,49 @@ func (r *MessageRepository) GetUnreadCount(currentUserID int) (int, error) {
 
 }
 
-func (r *MessageRepository) UpdateMessage(msgID, senderID int, content string) (*models.Message, error) {
+func (r *MessageRepository) UpdateMessage(msgID, senderID int, content string, audioURL, audioTitle, audioArtist *string) (*models.Message, error) {
+	hasAudioUpdate := (audioURL != nil)
+	valAudioURL := ""
+	valAudioTitle := ""
+	valAudioArtist := ""
+	if audioURL != nil {
+		valAudioURL = *audioURL
+	}
+	if audioTitle != nil {
+		valAudioTitle = *audioTitle
+	}
+	if audioArtist != nil {
+		valAudioArtist = *audioArtist
+	}
 
 	query := `
-
 	UPDATE messages
-
-	SET content = $1, is_edited = TRUE, updated_at = NOW()
-
-	WHERE id = $2 AND sender_id = $3
-
+	SET content = $1,
+	    audio_url = CASE WHEN $2::boolean THEN $3 ELSE audio_url END,
+	    audio_title = CASE WHEN $2::boolean THEN $4 ELSE audio_title END,
+	    audio_artist = CASE WHEN $2::boolean THEN $5 ELSE audio_artist END,
+	    is_edited = TRUE,
+	    updated_at = NOW()
+	WHERE id = $6 AND sender_id = $7
 	`
-
-	res, err := r.db.Exec(query, content, msgID, senderID)
-
+	res, err := r.db.Exec(query, content, hasAudioUpdate, valAudioURL, valAudioTitle, valAudioArtist, msgID, senderID)
 	if err != nil {
-
 		return nil, fmt.Errorf("update message: %w", err)
-
 	}
-
 	rows, _ := res.RowsAffected()
-
 	if rows == 0 {
-
 		return nil, fmt.Errorf("сообщение не найдено или у вас нет прав на его редактирование")
-
 	}
 
-	return r.GetMessageByID(msgID)
+	msg, err := r.GetMessageByID(msgID)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(msg.Content) == "" && strings.TrimSpace(msg.AudioURL) == "" {
+		return nil, fmt.Errorf("сообщение не может быть пустым")
+	}
 
+	return msg, nil
 }
 
 func (r *MessageRepository) DeleteMessage(msgID, userID int, forEveryone bool) error {
