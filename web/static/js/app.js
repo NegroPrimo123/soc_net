@@ -415,16 +415,24 @@ async function createPost() {
     }
 
     const textarea = document.getElementById('postContent');
-    let content = textarea.value.trim();
+    let content = textarea ? textarea.value.trim() : '';
     const urlInput = document.getElementById('postImageUrl');
     const imageUrl = currentUploadedFileUrl || (urlInput ? urlInput.value.trim() : '');
+
+    const musicUrlInput = document.getElementById('composerMusicUrl');
+    const musicTitleInput = document.getElementById('composerMusicTitle');
+    const musicArtistInput = document.getElementById('composerMusicArtist');
+
+    const musicUrl = musicUrlInput ? musicUrlInput.value.trim() : '';
+    const musicTitle = musicTitleInput ? musicTitleInput.value.trim() : '';
+    const musicArtist = musicArtistInput ? musicArtistInput.value.trim() : '';
 
     // Если в тексте поста указан только URL изображения, очищаем текст, чтобы не дублировать
     if (imageUrl && content === imageUrl) {
         content = '';
     }
 
-    if (!content && !imageUrl) {
+    if (!content && !imageUrl && !musicUrl) {
         showToast('Введите текст публикации или прикрепите файл', 'error');
         return;
     }
@@ -3745,6 +3753,10 @@ async function createProfilePost() {
     let content = textarea ? textarea.value.trim() : '';
     const urlInput = document.getElementById('profImageUrl');
     const imageUrl = currentProfUploadedImageUrl || (urlInput ? urlInput.value.trim() : '');
+
+    const musicUrl = '';
+    const musicTitle = '';
+    const musicArtist = '';
 
     if (imageUrl && content === imageUrl) {
         content = '';
