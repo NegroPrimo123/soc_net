@@ -93,7 +93,10 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Content = strings.TrimSpace(req.Content)
-	if req.Content == "" {
+	req.AudioURL = strings.TrimSpace(req.AudioURL)
+	req.AudioTitle = strings.TrimSpace(req.AudioTitle)
+	req.AudioArtist = strings.TrimSpace(req.AudioArtist)
+	if req.Content == "" && req.AudioURL == "" {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "сообщение не может быть пустым"})
 		return
 	}
@@ -108,7 +111,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := h.messageRepo.SendMessage(currentUser.ID, req.ReceiverID, req.Content)
+	msg, err := h.messageRepo.SendMessage(currentUser.ID, req.ReceiverID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -116,7 +119,14 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Создаем уведомление получателю о новом личном сообщении
 	if h.notifRepo != nil {
-		_, _ = h.notifRepo.CreateNotification(req.ReceiverID, currentUser.ID, "message", currentUser.ID, req.Content)
+		notifText := req.Content
+		if notifText == "" && req.AudioURL != "" {
+			notifText = "🎵 " + req.AudioTitle
+			if notifText == "🎵 " {
+				notifText = "🎵 Аудиозапись"
+			}
+		}
+		_, _ = h.notifRepo.CreateNotification(req.ReceiverID, currentUser.ID, "message", currentUser.ID, notifText)
 		if h.hub != nil {
 			h.hub.Broadcast(events.EventNotification, map[string]interface{}{
 				"user_id":     req.ReceiverID,
@@ -178,12 +188,25 @@ func (h *Handler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Content = strings.TrimSpace(req.Content)
-	if req.Content == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "текст сообщения не может быть пустым"})
+	if req.AudioURL != nil {
+		trimmedAudio := strings.TrimSpace(*req.AudioURL)
+		req.AudioURL = &trimmedAudio
+	}
+	if req.AudioTitle != nil {
+		trimmedTitle := strings.TrimSpace(*req.AudioTitle)
+		req.AudioTitle = &trimmedTitle
+	}
+	if req.AudioArtist != nil {
+		trimmedArtist := strings.TrimSpace(*req.AudioArtist)
+		req.AudioArtist = &trimmedArtist
+	}
+
+	if req.Content == "" && (req.AudioURL != nil && *req.AudioURL == "") {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "сообщение не может быть пустым"})
 		return
 	}
 
-	msg, err := h.messageRepo.UpdateMessage(msgID, currentUser.ID, req.Content)
+	msg, err := h.messageRepo.UpdateMessage(msgID, currentUser.ID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist)
 	if err != nil {
 		respondJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 		return
@@ -334,10 +357,10 @@ func (h *Handler) ToggleMessageReaction(w http.ResponseWriter, r *http.Request) 
 
 	if h.hub != nil {
 		h.hub.Broadcast(events.EventMessageReaction, map[string]interface{}{
-			"message_id": msgID,
-			"emoji":      req.Emoji,
-			"reactions":  reactions,
-			"sender_id":  currentUser.ID,
+			"message_id":  msgID,
+			"emoji":       req.Emoji,
+			"reactions":   reactions,
+			"sender_id":   currentUser.ID,
 			"receiver_id": msg.ReceiverID,
 			"other_id":    msg.SenderID,
 		})

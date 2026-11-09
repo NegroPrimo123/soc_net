@@ -272,3 +272,124 @@ func (h *Handler) ToggleFollow(w http.ResponseWriter, r *http.Request) {
 		"is_following": isFollowing,
 	})
 }
+
+func (h *Handler) GetUserMusic(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 3 {
+			idStr = parts[2]
+		}
+	}
+
+	userID, err := strconv.Atoi(idStr)
+	if err != nil || userID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Неверный ID пользователя"})
+		return
+	}
+
+	tracks, err := h.userRepo.GetUserMusic(userID)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, tracks)
+}
+
+func (h *Handler) AddUserMusic(w http.ResponseWriter, r *http.Request) {
+	currentUser := h.getUserFromRequest(r)
+	if currentUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Требуется авторизация"})
+		return
+	}
+
+	var req models.AddUserMusicRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Неверный формат запроса"})
+		return
+	}
+
+	req.URL = strings.TrimSpace(req.URL)
+	req.Title = strings.TrimSpace(req.Title)
+	req.Artist = strings.TrimSpace(req.Artist)
+
+	if req.URL == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "URL аудиофайла обязателен"})
+		return
+	}
+	if req.Title == "" {
+		req.Title = "Аудиозапись"
+	}
+
+	track, err := h.userRepo.AddUserMusic(currentUser.ID, req.URL, req.Title, req.Artist)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	tracks, _ := h.userRepo.GetUserMusic(currentUser.ID)
+	respondJSON(w, http.StatusCreated, map[string]interface{}{
+		"ok":       true,
+		"track":    track,
+		"playlist": tracks,
+	})
+}
+
+func (h *Handler) DeleteUserMusic(w http.ResponseWriter, r *http.Request) {
+	currentUser := h.getUserFromRequest(r)
+	if currentUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Требуется авторизация"})
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 4 {
+			idStr = parts[3]
+		}
+	}
+
+	musicID, err := strconv.Atoi(idStr)
+	if err != nil || musicID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Неверный ID трека"})
+		return
+	}
+
+	if err := h.userRepo.DeleteUserMusic(musicID, currentUser.ID); err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	tracks, _ := h.userRepo.GetUserMusic(currentUser.ID)
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":       true,
+		"playlist": tracks,
+	})
+}
+
+func (h *Handler) ReorderUserMusic(w http.ResponseWriter, r *http.Request) {
+	authUser := h.getUserFromRequest(r)
+	if authUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "не авторизован"})
+		return
+	}
+
+	var req models.ReorderUserMusicRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "неверный payload"})
+		return
+	}
+
+	tracks, err := h.userRepo.ReorderUserMusic(authUser.ID, req.TrackIDs)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"status":   "ok",
+		"playlist": tracks,
+	})
+}

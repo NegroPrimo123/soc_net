@@ -20,9 +20,9 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ограничение размера файла: 30 МБ
-	if err := r.ParseMultipartForm(30 << 20); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Файл превышает допустимый размер (максимум 30 МБ)"})
+	// Ограничение размера файла: 50 МБ
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Файл превышает допустимый размер (максимум 50 МБ)"})
 		return
 	}
 
@@ -39,6 +39,8 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		".webp": true, ".svg": true, ".bmp": true, ".ico": true,
 		".pdf": true, ".txt": true, ".doc": true, ".docx": true,
 		".zip": true, ".rar": true, ".7z": true,
+		".mp3": true, ".wav": true, ".ogg": true, ".m4a": true,
+		".aac": true, ".flac": true, ".webm": true,
 	}
 
 	if !allowedExts[ext] {
@@ -82,11 +84,18 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	isImage := imageExts[ext]
 
+	audioExts := map[string]bool{
+		".mp3": true, ".wav": true, ".ogg": true, ".m4a": true,
+		".aac": true, ".flac": true, ".webm": true,
+	}
+	isAudio := audioExts[ext]
+
 	respondJSON(w, http.StatusCreated, map[string]interface{}{
 		"url":       "/uploads/" + uniqueFilename,
 		"filename":  header.Filename,
 		"size":      header.Size,
 		"is_image":  isImage,
+		"is_audio":  isAudio,
 		"extension": ext,
 	})
 }

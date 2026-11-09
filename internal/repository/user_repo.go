@@ -27,6 +27,7 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
 		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
+		COALESCE(u.music_url, ''), COALESCE(u.music_title, ''), COALESCE(u.music_artist, ''),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -50,7 +51,7 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
-			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
+			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
@@ -61,7 +62,6 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 	return users, nil
 }
 
-
 func (r *UserRepository) Search(currentUserID int, search string) ([]models.User, error) {
 	query := `
 	SELECT 
@@ -69,6 +69,7 @@ func (r *UserRepository) Search(currentUserID int, search string) ([]models.User
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
 		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
+		COALESCE(u.music_url, ''), COALESCE(u.music_title, ''), COALESCE(u.music_artist, ''),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -93,7 +94,7 @@ func (r *UserRepository) Search(currentUserID int, search string) ([]models.User
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
-			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
+			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
@@ -111,6 +112,7 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
 		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
+		COALESCE(u.music_url, ''), COALESCE(u.music_title, ''), COALESCE(u.music_artist, ''),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -125,7 +127,7 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 		&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 		&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
-		&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
+		&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 		&u.CreatedAt,
 		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 	)
@@ -154,14 +156,16 @@ func (r *UserRepository) UpdateProfile(userID int, req models.UpdateProfileReque
 	SET display_name = $1, bio = $2, avatar_url = $3, banner_url = $4,
 	    status_text = $5, status_emoji = $6, custom_rank = $7,
 	    accent_color = $8, avatar_frame = $9, profile_bg_effect = $10,
-	    skills_tags = $11, social_links = $12, pinned_gift_id = $13
-	WHERE id = $14
+	    skills_tags = $11, social_links = $12, pinned_gift_id = $13,
+	    music_url = $14, music_title = $15, music_artist = $16
+	WHERE id = $17
 	`
 	_, err := r.db.Exec(query,
 		req.DisplayName, req.Bio, req.AvatarURL, req.BannerURL,
 		req.StatusText, req.StatusEmoji, req.CustomRank,
 		req.AccentColor, req.AvatarFrame, req.ProfileBgEffect,
 		req.SkillsTags, req.SocialLinks, req.PinnedGiftID,
+		req.MusicURL, req.MusicTitle, req.MusicArtist,
 		userID,
 	)
 	if err != nil {
@@ -177,6 +181,7 @@ func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User,
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
 		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
+		COALESCE(u.music_url, ''), COALESCE(u.music_title, ''), COALESCE(u.music_artist, ''),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -201,7 +206,7 @@ func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User,
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
-			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
+			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
@@ -219,6 +224,7 @@ func (r *UserRepository) GetFollowing(userID, currentUserID int) ([]models.User,
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
 		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
+		COALESCE(u.music_url, ''), COALESCE(u.music_title, ''), COALESCE(u.music_artist, ''),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -243,7 +249,7 @@ func (r *UserRepository) GetFollowing(userID, currentUserID int) ([]models.User,
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 			&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 			&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
-			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
+			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
 		); err != nil {
@@ -362,6 +368,7 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 		COALESCE(u.status_text, ''), COALESCE(u.status_emoji, ''), COALESCE(u.custom_rank, ''),
 		COALESCE(u.accent_color, '#00f0ff'), COALESCE(u.avatar_frame, 'default'), COALESCE(u.profile_bg_effect, 'none'),
 		COALESCE(u.skills_tags, ''), COALESCE(u.social_links, ''), COALESCE(u.pinned_gift_id, 0),
+		COALESCE(u.music_url, ''), COALESCE(u.music_title, ''), COALESCE(u.music_artist, ''),
 		u.created_at,
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
@@ -376,7 +383,7 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio,
 		&u.StatusText, &u.StatusEmoji, &u.CustomRank,
 		&u.AccentColor, &u.AvatarFrame, &u.ProfileBgEffect,
-		&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID,
+		&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 		&u.CreatedAt,
 		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount,
 	)
@@ -394,3 +401,120 @@ func (r *UserRepository) DeleteSession(token string) error {
 	return err
 }
 
+func (r *UserRepository) GetUserMusic(userID int) ([]models.UserMusic, error) {
+	query := `
+	SELECT id, user_id, url, title, COALESCE(artist, ''), COALESCE(position, 0), created_at
+	FROM user_music
+	WHERE user_id = $1
+	ORDER BY position ASC, id DESC
+	`
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user music: %w", err)
+	}
+	defer rows.Close()
+
+	var tracks []models.UserMusic
+	for rows.Next() {
+		var m models.UserMusic
+		if err := rows.Scan(&m.ID, &m.UserID, &m.URL, &m.Title, &m.Artist, &m.Position, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		tracks = append(tracks, m)
+	}
+	if tracks == nil {
+		tracks = []models.UserMusic{}
+	}
+	return tracks, nil
+}
+
+func (r *UserRepository) AddUserMusic(userID int, url, title, artist string) (*models.UserMusic, error) {
+	// Сдвигаем текущие позиции существующих треков
+	_, _ = r.db.Exec("UPDATE user_music SET position = position + 1 WHERE user_id = $1", userID)
+
+	query := `
+	INSERT INTO user_music (user_id, url, title, artist, position)
+	VALUES ($1, $2, $3, $4, 0)
+	RETURNING id, user_id, url, title, artist, position, created_at
+	`
+	var m models.UserMusic
+	err := r.db.QueryRow(query, userID, url, title, artist).Scan(
+		&m.ID, &m.UserID, &m.URL, &m.Title, &m.Artist, &m.Position, &m.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("add user music: %w", err)
+	}
+
+	// Новый трек на позиции 0 становится лицевым
+	_, _ = r.db.Exec(`
+	UPDATE users SET music_url = $1, music_title = $2, music_artist = $3
+	WHERE id = $4
+	`, url, title, artist, userID)
+
+	return &m, nil
+}
+
+func (r *UserRepository) ReorderUserMusic(userID int, trackIDs []int) ([]models.UserMusic, error) {
+	if len(trackIDs) == 0 {
+		return r.GetUserMusic(userID)
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	for pos, id := range trackIDs {
+		_, err := tx.Exec("UPDATE user_music SET position = $1 WHERE id = $2 AND user_id = $3", pos, id, userID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Первый трек (trackIDs[0]) теперь лицевой трек профиля
+	var frontURL, frontTitle, frontArtist string
+	err = tx.QueryRow(`
+		SELECT url, title, COALESCE(artist, '')
+		FROM user_music
+		WHERE id = $1 AND user_id = $2
+	`, trackIDs[0], userID).Scan(&frontURL, &frontTitle, &frontArtist)
+	if err == nil {
+		_, _ = tx.Exec(`
+			UPDATE users SET music_url = $1, music_title = $2, music_artist = $3 WHERE id = $4
+		`, frontURL, frontTitle, frontArtist, userID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return r.GetUserMusic(userID)
+}
+
+func (r *UserRepository) DeleteUserMusic(musicID, userID int) error {
+	_, err := r.db.Exec("DELETE FROM user_music WHERE id = $1 AND user_id = $2", musicID, userID)
+	if err != nil {
+		return fmt.Errorf("delete user music: %w", err)
+	}
+
+	// Обновляем лицевой трек на верхний оставшийся (position ASC, id DESC)
+	var latest models.UserMusic
+	err = r.db.QueryRow(`
+	SELECT url, title, COALESCE(artist, '')
+	FROM user_music
+	WHERE user_id = $1
+	ORDER BY position ASC, id DESC
+	LIMIT 1
+	`, userID).Scan(&latest.URL, &latest.Title, &latest.Artist)
+
+	if err == sql.ErrNoRows {
+		// Больше нет треков
+		_, _ = r.db.Exec("UPDATE users SET music_url = '', music_title = '', music_artist = '' WHERE id = $1", userID)
+	} else if err == nil {
+		_, _ = r.db.Exec("UPDATE users SET music_url = $1, music_title = $2, music_artist = $3 WHERE id = $4",
+			latest.URL, latest.Title, latest.Artist, userID)
+	}
+
+	return nil
+}

@@ -1,32 +1,21 @@
 package repository
 
-
-
 import (
-
 	"database/sql"
 
 	"fmt"
 
 	"time"
-
-
+	"strings"
 
 	"github.com/lib/pq"
 
 	"social-network/internal/models"
-
 )
 
-
-
 type MessageRepository struct {
-
 	db *sql.DB
-
 }
-
-
 
 func NewMessageRepository(db *sql.DB) *MessageRepository {
 
@@ -34,45 +23,25 @@ func NewMessageRepository(db *sql.DB) *MessageRepository {
 
 }
 
-
-
-func (r *MessageRepository) SendMessage(senderID, receiverID int, content string) (*models.Message, error) {
-
+func (r *MessageRepository) SendMessage(senderID, receiverID int, content, audioURL, audioTitle, audioArtist string) (*models.Message, error) {
 	if senderID == receiverID {
-
 		return nil, fmt.Errorf("нельзя отправить сообщение самому себе")
-
 	}
-
-
 
 	var exists bool
-
 	err := r.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", receiverID).Scan(&exists)
-
 	if err != nil || !exists {
-
 		return nil, fmt.Errorf("получатель не найден")
-
 	}
 
-
-
 	query := `
-
-	INSERT INTO messages (sender_id, receiver_id, content, is_read, created_at)
-
-	VALUES ($1, $2, $3, FALSE, NOW())
-
+	INSERT INTO messages (sender_id, receiver_id, content, audio_url, audio_title, audio_artist, is_read, created_at)
+	VALUES ($1, $2, $3, $4, $5, $6, FALSE, NOW())
 	RETURNING id, created_at
-
 	`
-
 	var msgID int
-
 	var createdAt time.Time
-
-	err = r.db.QueryRow(query, senderID, receiverID, content).Scan(&msgID, &createdAt)
+	err = r.db.QueryRow(query, senderID, receiverID, content, audioURL, audioTitle, audioArtist).Scan(&msgID, &createdAt)
 
 	if err != nil {
 
@@ -80,13 +49,9 @@ func (r *MessageRepository) SendMessage(senderID, receiverID int, content string
 
 	}
 
-
-
 	return r.GetMessageByID(msgID)
 
 }
-
-
 
 func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 
@@ -94,7 +59,7 @@ func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 
 	SELECT 
 
-		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
+		m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
 
 		s.id, s.username, s.display_name, s.avatar_url, s.bio,
 
@@ -116,12 +81,11 @@ func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 
 	err := r.db.QueryRow(query, msgID).Scan(
 
-		&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.IsRead, &m.IsEdited, &m.CreatedAt,
+		&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.AudioURL, &m.AudioTitle, &m.AudioArtist, &m.IsRead, &m.IsEdited, &m.CreatedAt,
 
 		&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
 
 		&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
-
 	)
 
 	if err != nil {
@@ -141,8 +105,6 @@ func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 
 }
 
-
-
 func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limit int) ([]models.Message, error) {
 
 	if limit <= 0 {
@@ -151,32 +113,21 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 
 	}
 
-
-
 	query := `
-
-	SELECT 
-
-		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
-
+	SELECT * FROM (
+		SELECT 
+			m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
 		s.id, s.username, s.display_name, s.avatar_url, s.bio,
-
 		rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio
-
-	FROM messages m
-
-	JOIN users s ON s.id = m.sender_id
-
-	JOIN users rc ON rc.id = m.receiver_id
-
-	WHERE ((m.sender_id = $1 AND m.receiver_id = $2 AND COALESCE(m.deleted_for_sender, FALSE) = FALSE)
-
-	   OR  (m.sender_id = $2 AND m.receiver_id = $1 AND COALESCE(m.deleted_for_receiver, FALSE) = FALSE))
-
-	ORDER BY m.created_at ASC
-
-	LIMIT $3
-
+		FROM messages m
+		JOIN users s ON s.id = m.sender_id
+		JOIN users rc ON rc.id = m.receiver_id
+		WHERE ((m.sender_id = $1 AND m.receiver_id = $2 AND COALESCE(m.deleted_for_sender, FALSE) = FALSE)
+		   OR  (m.sender_id = $2 AND m.receiver_id = $1 AND COALESCE(m.deleted_for_receiver, FALSE) = FALSE))
+		ORDER BY m.created_at DESC
+		LIMIT $3
+	) sub
+	ORDER BY sub.created_at ASC
 	`
 
 	rows, err := r.db.Query(query, currentUserID, otherUserID, limit)
@@ -189,8 +140,6 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 
 	defer rows.Close()
 
-
-
 	var messages []models.Message
 	var msgIDs []int
 
@@ -202,12 +151,11 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 
 		if err := rows.Scan(
 
-			&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.IsRead, &m.IsEdited, &m.CreatedAt,
+			&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.AudioURL, &m.AudioTitle, &m.AudioArtist, &m.IsRead, &m.IsEdited, &m.CreatedAt,
 
 			&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
 
 			&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
-
 		); err != nil {
 
 			return nil, fmt.Errorf("scan message: %w", err)
@@ -236,8 +184,6 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 
 }
 
-
-
 func (r *MessageRepository) MarkAsRead(currentUserID, senderID int) error {
 
 	query := `
@@ -256,8 +202,6 @@ func (r *MessageRepository) MarkAsRead(currentUserID, senderID int) error {
 
 }
 
-
-
 func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Conversation, error) {
 
 	query := `
@@ -266,7 +210,7 @@ func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Co
 
 		u.id, u.username, u.display_name, u.avatar_url, COALESCE(u.banner_url, ''), u.bio, u.created_at,
 
-		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, m.created_at,
+		m.id, m.sender_id, m.receiver_id, m.content, m.is_read, m.created_at, m.audio_url, m.audio_title,
 
 		(SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = $1 AND is_read = FALSE AND COALESCE(deleted_for_receiver, FALSE) = FALSE) AS unread_count
 
@@ -274,7 +218,7 @@ func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Co
 
 	JOIN LATERAL (
 
-		SELECT id, sender_id, receiver_id, content, is_read, created_at
+		SELECT id, sender_id, receiver_id, content, is_read, created_at, COALESCE(audio_url, '') AS audio_url, COALESCE(audio_title, '') AS audio_title
 
 		FROM messages
 
@@ -304,8 +248,6 @@ func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Co
 
 	defer rows.Close()
 
-
-
 	var conversations []models.Conversation
 
 	for rows.Next() {
@@ -319,26 +261,21 @@ func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Co
 		var content sql.NullString
 
 		var isRead sql.NullBool
-
 		var msgCreatedAt sql.NullTime
-
-
+		var audioURL, audioTitle sql.NullString
 
 		if err := rows.Scan(
 
 			&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.BannerURL, &c.User.Bio, &c.User.CreatedAt,
 
-			&msgID, &senderID, &receiverID, &content, &isRead, &msgCreatedAt,
+			&msgID, &senderID, &receiverID, &content, &isRead, &msgCreatedAt, &audioURL, &audioTitle,
 
 			&c.UnreadCount,
-
 		); err != nil {
 
 			return nil, fmt.Errorf("scan conversation: %w", err)
 
 		}
-
-
 
 		if msgID.Valid {
 
@@ -358,19 +295,13 @@ func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Co
 
 		}
 
-
-
 		conversations = append(conversations, c)
 
 	}
 
-
-
 	return conversations, nil
 
 }
-
-
 
 func (r *MessageRepository) GetUnreadCount(currentUserID int) (int, error) {
 
@@ -384,41 +315,50 @@ func (r *MessageRepository) GetUnreadCount(currentUserID int) (int, error) {
 
 }
 
-
-
-func (r *MessageRepository) UpdateMessage(msgID, senderID int, content string) (*models.Message, error) {
+func (r *MessageRepository) UpdateMessage(msgID, senderID int, content string, audioURL, audioTitle, audioArtist *string) (*models.Message, error) {
+	hasAudioUpdate := (audioURL != nil)
+	valAudioURL := ""
+	valAudioTitle := ""
+	valAudioArtist := ""
+	if audioURL != nil {
+		valAudioURL = *audioURL
+	}
+	if audioTitle != nil {
+		valAudioTitle = *audioTitle
+	}
+	if audioArtist != nil {
+		valAudioArtist = *audioArtist
+	}
 
 	query := `
-
 	UPDATE messages
-
-	SET content = $1, is_edited = TRUE, updated_at = NOW()
-
-	WHERE id = $2 AND sender_id = $3
-
+	SET content = $1,
+	    audio_url = CASE WHEN $2::boolean THEN $3 ELSE audio_url END,
+	    audio_title = CASE WHEN $2::boolean THEN $4 ELSE audio_title END,
+	    audio_artist = CASE WHEN $2::boolean THEN $5 ELSE audio_artist END,
+	    is_edited = TRUE,
+	    updated_at = NOW()
+	WHERE id = $6 AND sender_id = $7
 	`
-
-	res, err := r.db.Exec(query, content, msgID, senderID)
-
+	res, err := r.db.Exec(query, content, hasAudioUpdate, valAudioURL, valAudioTitle, valAudioArtist, msgID, senderID)
 	if err != nil {
-
 		return nil, fmt.Errorf("update message: %w", err)
-
 	}
-
 	rows, _ := res.RowsAffected()
-
 	if rows == 0 {
-
 		return nil, fmt.Errorf("сообщение не найдено или у вас нет прав на его редактирование")
-
 	}
 
-	return r.GetMessageByID(msgID)
+	msg, err := r.GetMessageByID(msgID)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(msg.Content) == "" && strings.TrimSpace(msg.AudioURL) == "" {
+		return nil, fmt.Errorf("сообщение не может быть пустым")
+	}
 
+	return msg, nil
 }
-
-
 
 func (r *MessageRepository) DeleteMessage(msgID, userID int, forEveryone bool) error {
 
@@ -445,8 +385,6 @@ func (r *MessageRepository) DeleteMessage(msgID, userID int, forEveryone bool) e
 		return nil
 
 	}
-
-
 
 	query := `
 
@@ -484,8 +422,6 @@ func (r *MessageRepository) DeleteMessage(msgID, userID int, forEveryone bool) e
 
 }
 
-
-
 func (r *MessageRepository) BatchDeleteMessages(msgIDs []int, userID int, forEveryone bool) (int, error) {
 
 	if len(msgIDs) == 0 {
@@ -511,8 +447,6 @@ func (r *MessageRepository) BatchDeleteMessages(msgIDs []int, userID int, forEve
 		return int(rows), nil
 
 	}
-
-
 
 	query := `
 
@@ -543,8 +477,6 @@ func (r *MessageRepository) BatchDeleteMessages(msgIDs []int, userID int, forEve
 	return int(rows), nil
 
 }
-
-
 
 func (r *MessageRepository) GetReactionsForMessages(messageIDs []int, currentUserID int) (map[int][]models.MessageReaction, error) {
 	result := make(map[int][]models.MessageReaction)

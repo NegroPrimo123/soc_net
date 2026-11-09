@@ -16,6 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const userParam = urlParams.get('user');
     const sendGiftParam = urlParams.get('send_gift');
     const giftDetailParam = urlParams.get('gift_detail');
+    const postParam = urlParams.get('post');
+    if (postParam) {
+        setTimeout(() => navigateToPost(parseInt(postParam, 10)), 350);
+    }
 
     if (viewParam === 'showcase') {
         navigateTo('showcase');
@@ -272,8 +276,14 @@ function initComposer() {
             if (item.kind === 'file' && item.type.startsWith('image/')) {
                 const blob = item.getAsFile();
                 if (blob) {
-                    expandComposer();
-                    uploadSingleFile(blob);
+                    const profView = document.getElementById('profileView');
+                    const isProfileActive = profView && profView.style.display !== 'none' && document.activeElement && (document.activeElement.id === 'profPostContent' || document.activeElement.closest('#profComposerCard'));
+                    if (isProfileActive) {
+                        uploadProfSingleImage(blob);
+                    } else {
+                        expandComposer();
+                        uploadSingleFile(blob);
+                    }
                 }
             }
         }
@@ -415,16 +425,24 @@ async function createPost() {
     }
 
     const textarea = document.getElementById('postContent');
-    let content = textarea.value.trim();
+    let content = textarea ? textarea.value.trim() : '';
     const urlInput = document.getElementById('postImageUrl');
     const imageUrl = currentUploadedFileUrl || (urlInput ? urlInput.value.trim() : '');
+
+    const musicUrlInput = document.getElementById('composerMusicUrl');
+    const musicTitleInput = document.getElementById('composerMusicTitle');
+    const musicArtistInput = document.getElementById('composerMusicArtist');
+
+    const musicUrl = musicUrlInput ? musicUrlInput.value.trim() : '';
+    const musicTitle = musicTitleInput ? musicTitleInput.value.trim() : '';
+    const musicArtist = musicArtistInput ? musicArtistInput.value.trim() : '';
 
     // Если в тексте поста указан только URL изображения, очищаем текст, чтобы не дублировать
     if (imageUrl && content === imageUrl) {
         content = '';
     }
 
-    if (!content && !imageUrl) {
+    if (!content && !imageUrl && !musicUrl) {
         showToast('Введите текст публикации или прикрепите файл', 'error');
         return;
     }
@@ -441,7 +459,10 @@ async function createPost() {
             body: JSON.stringify({
                 user_id: window.CURRENT_USER_ID,
                 content: content,
-                image_url: imageUrl
+                image_url: imageUrl,
+                music_url: musicUrl,
+                music_title: musicTitle,
+                music_artist: musicArtist
             })
         });
 
@@ -454,6 +475,7 @@ async function createPost() {
         textarea.value = '';
         handleComposerInput();
         clearComposerFile();
+        clearComposerMusic();
         const imageBox = document.getElementById('composerImageBox');
         if (imageBox) imageBox.style.display = 'none';
 
@@ -480,6 +502,7 @@ function openEditPostModal(postId, clickedBtn) {
         return;
     }
     closeAllPostDropdowns();
+    closeAllMusicMenus();
 
     let postEl = null;
     if (clickedBtn && clickedBtn.closest) {
@@ -526,6 +549,38 @@ function openEditPostModal(postId, clickedBtn) {
         if (photoImg) photoImg.src = '';
         if (previewWrap) previewWrap.style.display = 'none';
         if (btnLabel) btnLabel.textContent = 'Прикрепить фото';
+    }
+
+    // Заполняем секцию прикрепленного аудиофайла
+    const mUrlInput = document.getElementById('editPostMusicUrl');
+    const mTitleInput = document.getElementById('editPostMusicTitle');
+    const mArtistInput = document.getElementById('editPostMusicArtist');
+    const mTitlePreview = document.getElementById('editPostMusicTitlePreview');
+    const mArtistPreview = document.getElementById('editPostMusicArtistPreview');
+    const mPreviewCard = document.getElementById('editPostMusicPreviewCard');
+    const mAddBox = document.getElementById('editPostMusicAddBtnBox');
+
+    const musicCard = postEl.querySelector('.post-music-card');
+    if (musicCard) {
+        const mUrl = musicCard.getAttribute('data-music-url') || '';
+        const mTitle = musicCard.getAttribute('data-music-title') || 'Аудиозапись';
+        const mArtist = musicCard.getAttribute('data-music-artist') || '';
+
+        if (mUrlInput) mUrlInput.value = mUrl;
+        if (mTitleInput) mTitleInput.value = mTitle;
+        if (mArtistInput) mArtistInput.value = mArtist;
+
+        if (mTitlePreview) mTitlePreview.textContent = mTitle;
+        if (mArtistPreview) mArtistPreview.textContent = mArtist;
+        if (mPreviewCard) mPreviewCard.style.display = 'flex';
+        if (mAddBox) mAddBox.style.display = 'none';
+    } else {
+        if (mUrlInput) mUrlInput.value = '';
+        if (mTitleInput) mTitleInput.value = '';
+        if (mArtistInput) mArtistInput.value = '';
+
+        if (mPreviewCard) mPreviewCard.style.display = 'none';
+        if (mAddBox) mAddBox.style.display = 'block';
     }
 
     if (modal) modal.style.display = 'flex';
@@ -592,18 +647,128 @@ async function handleEditPostPhotoUpload(e) {
     }
 }
 
+
+// Управление аудиозаписью при редактировании поста
+async function handleEditPostAudioUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудио для публикации... 🎵', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) throw new Error('Ошибка при загрузке аудиофайла');
+        const data = await res.json();
+
+        const cleanTitle = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        const artist = window.CURRENT_USER_DISPLAY_NAME || 'Автор';
+
+        const mUrlInput = document.getElementById('editPostMusicUrl');
+        const mTitleInput = document.getElementById('editPostMusicTitle');
+        const mArtistInput = document.getElementById('editPostMusicArtist');
+        const mTitlePreview = document.getElementById('editPostMusicTitlePreview');
+        const mArtistPreview = document.getElementById('editPostMusicArtistPreview');
+        const mPreviewCard = document.getElementById('editPostMusicPreviewCard');
+        const mAddBox = document.getElementById('editPostMusicAddBtnBox');
+
+        if (mUrlInput) mUrlInput.value = data.url;
+        if (mTitleInput) mTitleInput.value = cleanTitle || 'Аудиозапись';
+        if (mArtistInput) mArtistInput.value = artist;
+
+        if (mTitlePreview) mTitlePreview.textContent = cleanTitle || 'Аудиозапись';
+        if (mArtistPreview) mArtistPreview.textContent = artist;
+        if (mPreviewCard) mPreviewCard.style.display = 'flex';
+        if (mAddBox) mAddBox.style.display = 'none';
+
+        showToast('Новый аудиофайл прикреплен! Нажмите «Сохранить изменения» 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function removeEditPostAudio() {
+    const mUrlInput = document.getElementById('editPostMusicUrl');
+    const mTitleInput = document.getElementById('editPostMusicTitle');
+    const mArtistInput = document.getElementById('editPostMusicArtist');
+    const mPreviewCard = document.getElementById('editPostMusicPreviewCard');
+    const mAddBox = document.getElementById('editPostMusicAddBtnBox');
+
+    if (mUrlInput) mUrlInput.value = '';
+    if (mTitleInput) mTitleInput.value = '';
+    if (mArtistInput) mArtistInput.value = '';
+
+    if (mPreviewCard) mPreviewCard.style.display = 'none';
+    if (mAddBox) mAddBox.style.display = 'block';
+
+    showToast('Аудиофайл откреплен от публикации. Нажмите «Сохранить изменения»', 'info');
+}
+
+async function quickRemovePostMusic(postId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    closeAllMusicMenus();
+
+    if (!confirm('Удалить аудиозапись из этой публикации?')) return;
+
+    try {
+        const card = document.querySelector(`[id="post-${postId}"]`);
+        const contentEl = card ? card.querySelector('.post-content') : null;
+        const content = contentEl ? contentEl.innerText.trim() : '';
+        const imgEl = card ? card.querySelector('.post-media img') : null;
+        const imageUrl = imgEl ? (imgEl.getAttribute('src') || '') : '';
+
+        const res = await fetch(`/api/posts/${postId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: content,
+                image_url: imageUrl,
+                music_url: '',
+                music_title: '',
+                music_artist: ''
+            })
+        });
+
+        if (!res.ok) throw new Error('Ошибка при удалении аудиозаписи');
+        
+        document.querySelectorAll(`[id="post-${postId}"]`).forEach(postCard => {
+            const m = postCard.querySelector('.post-music-card');
+            if (m) m.remove();
+        });
+
+        showToast('Аудиозапись удалена из публикации', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
 async function saveEditedPostModal() {
     const idInput = document.getElementById('editPostId');
     const contentInput = document.getElementById('editPostContentInput');
     const imgUrlInput = document.getElementById('editPostImageUrl');
+    const musicUrlInput = document.getElementById('editPostMusicUrl');
+    const musicTitleInput = document.getElementById('editPostMusicTitle');
+    const musicArtistInput = document.getElementById('editPostMusicArtist');
     const saveBtn = document.getElementById('btnSaveEditedPost');
 
     if (!idInput || !idInput.value) return;
     const postId = parseInt(idInput.value);
     const content = contentInput ? contentInput.value.trim() : '';
     const imageUrl = imgUrlInput ? imgUrlInput.value.trim() : '';
+    const musicUrl = musicUrlInput ? musicUrlInput.value.trim() : '';
+    const musicTitle = musicTitleInput ? musicTitleInput.value.trim() : '';
+    const musicArtist = musicArtistInput ? musicArtistInput.value.trim() : '';
 
-    if (!content && !imageUrl) {
+    if (!content && !imageUrl && !musicUrl) {
         showToast('Публикация не может быть полностью пустой', 'error');
         return;
     }
@@ -613,7 +778,10 @@ async function saveEditedPostModal() {
     try {
         const payload = {
             content: content,
-            image_url: imageUrl
+            image_url: imageUrl,
+            music_url: musicUrl,
+            music_title: musicTitle,
+            music_artist: musicArtist
         };
 
         const res = await fetch(`/api/posts/${postId}`, {
@@ -629,7 +797,7 @@ async function saveEditedPostModal() {
 
         const post = await res.json();
 
-        // Обновляем текст и медиа во ВСЕХ карточках этого поста на странице (в ленте и в профиле)
+        // Обновляем текст, медиа и музыку во ВСЕХ карточках этого поста на странице
         const allCards = document.querySelectorAll(`[id="post-${postId}"]`);
         allCards.forEach(postCard => {
             const contentEl = postCard.querySelector('.post-content');
@@ -659,6 +827,67 @@ async function saveEditedPostModal() {
                 mediaBox.remove();
             }
 
+            // Обновляем музыкальную карточку
+            let musicCard = postCard.querySelector('.post-music-card');
+            if (post.music_url) {
+                const pTitle = post.music_title || 'Аудиозапись';
+                const pArtist = post.music_artist || 'Исполнитель';
+                const newMusicHtml = `
+                    <div class="post-music-card" id="post-music-${post.id}" data-music-url="${escapeHtml(post.music_url)}" data-music-title="${escapeHtml(pTitle)}" data-music-artist="${escapeHtml(pArtist)}">
+                        <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(post.music_url)}', title: '${escapeHtml(pTitle)}', artist: '${escapeHtml(pArtist)}', elementId: 'post-music-${post.id}'}, event)" title="Воспроизвести">
+                            <span class="music-play-icon">▶️</span>
+                        </button>
+                        <div class="post-music-info">
+                            <div class="post-music-title">${escapeHtml(pTitle)}</div>
+                            <div class="post-music-artist">${escapeHtml(pArtist)}</div>
+                        </div>
+                        <div class="post-music-actions-wrap">
+                            <button type="button" class="post-music-menu-btn" onclick="togglePostMusicMenu(event, ${post.id})" title="Опции (скачать / отправить)">
+                                <span class="music-dots-icon">⋮</span>
+                            </button>
+                            <div class="post-music-dropdown" id="postMusicMenu-${post.id}" style="display: none;">
+                                <button type="button" class="post-music-action-item" onclick="openEditPostModal(${post.id}, this)">
+                                    <span class="action-icon">🔄</span>
+                                    <span>Заменить / изменить трек</span>
+                                </button>
+                                <button type="button" class="post-music-action-item text-danger" onclick="quickRemovePostMusic(${post.id}, event)">
+                                    <span class="action-icon">🗑️</span>
+                                    <span>Удалить трек из поста</span>
+                                </button>
+                                <div class="post-dropdown-divider" style="margin: 4px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
+                                <button type="button" class="post-music-action-item" onclick="downloadAudioTrack('${escapeHtml(post.music_url)}', '${escapeHtml(pTitle)}', event)">
+                                    <span class="action-icon">📥</span>
+                                    <span>Скачать файл</span>
+                                </button>
+                                <button type="button" class="post-music-action-item" onclick="openShareAudioModal('${escapeHtml(post.music_url)}', '${escapeHtml(pTitle)}', '${escapeHtml(pArtist)}', event)">
+                                    <span class="action-icon">💬</span>
+                                    <span>Отправить в сообщения</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                if (musicCard) {
+                    musicCard.outerHTML = newMusicHtml;
+                } else {
+                    const temp = document.createElement('div');
+                    temp.innerHTML = newMusicHtml;
+                    const cardEl = temp.firstElementChild;
+                    if (mediaBox) {
+                        postCard.insertBefore(cardEl, mediaBox);
+                    } else {
+                        const actionsBar = postCard.querySelector('.post-actions-bar');
+                        if (actionsBar) {
+                            postCard.insertBefore(cardEl, actionsBar);
+                        } else {
+                            postCard.appendChild(cardEl);
+                        }
+                    }
+                }
+            } else if (musicCard) {
+                musicCard.remove();
+            }
+
             const metaLine = postCard.querySelector('.meta-line');
             if (metaLine && !metaLine.querySelector('.edited-badge')) {
                 const badge = document.createElement('span');
@@ -669,7 +898,7 @@ async function saveEditedPostModal() {
         });
 
         closeEditPostModal();
-        showToast('Публикация обновлена', 'success');
+        showToast('Публикация успешно обновлена!', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
@@ -682,6 +911,7 @@ async function saveEditedPostModal() {
 // ==========================================
 function openSharePostModal(postId) {
     closeAllPostDropdowns();
+    closeAllMusicMenus();
     const modal = document.getElementById('sharePostModal');
     const idInput = document.getElementById('sharePostId');
     const urlInput = document.getElementById('sharePostUrlInput');
@@ -1322,6 +1552,7 @@ function togglePostDropdown(postId, event) {
 
     const isShown = (menu.style.display === 'flex');
     closeAllPostDropdowns();
+    closeAllMusicMenus();
     if (!isShown) {
         menu.style.display = 'flex';
         const card = menu.closest('.post-card');
@@ -1340,11 +1571,13 @@ function closeAllPostDropdowns() {
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.post-kebab-wrap')) {
         closeAllPostDropdowns();
+    closeAllMusicMenus();
     }
 });
 
 function downloadPostImage(imageUrl) {
     closeAllPostDropdowns();
+    closeAllMusicMenus();
     if (!imageUrl) return;
     const a = document.createElement('a');
     a.href = imageUrl;
@@ -1358,6 +1591,7 @@ function downloadPostImage(imageUrl) {
 
 function copyPostText(postId, clickedBtn) {
     closeAllPostDropdowns();
+    closeAllMusicMenus();
     let contentEl = null;
     if (clickedBtn && clickedBtn.closest) {
         const card = clickedBtn.closest('.post-card');
@@ -1530,6 +1764,50 @@ function createPostElement(post) {
         rawContent = '';
     }
 
+    const isOwner = (window.IS_AUTHENTICATED && (window.CURRENT_USER_ID == post.user_id || (post.user && window.CURRENT_USER_ID == post.user.id)));
+    let postMusicHtml = '';
+    if (post.music_url) {
+        const pTitle = post.music_title || 'Аудиозапись';
+        const pArtist = post.music_artist || (post.user ? post.user.display_name : 'Исполнитель');
+        postMusicHtml = `
+            <div class="post-music-card" id="post-music-${post.id}" data-music-url="${escapeHtml(post.music_url)}" data-music-title="${escapeHtml(pTitle)}" data-music-artist="${escapeHtml(pArtist)}">
+                <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(post.music_url)}', title: '${escapeHtml(pTitle)}', artist: '${escapeHtml(pArtist)}', elementId: 'post-music-${post.id}'}, event)" title="Воспроизвести">
+                    <span class="music-play-icon">▶️</span>
+                </button>
+                <div class="post-music-info">
+                    <div class="post-music-title">${escapeHtml(pTitle)}</div>
+                    <div class="post-music-artist">${escapeHtml(pArtist)}</div>
+                </div>
+                <div class="post-music-actions-wrap">
+                    <button type="button" class="post-music-menu-btn" onclick="togglePostMusicMenu(event, ${post.id})" title="Опции (скачать / отправить)">
+                        <span class="music-dots-icon">⋮</span>
+                    </button>
+                    <div class="post-music-dropdown" id="postMusicMenu-${post.id}" style="display: none;">
+                        ${isOwner ? `
+                            <button type="button" class="post-music-action-item" onclick="openEditPostModal(${post.id}, this)">
+                                <span class="action-icon">🔄</span>
+                                <span>Заменить / изменить трек</span>
+                            </button>
+                            <button type="button" class="post-music-action-item text-danger" onclick="quickRemovePostMusic(${post.id}, event)">
+                                <span class="action-icon">🗑️</span>
+                                <span>Удалить трек из поста</span>
+                            </button>
+                            <div class="post-dropdown-divider" style="margin: 4px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
+                        ` : ''}
+                        <button type="button" class="post-music-action-item" onclick="downloadAudioTrack('${escapeHtml(post.music_url)}', '${escapeHtml(pTitle)}', event)">
+                            <span class="action-icon">📥</span>
+                            <span>Скачать файл</span>
+                        </button>
+                        <button type="button" class="post-music-action-item" onclick="openShareAudioModal('${escapeHtml(post.music_url)}', '${escapeHtml(pTitle)}', '${escapeHtml(pArtist)}', event)">
+                            <span class="action-icon">💬</span>
+                            <span>Отправить в сообщения</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     let mediaHtml = '';
     if (finalImageUrl) {
         mediaHtml = `
@@ -1549,7 +1827,6 @@ function createPostElement(post) {
         commentsHtml = post.comments.map(c => renderCommentItemHtml(c, post.user_id)).join('');
     }
 
-    const isOwner = (window.IS_AUTHENTICATED && (window.CURRENT_USER_ID == post.user_id || (post.user && window.CURRENT_USER_ID == post.user.id)));
     const postMenuHtml = `
         <div class="post-kebab-wrap">
             <button type="button" class="post-kebab-btn" onclick="togglePostDropdown(${post.id}, event)" title="Действия с постом">
@@ -1611,6 +1888,7 @@ function createPostElement(post) {
             </div>
         </div>
 
+        ${postMusicHtml}
         ${mediaHtml}
 
         <div class="post-actions-bar">
@@ -2040,28 +2318,9 @@ function renderUserProfile(data) {
         }
     }
 
-    // Главный кибер-экспонат профиля (Pinned Trophy)
+    // Экспонат удален из профиля по запросу пользователя
     const trophyWrap = document.getElementById('heroPinnedTrophyWrap');
-    if (trophyWrap) {
-        const pinnedId = user.pinned_gift_id || 0;
-        const giftKeys = Object.keys(GIFT_SPECS);
-        const pinnedType = (pinnedId > 0 && pinnedId <= giftKeys.length) ? giftKeys[pinnedId - 1] : null;
-        if (pinnedType && GIFT_SPECS[pinnedType]) {
-            const spec = GIFT_SPECS[pinnedType];
-            const imgEl = document.getElementById('heroPinnedTrophyImg');
-            const titleEl = document.getElementById('heroPinnedTrophyTitle');
-            const rarityEl = document.getElementById('heroPinnedTrophyRarity');
-            if (imgEl) imgEl.src = spec.png;
-            if (titleEl) titleEl.textContent = spec.title;
-            if (rarityEl) {
-                rarityEl.textContent = spec.rarity;
-                rarityEl.className = 'artifact-rarity-pill ' + (spec.badgeClass || '');
-            }
-            trophyWrap.style.display = 'inline-flex';
-        } else {
-            trophyWrap.style.display = 'none';
-        }
-    }
+    if (trophyWrap) trophyWrap.remove();
 
     // Стек технологий и тегов (Skills Tags)
     const skillsContainer = document.getElementById('heroSkillsContainer');
@@ -2087,6 +2346,12 @@ function renderUserProfile(data) {
     }
 
     // Контакты и социальные сети (Social Links)
+    // Музыкальный плеер профиля (мультитрековый плейлист с лицевым треком)
+    const musicWrap = document.getElementById('heroMusicPlayerWrap');
+    if (musicWrap) {
+        loadUserProfileMusic(user.id, user);
+    }
+
     const socialContainer = document.getElementById('heroSocialContainer');
     if (socialContainer) {
         socialContainer.innerHTML = '';
@@ -2812,6 +3077,15 @@ async function openEditProfileModal() {
     // Главный экспонат
     initTrophyGrid(u.pinned_gift_id || 0);
 
+    // Музыка профиля
+    const musicUrlInput = document.getElementById('editMusicUrl');
+    const musicTitleInput = document.getElementById('editMusicTitle');
+    const musicArtistInput = document.getElementById('editMusicArtist');
+    if (musicUrlInput) musicUrlInput.value = u.music_url || '';
+    if (musicTitleInput) musicTitleInput.value = u.music_title || '';
+    if (musicArtistInput) musicArtistInput.value = u.music_artist || '';
+    updateModalMusicPreviewState();
+
     switchCustomTab('profile');
     updateModalLivePreview();
 
@@ -2825,7 +3099,7 @@ function closeEditProfileModal() {
 }
 
 function switchCustomTab(tabKey) {
-    const tabs = ['profile', 'status', 'avatar', 'theme', 'skills', 'social', 'trophy'];
+    const tabs = ['profile', 'status', 'avatar', 'theme', 'skills', 'social', 'trophy', 'music'];
     tabs.forEach(t => {
         const btn = document.getElementById(`tabCustom${capitalize(t)}`);
         const pane = document.getElementById(`customPane${capitalize(t)}`);
@@ -3330,6 +3604,9 @@ async function handleProfileUpdate(e) {
         web: (document.getElementById('editSocialWeb')?.value || '').trim()
     };
     const pinnedGiftId = parseInt(document.getElementById('editPinnedGiftId')?.value || '0', 10) || 0;
+    const musicUrl = (document.getElementById('editMusicUrl')?.value || '').trim();
+    const musicTitle = (document.getElementById('editMusicTitle')?.value || '').trim();
+    const musicArtist = (document.getElementById('editMusicArtist')?.value || '').trim();
 
     const saveBtn = document.getElementById('btnSaveProfile');
     if (saveBtn) {
@@ -3354,7 +3631,10 @@ async function handleProfileUpdate(e) {
                 profile_bg_effect: profileBgEffect,
                 skills_tags: skillsTags,
                 social_links: JSON.stringify(socialLinksObj),
-                pinned_gift_id: pinnedGiftId
+                pinned_gift_id: pinnedGiftId,
+                music_url: musicUrl,
+                music_title: musicTitle,
+                music_artist: musicArtist
             })
         });
 
@@ -3384,6 +3664,9 @@ async function handleProfileUpdate(e) {
 // СОЗДАНИЕ ПОСТА В ПРОФИЛЕ С ФОТО
 // ==========================================
 let currentProfUploadedImageUrl = '';
+let currentProfAudioUrl = '';
+let currentProfAudioTitle = '';
+let currentProfAudioArtist = '';
 
 function toggleProfImageBox() {
     const box = document.getElementById('profImageBox');
@@ -3391,6 +3674,16 @@ function toggleProfImageBox() {
     box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
     if (box.style.display === 'block') {
         const inp = document.getElementById('profImageUrl');
+        if (inp) inp.focus();
+    }
+}
+
+function toggleProfMusicBox() {
+    const box = document.getElementById('profMusicBox');
+    if (!box) return;
+    box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+    if (box.style.display === 'block') {
+        const inp = document.getElementById('profMusicTitle');
         if (inp) inp.focus();
     }
 }
@@ -3417,9 +3710,12 @@ function updateProfImagePreview() {
     }
 }
 
-async function handleProfComposerFileUpload(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
+async function uploadProfSingleImage(file) {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Пожалуйста, войдите в аккаунт для загрузки файлов 🔐', 'error');
+        openAuthModal('login');
+        return;
+    }
 
     if (file.size > 30 * 1024 * 1024) {
         showToast('Размер файла не должен превышать 30 МБ', 'error');
@@ -3429,7 +3725,7 @@ async function handleProfComposerFileUpload(e) {
     const formData = new FormData();
     formData.append('file', file);
 
-    showToast('Загрузка фото...', 'info');
+    showToast('Загрузка фото в профиль...', 'info');
 
     try {
         const res = await fetch('/api/upload', {
@@ -3466,6 +3762,16 @@ async function handleProfComposerFileUpload(e) {
     }
 }
 
+async function handleProfComposerFileUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+        await uploadProfSingleImage(file);
+    } finally {
+        e.target.value = '';
+    }
+}
+
 function clearProfComposerFile() {
     currentProfUploadedImageUrl = '';
     const fileInput = document.getElementById('profFileInput');
@@ -3478,18 +3784,130 @@ function clearProfComposerFile() {
     if (previewImg) previewImg.src = '';
 }
 
+async function handleProfComposerAudioUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудиофайла на сервер...', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка загрузки аудио');
+        }
+        const data = await res.json();
+        const cleanName = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        setProfComposerMusicPreset(data.url, cleanName, window.CURRENT_USER_DISPLAY_NAME || 'Автор');
+        showToast('Аудиофайл успешно прикреплен! 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function setProfComposerMusicPreset(url, title, artist) {
+    currentProfAudioUrl = url;
+    currentProfAudioTitle = title;
+    currentProfAudioArtist = artist;
+
+    const urlInput = document.getElementById('profMusicUrl');
+    const titleInput = document.getElementById('profMusicTitle');
+    const artistInput = document.getElementById('profMusicArtist');
+    if (urlInput) urlInput.value = url;
+    if (titleInput) titleInput.value = title;
+    if (artistInput) artistInput.value = artist;
+
+    const preview = document.getElementById('profMusicPreview');
+    const pTitle = document.getElementById('profPreviewTitle');
+    const pArtist = document.getElementById('profPreviewArtist');
+    if (pTitle) pTitle.textContent = title;
+    if (pArtist) pArtist.textContent = artist;
+    if (preview) preview.style.display = 'block';
+
+    const box = document.getElementById('profMusicBox');
+    if (box) box.style.display = 'none';
+}
+
+function updateProfMusicState() {
+    const url = document.getElementById('profMusicUrl')?.value.trim();
+    const title = document.getElementById('profMusicTitle')?.value.trim() || 'Аудиозапись';
+    const artist = document.getElementById('profMusicArtist')?.value.trim() || 'Исполнитель';
+
+    if (url) {
+        setProfComposerMusicPreset(url, title, artist);
+    } else {
+        clearProfComposerMusic();
+    }
+}
+
+function clearProfComposerMusic() {
+    currentProfAudioUrl = '';
+    currentProfAudioTitle = '';
+    currentProfAudioArtist = '';
+
+    const urlInput = document.getElementById('profMusicUrl');
+    const titleInput = document.getElementById('profMusicTitle');
+    const artistInput = document.getElementById('profMusicArtist');
+    if (urlInput) urlInput.value = '';
+    if (titleInput) titleInput.value = '';
+    if (artistInput) artistInput.value = '';
+
+    const preview = document.getElementById('profMusicPreview');
+    if (preview) preview.style.display = 'none';
+}
+
+function previewProfComposerAudio(e) {
+    if (e) e.stopPropagation();
+    if (!currentProfAudioUrl) return;
+    window.musicPlayer.playTrack({
+        url: currentProfAudioUrl,
+        title: currentProfAudioTitle || 'Аудиозапись',
+        artist: currentProfAudioArtist || 'Предпросмотр',
+        source: 'prof-composer'
+    });
+}
+
 async function createProfilePost() {
     const textarea = document.getElementById('profPostContent');
     let content = textarea ? textarea.value.trim() : '';
     const urlInput = document.getElementById('profImageUrl');
-    const imageUrl = currentProfUploadedImageUrl || (urlInput ? urlInput.value.trim() : '');
+    let imageUrl = currentProfUploadedImageUrl || (urlInput ? urlInput.value.trim() : '');
 
-    if (imageUrl && content === imageUrl) {
+    const profMusicUrlEl = document.getElementById('profMusicUrl');
+    const profMusicTitleEl = document.getElementById('profMusicTitle');
+    const profMusicArtistEl = document.getElementById('profMusicArtist');
+
+    let musicUrl = currentProfAudioUrl || (profMusicUrlEl ? profMusicUrlEl.value.trim() : '');
+    let musicTitle = currentProfAudioTitle || (profMusicTitleEl ? profMusicTitleEl.value.trim() : '') || (musicUrl ? 'Аудиозапись' : '');
+    let musicArtist = currentProfAudioArtist || (profMusicArtistEl ? profMusicArtistEl.value.trim() : '') || (musicUrl ? (window.CURRENT_USER_DISPLAY_NAME || 'Автор') : '');
+
+    // Авто-детекция ссылки на картинку из текста
+    const imagePattern = /^https?:\/\/[^\s]+\.(jpeg|jpg|gif|png|webp)(\?[^\s]*)?$/i;
+    if (!imageUrl && imagePattern.test(content)) {
+        imageUrl = content;
+        content = '';
+    } else if (imageUrl && content === imageUrl) {
         content = '';
     }
 
-    if (!content && !imageUrl) {
-        showToast('Введите текст публикации или прикрепите фото', 'error');
+    // Авто-детекция ссылки на аудио из текста
+    const audioPattern = /^https?:\/\/[^\s]+\.(mp3|wav|ogg|m4a)(\?[^\s]*)?$/i;
+    if (!musicUrl && audioPattern.test(content)) {
+        musicUrl = content;
+        musicTitle = 'Аудиозапись';
+        musicArtist = window.CURRENT_USER_DISPLAY_NAME || 'Автор';
+        content = '';
+    }
+
+    if (!content && !imageUrl && !musicUrl) {
+        showToast('Введите текст публикации, прикрепите фото или аудиозапись', 'error');
         return;
     }
 
@@ -3500,7 +3918,10 @@ async function createProfilePost() {
             body: JSON.stringify({
                 user_id: window.CURRENT_USER_ID,
                 content: content,
-                image_url: imageUrl
+                image_url: imageUrl,
+                music_url: musicUrl,
+                music_title: musicTitle,
+                music_artist: musicArtist
             })
         });
 
@@ -3509,6 +3930,12 @@ async function createProfilePost() {
 
         if (textarea) textarea.value = '';
         clearProfComposerFile();
+        clearProfComposerMusic();
+        const pBox = document.getElementById('profMusicBox');
+        if (pBox) pBox.style.display = 'none';
+        const imgBox = document.getElementById('profImageBox');
+        if (imgBox) imgBox.style.display = 'none';
+
         showToast('Запись опубликована в ваш профиль', 'success');
 
         const profPosts = document.getElementById('profPostsContainer');
@@ -4431,21 +4858,38 @@ let pendingBatchDelete = false;
 function startEditChatMessage(msgId) {
     const msgEl = document.getElementById(`chat-msg-${msgId}`);
     if (!msgEl) return;
-    const contentEl = msgEl.querySelector('.chat-bubble-content');
-    if (!contentEl) return;
-    const text = contentEl.textContent.trim();
 
     editingChatMessageId = msgId;
+
+    const rawText = msgEl.getAttribute('data-raw-content') ?? '';
+    const audioUrl = msgEl.getAttribute('data-audio-url') || '';
+    const audioTitle = msgEl.getAttribute('data-audio-title') || 'Аудиозапись';
+    const audioArtist = msgEl.getAttribute('data-audio-artist') || '';
+
     const banner = document.getElementById('chatEditBanner');
     const preview = document.getElementById('chatEditPreviewText');
     const input = document.getElementById('chatMessageInput');
 
-    if (preview) preview.textContent = text;
+    if (preview) {
+        let previewDesc = rawText;
+        if (audioUrl) {
+            previewDesc = (rawText ? (rawText + ' ') : '') + `🎵 [${audioTitle}]`;
+        }
+        preview.textContent = previewDesc || 'Редактирование аудио';
+    }
     if (banner) banner.style.display = 'flex';
+
     if (input) {
-        input.value = text;
+        input.value = rawText;
         input.focus();
         input.select();
+    }
+
+    // Обработка аудиофайла в режиме редактирования:
+    if (audioUrl) {
+        attachChatMusicPreset(audioUrl, audioTitle, audioArtist);
+    } else {
+        clearChatAudioAttachment();
     }
 }
 
@@ -4455,6 +4899,8 @@ function cancelEditChatMessage() {
     const input = document.getElementById('chatMessageInput');
     if (banner) banner.style.display = 'none';
     if (input) input.value = '';
+    clearChatFile();
+    clearChatAudioAttachment();
 }
 
 function openDeleteMessageModal(msgId, isOut) {
@@ -4630,6 +5076,181 @@ async function executeBatchDelete(forEveryone) {
     }
 }
 
+
+function formatChatMessageText(text) {
+    if (!text) return '';
+
+    // Проверяем наличие ссылки на публикацию: ?post=123 или /?post=123
+    const postMatch = text.match(/(?:https?:\/\/[^\s<]+)?\/?\?post=(\d+)/i);
+    let repostCardHtml = '';
+    let sharedPostId = null;
+
+    if (postMatch) {
+        sharedPostId = parseInt(postMatch[1], 10);
+        let snippet = '';
+        const snippetMatch = text.match(/Поделился публикацией:\s*(?:"([^"]+)"|'([^']+)'|([^?\n\r]+))/i);
+        if (snippetMatch) {
+            snippet = (snippetMatch[1] || snippetMatch[2] || snippetMatch[3] || '').trim();
+        }
+
+        repostCardHtml = `
+            <div class="chat-repost-card" onclick="navigateToPost(${sharedPostId}, event)" title="Нажмите, чтобы открыть публикацию">
+                <div class="chat-repost-header">
+                    <span style="display: inline-flex; align-items: center; gap: 6px;">
+                        <span>📌</span> <span>Публикация #${sharedPostId}</span>
+                    </span>
+                    <span class="chat-repost-arrow">Перейти ↗</span>
+                </div>
+                ${snippet ? `<div class="chat-repost-snippet">${escapeHtml(snippet)}</div>` : ''}
+            </div>
+        `;
+    }
+
+    let escaped = escapeHtml(text);
+
+    // Превращаем внутренние ссылки на публикации в кликабельные кнопки перехода
+    escaped = escaped.replace(/(https?:\/\/[^\s<]+|\/)\?post=(\d+)/gi, (match, prefix, pid) => {
+        return `<a href="/?post=${pid}" class="chat-post-link" onclick="event.preventDefault(); event.stopPropagation(); navigateToPost(${pid}, event);" title="Перейти к публикации #${pid}">${match}</a>`;
+    });
+
+    // Обычные внешние ссылки
+    escaped = escaped.replace(/(https?:\/\/[^\s<]+)/gi, (match) => {
+        if (match.includes('chat-post-link') || match.includes('navigateToPost')) return match;
+        return `<a href="${match}" target="_blank" rel="noopener noreferrer" class="chat-external-link" onclick="event.stopPropagation()">${match}</a>`;
+    });
+
+    escaped = escaped.replace(/\n/g, '<br>');
+    return escaped + repostCardHtml;
+}
+
+async function navigateToPost(postId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    if (!postId) return;
+
+    navigateTo('feed');
+
+    try {
+        history.pushState(null, '', `/?post=${postId}`);
+    } catch (_) {}
+
+    let postEl = document.getElementById(`post-${postId}`);
+
+    if (!postEl) {
+        try {
+            const res = await fetch(`/api/posts/${postId}`);
+            if (res.ok) {
+                const post = await res.json();
+                const container = document.getElementById('postsContainer');
+                if (container) {
+                    postEl = createPostElement(post);
+                    container.insertBefore(postEl, container.firstChild);
+                }
+            }
+        } catch (e) {
+            console.error('Error fetching post:', e);
+        }
+    }
+
+    if (postEl) {
+        setTimeout(() => {
+            postEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            postEl.classList.remove('post-card-highlighted');
+            void postEl.offsetWidth;
+            postEl.classList.add('post-card-highlighted');
+            setTimeout(() => {
+                postEl.classList.remove('post-card-highlighted');
+            }, 3500);
+        }, 180);
+    } else {
+        showToast('Публикация не найдена или была удалена', 'error');
+    }
+}
+
+function buildChatMessageBubbleHtml(m, isOut) {
+    const trimmed = (m.content || '').trim();
+    const isImageFile = /\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(trimmed);
+    const isUploadedPath = trimmed.startsWith('/uploads/');
+    const isAudioFile = /\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(trimmed);
+    const audioUrl = m.audio_url || (isAudioFile ? trimmed : '');
+
+    let audioHtml = '';
+    if (audioUrl) {
+        const audioTitle = m.audio_title || (isAudioFile ? trimmed.split('/').pop().replace(/^\d+_/, '') : 'Аудиозапись');
+        const audioArtist = m.audio_artist || (isOut ? (window.CURRENT_USER_DISPLAY_NAME || 'Вы') : (activeInterlocutorData ? activeInterlocutorData.display_name : 'Собеседник'));
+        audioHtml = `
+            <div class="chat-audio-card" id="chat-audio-${m.id}" data-audio-url="${escapeHtml(audioUrl)}" data-audio-title="${escapeHtml(audioTitle)}" data-audio-artist="${escapeHtml(audioArtist)}">
+                <button type="button" class="chat-audio-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(audioUrl)}', title: '${escapeHtml(audioTitle)}', artist: '${escapeHtml(audioArtist)}', elementId: 'chat-audio-${m.id}'}, event)" title="Слушать аудио">
+                    <span class="chat-audio-icon">▶️</span>
+                </button>
+                <div class="chat-audio-info">
+                    <div class="chat-audio-title">${escapeHtml(audioTitle)}</div>
+                    <div class="chat-audio-artist">${escapeHtml(audioArtist)}</div>
+                </div>
+                <div class="chat-audio-wave">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+            </div>
+        `;
+    }
+
+    let contentHtml = '';
+    if (audioHtml) {
+        if (trimmed && trimmed !== audioUrl) {
+            contentHtml = audioHtml + `<div class="chat-text-after-audio" style="margin-top: 4px;">${formatChatMessageText(trimmed)}</div>`;
+        } else {
+            contentHtml = audioHtml;
+        }
+    } else if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
+        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" class="chat-sent-image" onclick="openImageLightbox('${escapeHtml(trimmed)}', 'Фото')"></div>`;
+    } else if (isUploadedPath) {
+        const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
+        contentHtml = `<a href="${escapeHtml(trimmed)}" target="_blank" download class="chat-file-attachment" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.08); border-radius: 10px; color: #fff; text-decoration: none; font-weight: 500;">📎 <span>${escapeHtml(fileName || 'Скачать файл')}</span></a>`;
+    } else {
+        contentHtml = formatChatMessageText(m.content || '');
+    }
+    return contentHtml;
+}
+
+function setChatMessageRowData(row, m, isOut) {
+    const trimmed = (m.content || '').trim();
+    const isAudioFile = /\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(trimmed);
+    const audioUrl = m.audio_url || (isAudioFile ? trimmed : '');
+    const audioTitle = m.audio_title || (isAudioFile ? trimmed.split('/').pop().replace(/^\d+_/, '') : '');
+    const audioArtist = m.audio_artist || '';
+    const rawText = (trimmed === audioUrl) ? '' : (m.content || '');
+
+    row.setAttribute('data-msg-id', m.id);
+    row.setAttribute('data-is-out', isOut ? '1' : '0');
+    row.setAttribute('data-raw-content', rawText);
+    row.setAttribute('data-audio-url', audioUrl);
+    row.setAttribute('data-audio-title', audioTitle);
+    row.setAttribute('data-audio-artist', audioArtist);
+}
+
+function updateChatMessageDOM(m) {
+    const row = document.getElementById(`chat-msg-${m.id}`);
+    if (!row) return;
+
+    const isOut = (row.getAttribute('data-is-out') === '1') || (m.sender_id === window.CURRENT_USER_ID);
+    setChatMessageRowData(row, m, isOut);
+
+    const contentEl = row.querySelector('.chat-bubble-content');
+    if (contentEl) {
+        contentEl.innerHTML = buildChatMessageBubbleHtml(m, isOut);
+    }
+
+    const footer = row.querySelector('.chat-bubble-footer');
+    if (footer && !footer.querySelector('.chat-bubble-edited')) {
+        const ed = document.createElement('span');
+        ed.className = 'chat-bubble-edited';
+        ed.textContent = ' • (ред.)';
+        footer.insertBefore(ed, footer.firstChild);
+    }
+}
+
 function appendChatMessageElement(m) {
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
@@ -4658,26 +5279,13 @@ function appendChatMessageElement(m) {
     const row = document.createElement('div');
     row.id = `chat-msg-${m.id}`;
     row.className = 'chat-bubble-row ' + (isOut ? 'out' : 'in');
-    row.setAttribute('data-msg-id', m.id);
-    row.setAttribute('data-is-out', isOut ? '1' : '0');
+
+    setChatMessageRowData(row, m, isOut);
 
     const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
     const editedBadge = m.is_edited ? '<span class="chat-bubble-edited" title="Отредактировано">• (ред.)</span>' : '';
 
-    const trimmed = (m.content || '').trim();
-    const isImageFile = /\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(trimmed);
-    const isUploadedPath = trimmed.startsWith('/uploads/');
-    let contentHtml = '';
-
-    if (isImageFile || (isUploadedPath && /\.(jpeg|jpg|gif|png|webp)$/i.test(trimmed))) {
-        // Отображаем изображение полностью, без обрезки и с удобным масштабом
-        contentHtml = `<div class="chat-media-preview-box"><img src="${escapeHtml(trimmed)}" alt="Фото" class="chat-sent-image" onclick="openImageLightbox('${escapeHtml(trimmed)}', 'Фото')"></div>`;
-    } else if (isUploadedPath) {
-        const fileName = trimmed.split('/').pop().replace(/^\d+_/, '');
-        contentHtml = `<a href="${escapeHtml(trimmed)}" target="_blank" download class="chat-file-attachment" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.08); border-radius: 10px; color: #fff; text-decoration: none; font-weight: 500;">📎 <span>${escapeHtml(fileName || 'Скачать файл')}</span></a>`;
-    } else {
-        contentHtml = escapeHtml(m.content);
-    }
+    const contentHtml = buildChatMessageBubbleHtml(m, isOut);
 
     const selectCol = `
         <div class="chat-msg-select-col" style="${isChatSelectionMode ? 'display:flex;' : 'display:none;'}">
@@ -4736,39 +5344,39 @@ async function handleSendMessage(e) {
     if (currentChatAttachmentUrl) {
         content = content ? `${content}\n${currentChatAttachmentUrl}` : currentChatAttachmentUrl;
     }
-    if (!content) return;
+
+    let audioUrl = pendingChatAudio ? pendingChatAudio.url : '';
+    let audioTitle = pendingChatAudio ? pendingChatAudio.title : '';
+    let audioArtist = pendingChatAudio ? pendingChatAudio.artist : '';
+
+    if (!content && !audioUrl) return;
 
     const sendBtn = document.getElementById('chatSendBtn');
 
     // Если сейчас включен режим редактирования сообщения:
     if (editingChatMessageId) {
+        const msgIdToEdit = editingChatMessageId;
         if (sendBtn) sendBtn.disabled = true;
         isSendingMessage = true;
         try {
-            const res = await fetch(`/api/messages/${editingChatMessageId}`, {
+            const res = await fetch(`/api/messages/${msgIdToEdit}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: content })
+                body: JSON.stringify({
+                    content: content,
+                    audio_url: audioUrl,
+                    audio_title: audioTitle,
+                    audio_artist: audioArtist
+                })
             });
             if (!res.ok) {
                 const errData = await res.json();
                 throw new Error(errData.error || 'Ошибка редактирования сообщения');
             }
             const updated = await res.json();
-            const msgEl = document.getElementById(`chat-msg-${updated.id}`);
-            if (msgEl) {
-                const contentEl = msgEl.querySelector('.chat-bubble-content');
-                if (contentEl) contentEl.textContent = updated.content;
-                const footer = msgEl.querySelector('.chat-bubble-footer');
-                if (footer && !footer.querySelector('.chat-bubble-edited')) {
-                    const ed = document.createElement('span');
-                    ed.className = 'chat-bubble-edited';
-                    ed.textContent = ' • (ред.)';
-                    footer.insertBefore(ed, footer.firstChild);
-                }
-            }
+            updateChatMessageDOM(updated);
             cancelEditChatMessage();
-            showToast('Сообщение изменено', 'success');
+            showToast('Сообщение изменено ✨', 'success');
         } catch (err) {
             showToast(err.message, 'error');
         } finally {
@@ -4786,7 +5394,10 @@ async function handleSendMessage(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 receiver_id: activeChatUserId,
-                content: content
+                content: content,
+                audio_url: audioUrl,
+                audio_title: audioTitle,
+                audio_artist: audioArtist
             })
         });
 
@@ -4798,6 +5409,7 @@ async function handleSendMessage(e) {
         const msg = await res.json();
         input.value = '';
         clearChatFile();
+        clearChatAudioAttachment();
 
         playChatSoundFx('send');
 
@@ -4825,15 +5437,16 @@ function clearChatFile() {
     if (preview) preview.style.display = 'none';
 }
 
-// Загрузка фото/файла в чат
+// Загрузка фото/файла/аудио в чат через единую скрепку 📎
 async function handleChatFileUpload(e) {
     const file = e.target.files && e.target.files[0];
     if (!file || !activeChatUserId) return;
 
+    const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac|aac|webm)$/i.test(file.name);
     const formData = new FormData();
     formData.append('file', file);
 
-    showToast('Загрузка файла...', 'success');
+    showToast(isAudio ? 'Загрузка аудио...' : 'Загрузка файла...', 'info');
 
     try {
         const res = await fetch('/api/upload', {
@@ -4844,14 +5457,34 @@ async function handleChatFileUpload(e) {
         if (!res.ok) throw new Error('Ошибка при загрузке файла');
         const data = await res.json();
 
-        currentChatAttachmentUrl = data.url;
-        const preview = document.getElementById('chatUploadPreview');
-        const previewName = document.getElementById('chatPreviewName');
-        if (preview && previewName) {
-            previewName.textContent = file.name;
-            preview.style.display = 'block';
+        if (isAudio || data.is_audio) {
+            // Аудиофайл: название автоматически из имени файла, никаких запросов названия/исполнителя!
+            const cleanTitle = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+            pendingChatAudio = {
+                url: data.url,
+                title: cleanTitle || 'Аудиозапись',
+                artist: ''
+            };
+            const preview = document.getElementById('chatAudioPreview');
+            const pTitle = document.getElementById('chatAudioPreviewTitle');
+            const pArtist = document.getElementById('chatAudioPreviewArtist');
+            if (pTitle) pTitle.textContent = pendingChatAudio.title;
+            if (pArtist) pArtist.textContent = '🎵 Аудиофайл';
+            if (preview) preview.style.display = 'block';
+
+            clearChatFile();
+            showToast('Аудиозапись прикреплена! Нажмите «Отправить»', 'success');
+        } else {
+            currentChatAttachmentUrl = data.url;
+            const preview = document.getElementById('chatUploadPreview');
+            const previewName = document.getElementById('chatPreviewName');
+            if (preview && previewName) {
+                previewName.textContent = file.name;
+                preview.style.display = 'block';
+            }
+            clearChatAudioAttachment();
+            showToast('Файл прикреплен! Нажмите «Отправить»', 'success');
         }
-        showToast('Файл прикреплен! Нажмите «Отправить»', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
@@ -4991,18 +5624,7 @@ function handleSSEEvent(event) {
         case 'message_updated': {
             const msg = event.payload || event.message;
             if (msg) {
-                const msgEl = document.getElementById(`chat-msg-${msg.id}`);
-                if (msgEl) {
-                    const contentEl = msgEl.querySelector('.chat-bubble-content');
-                    if (contentEl) contentEl.textContent = msg.content;
-                    const footer = msgEl.querySelector('.chat-bubble-footer');
-                    if (footer && !footer.querySelector('.chat-bubble-edited')) {
-                        const ed = document.createElement('span');
-                        ed.className = 'chat-bubble-edited';
-                        ed.textContent = ' • (ред.)';
-                        footer.insertBefore(ed, footer.firstChild);
-                    }
-                }
+                updateChatMessageDOM(msg);
             }
             break;
         }
@@ -5783,5 +6405,1088 @@ async function applyIthaquaSkinPreset(presetKey) {
         }
     } catch (e) {
         console.error('Error applying skin:', e);
+    }
+}
+
+
+// ============================================================================
+// GLOBAL CYBERPUNK MUSIC SYSTEM & AUDIO ENGINE
+// ============================================================================
+
+let currentComposerAudioUrl = '';
+let currentComposerAudioTitle = '';
+let currentComposerAudioArtist = '';
+
+let pendingChatAudio = null;
+
+const HEADER_PLAY_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon" style="margin-left: 2px;"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+const HEADER_PAUSE_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor"/></svg>';
+
+class GlobalMusicPlayer {
+    constructor() {
+        this.audio = new Audio();
+        this.isPlaying = false;
+        this.currentTrack = null;
+        this.playlist = [];
+        this.currentIndex = 0;
+    }
+
+    init() {
+        const playerHeader = document.getElementById('headerMusicPlayer');
+        if (playerHeader) {
+            playerHeader.style.display = 'none';
+            playerHeader.classList.remove('is-active', 'is-playing');
+        }
+
+        this.audio.addEventListener('timeupdate', () => {
+            if (this.audio.duration) {
+                const percent = (this.audio.currentTime / this.audio.duration) * 100;
+                const bar = document.getElementById('headerMusicProgressBar');
+                if (bar) bar.style.width = `${percent}%`;
+            }
+        });
+
+        this.audio.addEventListener('play', () => {
+            this.isPlaying = true;
+            this.updateUIState();
+        });
+
+        this.audio.addEventListener('pause', () => {
+            this.isPlaying = false;
+            this.updateUIState();
+        });
+
+        this.audio.addEventListener('ended', () => {
+            this.nextTrack();
+        });
+
+        this.audio.addEventListener('error', (e) => {
+            console.error('Audio playback error:', e);
+            this.isPlaying = false;
+            this.updateUIState();
+        });
+    }
+
+    collectPageTracks() {
+        const tracks = [];
+
+        // Треки из ленты постов
+        document.querySelectorAll('.post-music-card').forEach(card => {
+            const url = card.getAttribute('data-music-url');
+            const title = card.getAttribute('data-music-title') || 'Аудиозапись';
+            const artist = card.getAttribute('data-music-artist') || 'Исполнитель';
+            if (url && !tracks.some(t => t.url === url)) {
+                tracks.push({ url, title, artist, elementId: card.id, source: 'post' });
+            }
+        });
+
+        // Трек из открытого профиля
+        const profileCard = document.getElementById('heroMusicCard');
+        if (profileCard) {
+            const url = profileCard.getAttribute('data-music-url');
+            const title = profileCard.getAttribute('data-music-title') || 'Музыка профиля';
+            const artist = profileCard.getAttribute('data-music-artist') || 'Профиль';
+            if (url && !tracks.some(t => t.url === url)) {
+                tracks.unshift({ url, title, artist, elementId: 'heroMusicCard', source: 'profile' });
+            }
+        }
+
+        // Треки из сообщений чата
+        document.querySelectorAll('.chat-audio-card').forEach(card => {
+            const url = card.getAttribute('data-audio-url');
+            const title = card.getAttribute('data-audio-title') || 'Аудиосообщение';
+            const artist = card.getAttribute('data-audio-artist') || 'Чат';
+            if (url && !tracks.some(t => t.url === url)) {
+                tracks.push({ url, title, artist, source: 'chat' });
+            }
+        });
+
+        this.playlist = tracks;
+    }
+
+    playTrack(trackData, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        if (!trackData || !trackData.url) return;
+
+        // Если кликнули на уже загруженный трек: переключаем play/pause
+        if (this.currentTrack && this.currentTrack.url === trackData.url) {
+            this.togglePlay();
+            return;
+        }
+
+        this.collectPageTracks();
+        let existingIdx = this.playlist.findIndex(t => t.url === trackData.url);
+        if (existingIdx === -1) {
+            this.playlist.push(trackData);
+            this.currentIndex = this.playlist.length - 1;
+        } else {
+            this.currentIndex = existingIdx;
+        }
+
+        this.currentTrack = trackData;
+        this.audio.src = trackData.url;
+        this.audio.currentTime = 0;
+        
+        // Показываем плеер в верхней панели, когда пользователь запустил музыку
+        const playerHeader = document.getElementById('headerMusicPlayer');
+        if (playerHeader) {
+            playerHeader.style.display = 'flex';
+            playerHeader.classList.add('is-active');
+        }
+
+        const playPromise = this.audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(err => {
+                console.warn('Autoplay prevented or audio load failed:', err);
+            });
+        }
+
+        this.updateHeaderTrackInfo(trackData);
+        this.updateUIState();
+    }
+
+    closePlayer(event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        this.audio.pause();
+        this.audio.currentTime = 0;
+        this.isPlaying = false;
+        this.currentTrack = null;
+        const playerHeader = document.getElementById('headerMusicPlayer');
+        if (playerHeader) {
+            playerHeader.style.display = 'none';
+            playerHeader.classList.remove('is-active', 'is-playing');
+        }
+        const vinyl = document.getElementById('headerMusicVinyl');
+        if (vinyl) {
+            vinyl.style.animationPlayState = 'paused';
+        }
+        this.updateUIState();
+    }
+
+    togglePlay() {
+        if (!this.currentTrack) {
+            this.collectPageTracks();
+            if (this.playlist.length > 0) {
+                this.playTrack(this.playlist[0]);
+            }
+            return;
+        }
+
+        if (this.audio.paused) {
+            this.audio.play().catch(e => console.warn(e));
+        } else {
+            this.audio.pause();
+        }
+    }
+
+    nextTrack() {
+        this.collectPageTracks();
+        if (this.playlist.length === 0) return;
+        this.currentIndex = (this.currentIndex + 1) % this.playlist.length;
+        const next = this.playlist[this.currentIndex];
+        this.playTrack(next);
+        showToast(`Следующий трек: ${next.title}`, 'info');
+    }
+
+    prevTrack() {
+        if (this.audio.currentTime > 3.0) {
+            this.audio.currentTime = 0;
+            return;
+        }
+        this.collectPageTracks();
+        if (this.playlist.length === 0) return;
+        this.currentIndex = (this.currentIndex - 1 + this.playlist.length) % this.playlist.length;
+        const prev = this.playlist[this.currentIndex];
+        this.playTrack(prev);
+        showToast(`Предыдущий трек: ${prev.title}`, 'info');
+    }
+
+    handleProgressClick(event) {
+        const container = document.getElementById('headerMusicProgressContainer');
+        if (!container || !this.audio.duration) return;
+        const rect = container.getBoundingClientRect();
+        const clickX = event.clientX - rect.left;
+        const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+        this.audio.currentTime = ratio * this.audio.duration;
+    }
+
+    updateHeaderTrackInfo(track) {
+        const titleEl = document.getElementById('headerMusicTitle');
+        const artistEl = document.getElementById('headerMusicArtist');
+        if (titleEl) titleEl.textContent = track.title || 'Аудиозапись';
+        if (artistEl) artistEl.textContent = track.artist || 'GoSocial Player';
+    }
+
+    updateUIState() {
+        const playerHeader = document.getElementById('headerMusicPlayer');
+        const playIcon = document.getElementById('headerPlayIcon');
+
+        if (playerHeader) {
+            playerHeader.classList.toggle('is-playing', this.isPlaying);
+            if (this.currentTrack) {
+                playerHeader.style.display = 'flex';
+                playerHeader.classList.add('is-active');
+            } else {
+                playerHeader.style.display = 'none';
+                playerHeader.classList.remove('is-active');
+            }
+        }
+        if (playIcon) {
+            playIcon.innerHTML = this.isPlaying ? HEADER_PAUSE_SVG : HEADER_PLAY_SVG;
+        }
+        const vinyl = document.getElementById('headerMusicVinyl');
+        if (vinyl) {
+            vinyl.style.animationPlayState = this.isPlaying ? 'running' : 'paused';
+        }
+
+        // Синхронизация кнопки в профиле
+        const heroPlayIcon = document.getElementById('heroProfilePlayIcon');
+        const heroCard = document.getElementById('heroMusicCard');
+        if (heroPlayIcon && heroCard) {
+            const heroUrl = heroCard.getAttribute('data-music-url');
+            const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === heroUrl);
+            heroPlayIcon.textContent = isThisPlaying ? '⏸️' : '▶️';
+            heroCard.classList.toggle('is-active-playing', isThisPlaying);
+        }
+
+        // Синхронизация постов
+        document.querySelectorAll('.post-music-card').forEach(card => {
+            const url = card.getAttribute('data-music-url');
+            const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === url);
+            const icon = card.querySelector('.music-play-icon');
+            if (icon) icon.textContent = isThisPlaying ? '⏸️' : '▶️';
+            card.classList.toggle('is-active-playing', isThisPlaying);
+        });
+
+        // Синхронизация чата
+        document.querySelectorAll('.chat-audio-card').forEach(card => {
+            const url = card.getAttribute('data-audio-url');
+            const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === url);
+            const icon = card.querySelector('.chat-audio-icon');
+            if (icon) icon.textContent = isThisPlaying ? '⏸️' : '▶️';
+            card.classList.toggle('is-active-playing', isThisPlaying);
+        });
+    }
+}
+
+window.musicPlayer = new GlobalMusicPlayer();
+document.addEventListener('DOMContentLoaded', () => {
+    window.musicPlayer.init();
+});
+
+// ==========================================
+// COMPOSER MUSIC LOGIC
+// ==========================================
+function toggleComposerMusicBox() {
+    const box = document.getElementById('composerMusicBox');
+    if (!box) return;
+    const isHidden = (box.style.display === 'none' || !box.style.display);
+    box.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+        expandComposer();
+    }
+}
+
+async function handleComposerAudioUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудиофайла на сервер...', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка загрузки аудио');
+        }
+        const data = await res.json();
+        const cleanName = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        setComposerMusicPreset(data.url, cleanName, window.CURRENT_USER_DISPLAY_NAME || 'Автор');
+        showToast('Аудиофайл успешно прикреплен! 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function setComposerMusicPreset(url, title, artist) {
+    currentComposerAudioUrl = url;
+    currentComposerAudioTitle = title;
+    currentComposerAudioArtist = artist;
+
+    const urlInput = document.getElementById('composerMusicUrl');
+    const titleInput = document.getElementById('composerMusicTitle');
+    const artistInput = document.getElementById('composerMusicArtist');
+    if (urlInput) urlInput.value = url;
+    if (titleInput) titleInput.value = title;
+    if (artistInput) artistInput.value = artist;
+
+    const preview = document.getElementById('composerMusicPreview');
+    const pTitle = document.getElementById('composerPreviewTitle');
+    const pArtist = document.getElementById('composerPreviewArtist');
+    if (pTitle) pTitle.textContent = title;
+    if (pArtist) pArtist.textContent = artist;
+    if (preview) preview.style.display = 'block';
+
+    const box = document.getElementById('composerMusicBox');
+    if (box) box.style.display = 'none';
+}
+
+function updateComposerMusicState() {
+    const url = document.getElementById('composerMusicUrl')?.value.trim();
+    const title = document.getElementById('composerMusicTitle')?.value.trim() || 'Аудиозапись';
+    const artist = document.getElementById('composerMusicArtist')?.value.trim() || 'Исполнитель';
+
+    if (url) {
+        setComposerMusicPreset(url, title, artist);
+    } else {
+        clearComposerMusic();
+    }
+}
+
+function clearComposerMusic() {
+    currentComposerAudioUrl = '';
+    currentComposerAudioTitle = '';
+    currentComposerAudioArtist = '';
+
+    const urlInput = document.getElementById('composerMusicUrl');
+    const titleInput = document.getElementById('composerMusicTitle');
+    const artistInput = document.getElementById('composerMusicArtist');
+    if (urlInput) urlInput.value = '';
+    if (titleInput) titleInput.value = '';
+    if (artistInput) artistInput.value = '';
+
+    const preview = document.getElementById('composerMusicPreview');
+    if (preview) preview.style.display = 'none';
+}
+
+function previewComposerAudio(e) {
+    if (e) e.stopPropagation();
+    if (!currentComposerAudioUrl) return;
+    window.musicPlayer.playTrack({
+        url: currentComposerAudioUrl,
+        title: currentComposerAudioTitle || 'Аудиозапись',
+        artist: currentComposerAudioArtist || 'Предпросмотр',
+        source: 'composer'
+    });
+}
+
+// ==========================================
+// PROFILE MUSIC LOGIC
+// ==========================================
+async function handleProfileMusicUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка музыки профиля...', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка загрузки аудио');
+        }
+        const data = await res.json();
+        const cleanName = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        setProfileMusicPreset(data.url, cleanName, window.CURRENT_USER_DISPLAY_NAME || 'Профиль');
+        showToast('Музыка профиля прикреплена! 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function setProfileMusicPreset(url, title, artist) {
+    const urlInput = document.getElementById('editMusicUrl');
+    const titleInput = document.getElementById('editMusicTitle');
+    const artistInput = document.getElementById('editMusicArtist');
+    if (urlInput) urlInput.value = url;
+    if (titleInput) titleInput.value = title;
+    if (artistInput) artistInput.value = artist;
+    updateModalMusicPreviewState();
+}
+
+function clearProfileMusicPreset() {
+    const urlInput = document.getElementById('editMusicUrl');
+    const titleInput = document.getElementById('editMusicTitle');
+    const artistInput = document.getElementById('editMusicArtist');
+    if (urlInput) urlInput.value = '';
+    if (titleInput) titleInput.value = '';
+    if (artistInput) artistInput.value = '';
+    updateModalMusicPreviewState();
+}
+
+function updateModalMusicPreviewState() {
+    const url = document.getElementById('editMusicUrl')?.value.trim();
+    const title = document.getElementById('editMusicTitle')?.value.trim() || 'Аудиозапись';
+    const artist = document.getElementById('editMusicArtist')?.value.trim() || 'Исполнитель';
+    const wrap = document.getElementById('modalMusicPreviewWrap');
+    const pTitle = document.getElementById('modalPreviewTitle');
+    const pArtist = document.getElementById('modalPreviewArtist');
+
+    if (url && wrap) {
+        wrap.style.display = 'block';
+        if (pTitle) pTitle.textContent = title;
+        if (pArtist) pArtist.textContent = artist;
+    } else if (wrap) {
+        wrap.style.display = 'none';
+    }
+}
+
+function previewModalAudio(e) {
+    if (e) e.stopPropagation();
+    const url = document.getElementById('editMusicUrl')?.value.trim();
+    const title = document.getElementById('editMusicTitle')?.value.trim() || 'Музыка профиля';
+    const artist = document.getElementById('editMusicArtist')?.value.trim() || 'Предпросмотр';
+    if (!url) return;
+    window.musicPlayer.playTrack({ url, title, artist, source: 'modal' });
+}
+
+function toggleHeroProfileMusic(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    const card = document.getElementById('heroMusicCard');
+    if (!card) return;
+    const url = card.getAttribute('data-music-url');
+    const title = card.getAttribute('data-music-title') || 'Трек профиля';
+    const artist = card.getAttribute('data-music-artist') || 'Профиль';
+    if (!url) return;
+    window.musicPlayer.playTrack({ url, title, artist, elementId: 'heroMusicCard', source: 'profile' });
+}
+
+// ==========================================
+// CHAT AUDIO MESSAGES LOGIC
+// ==========================================
+function toggleChatMusicDrawer() {
+    const drawer = document.getElementById('chatMusicDrawer');
+    if (!drawer) return;
+    const isHidden = (drawer.style.display === 'none' || !drawer.style.display);
+    drawer.style.display = isHidden ? 'flex' : 'none';
+}
+
+async function handleChatAudioUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудио в чат...', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка загрузки аудио');
+        }
+        const data = await res.json();
+        const cleanName = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        attachChatMusicPreset(data.url, cleanName, window.CURRENT_USER_DISPLAY_NAME || 'Вы');
+        showToast('Аудио прикреплено к сообщению! 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+function attachChatMusicPreset(url, title, artist) {
+    pendingChatAudio = { url, title, artist };
+    const preview = document.getElementById('chatAudioPreview');
+    const pTitle = document.getElementById('chatAudioPreviewTitle');
+    const pArtist = document.getElementById('chatAudioPreviewArtist');
+    if (pTitle) pTitle.textContent = title;
+    if (pArtist) pArtist.textContent = artist;
+    if (preview) preview.style.display = 'block';
+
+    const drawer = document.getElementById('chatMusicDrawer');
+    if (drawer) drawer.style.display = 'none';
+
+    const input = document.getElementById('chatMessageInput');
+    if (input) input.focus();
+}
+
+function clearChatAudioAttachment() {
+    pendingChatAudio = null;
+    const preview = document.getElementById('chatAudioPreview');
+    if (preview) preview.style.display = 'none';
+}
+
+function previewChatAudio(e) {
+    if (e) e.stopPropagation();
+    if (!pendingChatAudio) return;
+    window.musicPlayer.playTrack({
+        url: pendingChatAudio.url,
+        title: pendingChatAudio.title || 'Аудиосообщение',
+        artist: pendingChatAudio.artist || 'Чат',
+        source: 'chat-preview'
+    });
+}
+
+
+// ==========================================
+// 3-DOTS MENU & ACTIONS FOR POST MUSIC CARD
+// ==========================================
+function togglePostMusicMenu(event, postId) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    let menu = null;
+    if (event) {
+        const target = event.currentTarget || event.target;
+        const wrap = target ? target.closest('.post-music-actions-wrap') : null;
+        if (wrap) {
+            menu = wrap.querySelector('.post-music-dropdown');
+        }
+    }
+    if (!menu) {
+        const allMenus = document.querySelectorAll(`[id="postMusicMenu-${postId}"]`);
+        for (const m of allMenus) {
+            const vp = m.closest('.view-panel');
+            if (!vp || vp.style.display !== 'none') {
+                menu = m;
+                break;
+            }
+        }
+        if (!menu && allMenus.length > 0) menu = allMenus[0];
+    }
+    if (!menu) return;
+    const isShown = (menu.style.display === 'block');
+    closeAllMusicMenus();
+    if (!isShown) {
+        menu.style.display = 'block';
+    }
+}
+
+function closeAllMusicMenus() {
+    document.querySelectorAll('.post-music-dropdown').forEach(m => {
+        m.style.display = 'none';
+    });
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.post-music-actions-wrap')) {
+        closeAllMusicMenus();
+    }
+});
+
+function downloadAudioTrack(url, title, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    closeAllMusicMenus();
+
+    if (!url) {
+        showToast('Ссылка на аудиофайл недоступна', 'error');
+        return;
+    }
+
+    showToast(`Загрузка аудио: ${title || 'файл'}... 📥`, 'info');
+
+    let ext = '.mp3';
+    const match = url.match(/\.(mp3|wav|ogg|m4a|flac|aac|webm)($|\?)/i);
+    if (match) ext = '.' + match[1];
+
+    let safeName = (title || 'audio_track').replace(/[\/\\:*?"<>|]/g, '_');
+    if (!safeName.toLowerCase().endsWith(ext)) {
+        safeName += ext;
+    }
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+let pendingShareAudio = null;
+
+async function openShareAudioModal(url, title, artist, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    closeAllMusicMenus();
+
+    pendingShareAudio = {
+        url,
+        title: title || 'Аудиозапись',
+        artist: artist || ''
+    };
+
+    const modal = document.getElementById('shareAudioModal');
+    if (!modal) return;
+
+    const trackPreview = document.getElementById('shareAudioTrackName');
+    if (trackPreview) {
+        trackPreview.textContent = `${title || 'Аудиозапись'} ${artist ? '• ' + artist : ''}`;
+    }
+
+    const listContainer = document.getElementById('shareAudioConversationsList');
+    if (listContainer) {
+        listContainer.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-dim);">Загрузка ваших диалогов...</div>';
+    }
+
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch('/api/messages/conversations');
+        if (!res.ok) throw new Error('Не удалось загрузить список диалогов');
+        const convs = await res.json();
+        renderShareAudioConversations(convs);
+    } catch (err) {
+        if (listContainer) {
+            listContainer.innerHTML = `<div style="padding: 1rem; color: #f43f5e; text-align: center;">${err.message}</div>`;
+        }
+    }
+}
+
+function closeShareAudioModal() {
+    const modal = document.getElementById('shareAudioModal');
+    if (modal) modal.style.display = 'none';
+    pendingShareAudio = null;
+}
+
+function renderShareAudioConversations(convs) {
+    const listContainer = document.getElementById('shareAudioConversationsList');
+    if (!listContainer) return;
+
+    if (!convs || convs.length === 0) {
+        listContainer.innerHTML = `
+            <div style="padding: 1.5rem; text-align: center; color: var(--text-dim); font-size: 0.88rem;">
+                У вас пока нет активных диалогов.<br>Начните переписку на странице профиля любого пользователя!
+            </div>
+        `;
+        return;
+    }
+
+    listContainer.innerHTML = convs.map(c => `
+        <div class="share-conversation-item" onclick="sendSharedAudioToUser(${c.user.id}, '${escapeHtml(c.user.display_name)}')">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <img src="${escapeHtml(c.user.avatar_url || '/static/avatars/default.svg')}" class="share-conv-avatar" alt="avatar">
+                <div>
+                    <strong style="color: #fff; font-size: 0.88rem; display: block;">${escapeHtml(c.user.display_name)}</strong>
+                    <span style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">@${escapeHtml(c.user.username)}</span>
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary btn-xs">Отправить 💬</button>
+        </div>
+    `).join('');
+}
+
+async function sendSharedAudioToUser(partnerId, partnerName) {
+    if (!pendingShareAudio) return;
+
+    try {
+        const res = await fetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                receiver_id: partnerId,
+                content: '',
+                audio_url: pendingShareAudio.url,
+                audio_title: pendingShareAudio.title,
+                audio_artist: pendingShareAudio.artist
+            })
+        });
+
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка при отправке');
+        }
+
+        showToast(`Аудиозапись отправлена пользователю ${partnerName}! 💬`, 'success');
+        closeShareAudioModal();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function copyAudioLink() {
+    if (!pendingShareAudio || !pendingShareAudio.url) return;
+    const fullUrl = pendingShareAudio.url.startsWith('http') ? pendingShareAudio.url : (window.location.origin + pendingShareAudio.url);
+    navigator.clipboard.writeText(fullUrl).then(() => {
+        showToast('Ссылка на трек скопирована в буфер обмена! 🔗', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать ссылку', 'error');
+    });
+}
+
+// ==========================================
+// MULTI-TRACK PROFILE MUSIC & PLAYLIST MODAL
+// ==========================================
+let currentViewedUserMusic = [];
+let currentViewedProfileUser = null;
+
+async function loadUserProfileMusic(userId, user) {
+    currentViewedProfileUser = user;
+    const musicWrap = document.getElementById('heroMusicPlayerWrap');
+    if (!musicWrap) return;
+
+    // Сразу показываем текущую музыку пользователя если есть, чтобы не моргало
+    if (user && user.music_url) {
+        musicWrap.style.display = 'block';
+        const mTitle = document.getElementById('heroMusicTitle');
+        const mArtist = document.getElementById('heroMusicArtist');
+        const mCard = document.getElementById('heroMusicCard');
+        if (mTitle) mTitle.textContent = user.music_title || 'Аудиозапись';
+        if (mArtist) mArtist.textContent = user.music_artist || (user ? user.display_name : '');
+        if (mCard) {
+            mCard.setAttribute('data-music-url', user.music_url);
+            mCard.setAttribute('data-music-title', user.music_title || 'Аудиозапись');
+            mCard.setAttribute('data-music-artist', user.music_artist || (user ? user.display_name : ''));
+        }
+    }
+
+    try {
+        const res = await fetch(`/api/users/${userId}/music`);
+        let tracks = [];
+        if (res.ok) {
+            tracks = await res.json();
+        }
+
+        // Если в таблице user_music еще нет записей, но у пользователя есть music_url
+        if ((!tracks || tracks.length === 0) && user && user.music_url) {
+            tracks = [{
+                id: 0,
+                user_id: user.id,
+                url: user.music_url,
+                title: user.music_title || 'Аудиозапись',
+                artist: user.music_artist || user.display_name
+            }];
+        }
+
+        currentViewedUserMusic = tracks || [];
+
+        if (currentViewedUserMusic.length > 0) {
+            // Самый последний добавленный трек является лицевым (tracks[0])
+            const frontTrack = currentViewedUserMusic[0];
+            musicWrap.style.display = 'block';
+
+            const mTitle = document.getElementById('heroMusicTitle');
+            const mArtist = document.getElementById('heroMusicArtist');
+            const mCard = document.getElementById('heroMusicCard');
+            const mCount = document.getElementById('heroMusicCountBadge');
+
+            if (mTitle) mTitle.textContent = frontTrack.title || 'Аудиозапись';
+            if (mArtist) mArtist.textContent = frontTrack.artist || (user ? user.display_name : '');
+            if (mCard) {
+                mCard.setAttribute('data-music-url', frontTrack.url);
+                mCard.setAttribute('data-music-title', frontTrack.title || 'Аудиозапись');
+                mCard.setAttribute('data-music-artist', frontTrack.artist || (user ? user.display_name : ''));
+            }
+            if (mCount) {
+                const count = currentViewedUserMusic.length;
+                mCount.textContent = `🎵 ${count} ${count === 1 ? 'трек' : (count < 5 ? 'трека' : 'треков')}`;
+            }
+        } else {
+            musicWrap.style.display = 'none';
+        }
+    } catch (err) {
+        console.warn('Error loading user music:', err);
+    }
+}
+
+async function openProfileMusicModal(event) {
+    if (event) {
+        if (event.target.closest('#heroProfilePlayBtn')) return;
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const modal = document.getElementById('profileMusicListModal');
+    if (!modal) return;
+
+    const user = currentProfileUserData || currentViewedProfileUser;
+    const isOwner = window.IS_AUTHENTICATED && user && (window.CURRENT_USER_ID === user.id);
+
+    const titleEl = document.getElementById('profileMusicModalTitle');
+    const subtextEl = document.getElementById('profileMusicModalSubtext');
+    const addBox = document.getElementById('profileMusicOwnerAddBox');
+
+    if (titleEl) titleEl.textContent = `Музыка профиля @${user ? user.username : ''}`;
+    if (addBox) {
+        addBox.style.display = isOwner ? 'block' : 'none';
+    }
+
+    if (user && (!currentViewedUserMusic || currentViewedUserMusic.length === 0)) {
+        try {
+            const res = await fetch(`/api/users/${user.id}/music`);
+            if (res.ok) {
+                currentViewedUserMusic = await res.json();
+            }
+        } catch (e) {}
+    }
+
+    if (subtextEl) {
+        const count = currentViewedUserMusic ? currentViewedUserMusic.length : 0;
+        subtextEl.textContent = `Всего треков: ${count}. Самый последний трек является лицевым на странице профиля.`;
+    }
+
+    renderProfileMusicList(currentViewedUserMusic, isOwner);
+    modal.style.display = 'flex';
+}
+
+function closeProfileMusicModal() {
+    const modal = document.getElementById('profileMusicListModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function renderProfileMusicList(tracks, isOwner) {
+    const container = document.getElementById('profileMusicListContainer');
+    if (!container) return;
+
+    if (!tracks || tracks.length === 0) {
+        container.innerHTML = `
+            <div style="padding: 2.5rem; text-align: center; color: var(--text-dim); font-size: 0.9rem;">
+                В профиле пока нет добавленных музыкальных треков.
+                ${isOwner ? '<br><span style="color: #00f0ff; margin-top: 8px; display: inline-block;">Добавьте свой первый трек кнопкой выше! 🎵</span>' : ''}
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = tracks.map((track, idx) => {
+        const isFront = (idx === 0);
+        return `
+            <div class="profile-music-item ${isFront ? 'is-front-track' : ''} ${isOwner ? 'is-draggable' : ''}" 
+                 data-music-id="${track.id}" 
+                 data-music-url="${escapeHtml(track.url)}" 
+                 data-music-title="${escapeHtml(track.title)}" 
+                 data-music-artist="${escapeHtml(track.artist || '')}" 
+                 ${isOwner ? 'draggable="true"' : ''}>
+                ${isOwner ? `
+                <div class="profile-item-drag-handle" title="Зажмите и перетащите, чтобы изменить порядок треков (первый станет лицевым)">
+                    ⠿
+                </div>` : ''}
+                <button type="button" class="profile-item-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(track.url)}', title: '${escapeHtml(track.title)}', artist: '${escapeHtml(track.artist)}', source: 'profile-modal'}, event)" title="Воспроизвести">
+                    <span>▶️</span>
+                </button>
+                <div class="profile-item-info">
+                    <div class="profile-item-title-row">
+                        <strong class="profile-item-title">${escapeHtml(track.title)}</strong>
+                        <span class="chip-front-track" style="${isFront ? '' : 'display: none;'}">⭐ Лицевой</span>
+                    </div>
+                    <span class="profile-item-artist">${escapeHtml(track.artist || 'Аудиозапись')}</span>
+                </div>
+                <div class="profile-item-actions">
+                    <button type="button" class="profile-item-dl-btn" onclick="downloadAudioTrack('${escapeHtml(track.url)}', '${escapeHtml(track.title)}', event)" title="Скачать файл">
+                        📥
+                    </button>
+                    ${isOwner ? `
+                    <button type="button" class="profile-item-del-btn" onclick="handleDeleteProfileMusic(${track.id}, event)" title="Удалить из профиля">
+                        ✕
+                    </button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    if (isOwner) {
+        initProfileMusicDragAndDrop(container);
+    }
+}
+
+let draggedMusicItem = null;
+
+function initProfileMusicDragAndDrop(container) {
+    const items = container.querySelectorAll('.profile-music-item.is-draggable');
+    items.forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            draggedMusicItem = item;
+            item.classList.add('is-dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', item.dataset.musicId);
+        });
+
+        item.addEventListener('dragend', () => {
+            draggedMusicItem = null;
+            item.classList.remove('is-dragging');
+            container.querySelectorAll('.profile-music-item').forEach(el => el.classList.remove('drag-over'));
+            updateProfileMusicOrderAfterDrag(container);
+        });
+
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (!draggedMusicItem || draggedMusicItem === item) return;
+
+            const rect = item.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            if (e.clientY < midpoint) {
+                container.insertBefore(draggedMusicItem, item);
+            } else {
+                container.insertBefore(draggedMusicItem, item.nextSibling);
+            }
+        });
+
+        item.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            if (draggedMusicItem && draggedMusicItem !== item) {
+                item.classList.add('drag-over');
+            }
+        });
+
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('drag-over');
+        });
+
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            item.classList.remove('drag-over');
+        });
+    });
+}
+
+async function updateProfileMusicOrderAfterDrag(container) {
+    const allItems = Array.from(container.querySelectorAll('.profile-music-item'));
+    if (allItems.length === 0) return;
+
+    // Обновляем визуальный бейдж лицевого трека на первом элементе
+    allItems.forEach((el, idx) => {
+        const isFront = (idx === 0);
+        el.classList.toggle('is-front-track', isFront);
+        const badge = el.querySelector('.chip-front-track');
+        if (badge) badge.style.display = isFront ? 'inline-block' : 'none';
+    });
+
+    const trackIDs = allItems.map(el => parseInt(el.dataset.musicId)).filter(id => !isNaN(id) && id > 0);
+    if (trackIDs.length === 0) return;
+
+    // Мгновенно обновляем лицевой трек на странице профиля в hero-карточке
+    const frontEl = allItems[0];
+    const frontUrl = frontEl.dataset.musicUrl;
+    const frontTitle = frontEl.dataset.musicTitle;
+    const frontArtist = frontEl.dataset.musicArtist;
+
+    const mTitle = document.getElementById('heroMusicTitle');
+    const mArtist = document.getElementById('heroMusicArtist');
+    const mCard = document.getElementById('heroMusicCard');
+    if (mTitle) mTitle.textContent = frontTitle || 'Аудиозапись';
+    if (mArtist) mArtist.textContent = frontArtist || '';
+    if (mCard) {
+        mCard.setAttribute('data-music-url', frontUrl);
+        mCard.setAttribute('data-music-title', frontTitle || 'Аудиозапись');
+        mCard.setAttribute('data-music-artist', frontArtist || '');
+    }
+
+    try {
+        const res = await fetch('/api/users/music/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ track_ids: trackIDs })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            currentViewedUserMusic = data.playlist || [];
+            showToast(`Порядок обновлен! Лицевой трек: ${frontTitle} ⭐`, 'success');
+        }
+    } catch (err) {
+        console.error('Error reordering music:', err);
+    }
+}
+
+async function handleQuickUploadMusicToProfile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудио в профиль... 🎵', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) throw new Error('Ошибка загрузки файла');
+        const data = await res.json();
+
+        const cleanTitle = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        const artist = (currentProfileUserData && currentProfileUserData.display_name) || window.CURRENT_USER_DISPLAY_NAME || '';
+
+        // Добавляем трек в профиль
+        const addRes = await fetch('/api/users/music', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: data.url,
+                title: cleanTitle || 'Аудиозапись',
+                artist: artist
+            })
+        });
+
+        if (!addRes.ok) {
+            const errData = await addRes.json();
+            throw new Error(errData.error || 'Ошибка добавления трека в профиль');
+        }
+
+        const addData = await addRes.json();
+        currentViewedUserMusic = addData.playlist || [];
+
+        renderProfileMusicList(currentViewedUserMusic, true);
+        const user = currentProfileUserData || currentViewedProfileUser;
+        if (user && user.id) {
+            loadUserProfileMusic(user.id, user);
+        }
+
+        showToast('Новый лицевой трек успешно добавлен в профиль! ⭐🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+async function handleDeleteProfileMusic(musicId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    if (!confirm('Удалить этот трек из профиля?')) return;
+
+    try {
+        const res = await fetch(`/api/users/music/${musicId}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) throw new Error('Ошибка удаления трека');
+        const data = await res.json();
+        currentViewedUserMusic = data.playlist || [];
+        renderProfileMusicList(currentViewedUserMusic, true);
+
+        const user = currentProfileUserData || currentViewedProfileUser;
+        if (user && user.id) {
+            loadUserProfileMusic(user.id, user);
+        }
+        showToast('Трек удален из профиля', 'info');
+    } catch (err) {
+        showToast(err.message, 'error');
     }
 }

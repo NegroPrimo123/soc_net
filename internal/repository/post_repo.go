@@ -1,42 +1,26 @@
 package repository
 
-
-
 import (
-
 	"database/sql"
 
 	"fmt"
 
 	"strings"
 
-
-
 	"social-network/internal/models"
 
-
-
 	"github.com/lib/pq"
-
 )
 
-
-
 type PostRepository struct {
-
 	db *sql.DB
-
 }
-
-
 
 func NewPostRepository(db *sql.DB) *PostRepository {
 
 	return &PostRepository{db: db}
 
 }
-
-
 
 func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQuery string, limit, offset int) ([]models.Post, error) {
 
@@ -58,13 +42,11 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 	}
 
-
-
 	query := `
 
 	SELECT 
 
-		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
+		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
 
@@ -86,29 +68,21 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 	argIdx := 2
 
-
-
 	if feedType == "following" {
 
 		query += fmt.Sprintf(" AND (p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR p.user_id = $1)")
 
 	}
 
-
-
 	var isRankedSearch bool
 
 	var searchArgIdx int
-
-
 
 	if searchQuery != "" {
 
 		isRankedSearch = true
 
 		searchArgIdx = argIdx
-
-
 
 		// Полнотекстовый поиск с морфологией (FTS) + Триграммы для поиска с опечатками (pg_trgm) + поиск по авторам
 
@@ -126,15 +100,11 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 		)`, searchArgIdx, searchArgIdx, searchArgIdx+1, searchArgIdx+1, searchArgIdx+1)
 
-
-
 		args = append(args, searchQuery, "%"+searchQuery+"%")
 
 		argIdx += 2
 
 	}
-
-
 
 	if tagQuery != "" {
 
@@ -154,8 +124,6 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 	}
 
-
-
 	if isRankedSearch {
 
 		// Ранжирование по релевантности: FTS ts_rank_cd + триграммная схожесть word_similarity
@@ -174,13 +142,9 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 	}
 
-
-
 	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 
 	args = append(args, limit, offset)
-
-
 
 	rows, err := r.db.Query(query, args...)
 
@@ -192,8 +156,6 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 	defer rows.Close()
 
-
-
 	var posts []models.Post
 
 	var postIDs []int
@@ -204,19 +166,16 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 		if err := rows.Scan(
 
-			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
+			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
 
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
 
 			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
-
 		); err != nil {
 
 			return nil, fmt.Errorf("scan post: %w", err)
 
 		}
-
-
 
 		p.Comments = []models.Comment{}
 
@@ -225,8 +184,6 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 		postIDs = append(postIDs, p.ID)
 
 	}
-
-
 
 	// Пакетная загрузка комментариев в 1 запрос (устранение N+1 запросов)
 
@@ -251,13 +208,9 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 	}
 
-
-
 	return posts, nil
 
 }
-
-
 
 func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models.Post, error) {
 
@@ -265,7 +218,7 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 
 	SELECT 
 
-		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
+		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
 
@@ -297,8 +250,6 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 
 	defer rows.Close()
 
-
-
 	var posts []models.Post
 
 	var postIDs []int
@@ -309,19 +260,16 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 
 		if err := rows.Scan(
 
-			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
+			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
 
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
 
 			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
-
 		); err != nil {
 
 			return nil, fmt.Errorf("scan user post: %w", err)
 
 		}
-
-
 
 		p.Comments = []models.Comment{}
 
@@ -330,8 +278,6 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 		postIDs = append(postIDs, p.ID)
 
 	}
-
-
 
 	// Пакетная загрузка комментариев в 1 запрос (устранение N+1 запросов)
 
@@ -356,21 +302,17 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 
 	}
 
-
-
 	return posts, nil
 
 }
 
-
-
-func (r *PostRepository) CreatePost(userID int, content string, imageURL string) (*models.Post, error) {
+func (r *PostRepository) CreatePost(userID int, content, imageURL, musicURL, musicTitle, musicArtist string) (*models.Post, error) {
 
 	var postID int
 
-	query := `INSERT INTO posts (user_id, content, image_url) VALUES ($1, $2, $3) RETURNING id`
+	query := `INSERT INTO posts (user_id, content, image_url, music_url, music_title, music_artist) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
 
-	err := r.db.QueryRow(query, userID, content, imageURL).Scan(&postID)
+	err := r.db.QueryRow(query, userID, content, imageURL, musicURL, musicTitle, musicArtist).Scan(&postID)
 
 	if err != nil {
 
@@ -378,36 +320,27 @@ func (r *PostRepository) CreatePost(userID int, content string, imageURL string)
 
 	}
 
-
-
 	return r.GetPostByID(postID, userID)
 
 }
 
-
-
-func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL *string) (*models.Post, error) {
-	var query string
+func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL, musicURL, musicTitle, musicArtist *string) (*models.Post, error) {
 	var err error
 	var updatedID int
 
-	if imageURL != nil {
-		query = `
-		UPDATE posts 
-		SET content = $1, image_url = $2, is_edited = TRUE, updated_at = NOW() 
-		WHERE id = $3 AND user_id = $4 
-		RETURNING id
-		`
-		err = r.db.QueryRow(query, content, *imageURL, postID, userID).Scan(&updatedID)
-	} else {
-		query = `
-		UPDATE posts 
-		SET content = $1, is_edited = TRUE, updated_at = NOW() 
-		WHERE id = $2 AND user_id = $3 
-		RETURNING id
-		`
-		err = r.db.QueryRow(query, content, postID, userID).Scan(&updatedID)
-	}
+	query := `
+	UPDATE posts 
+	SET content = $1,
+	    image_url = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE image_url END,
+	    music_url = CASE WHEN $3::text IS NOT NULL THEN $3::text ELSE music_url END,
+	    music_title = CASE WHEN $4::text IS NOT NULL THEN $4::text ELSE music_title END,
+	    music_artist = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE music_artist END,
+	    is_edited = TRUE, 
+	    updated_at = NOW() 
+	WHERE id = $6 AND user_id = $7 
+	RETURNING id
+	`
+	err = r.db.QueryRow(query, content, imageURL, musicURL, musicTitle, musicArtist, postID, userID).Scan(&updatedID)
 
 	if err != nil {
 		return nil, fmt.Errorf("post not found or unauthorized: %w", err)
@@ -416,15 +349,13 @@ func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL
 	return r.GetPostByID(updatedID, userID)
 }
 
-
-
 func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, error) {
 
 	query := `
 
 	SELECT 
 
-		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
+		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
 
@@ -446,12 +377,11 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 
 	err := r.db.QueryRow(query, currentUserID, postID).Scan(
 
-		&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
+		&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
 
 		&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
 
 		&p.LikesCount, &p.CommentsCount, &p.IsLiked,
-
 	)
 
 	if err != nil {
@@ -459,8 +389,6 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 		return nil, err
 
 	}
-
-
 
 	p.Comments, _ = r.GetComments(p.ID)
 	if len(p.Comments) > p.CommentsCount {
@@ -470,8 +398,6 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 	return &p, nil
 
 }
-
-
 
 func (r *PostRepository) ToggleLike(userID, postID int) (bool, int, error) {
 
@@ -492,8 +418,6 @@ func (r *PostRepository) ToggleLike(userID, postID int) (bool, int, error) {
 		return false, 0, err
 
 	}
-
-
 
 	var isLiked bool
 
@@ -517,8 +441,6 @@ func (r *PostRepository) ToggleLike(userID, postID int) (bool, int, error) {
 
 	}
 
-
-
 	// 2. Получаем обновленный счетчик и синхронизируем колонку likes_count
 
 	var count int
@@ -533,13 +455,9 @@ func (r *PostRepository) ToggleLike(userID, postID int) (bool, int, error) {
 
 	_, _ = r.db.Exec("UPDATE posts SET likes_count = $1 WHERE id = $2", count, postID)
 
-
-
 	return isLiked, count, nil
 
 }
-
-
 
 // GetCommentsByPostIDs загружает комментарии для списка постов за один пакетный запрос (WHERE post_id = ANY($1))
 
@@ -552,8 +470,6 @@ func (r *PostRepository) GetCommentsByPostIDs(postIDs []int) (map[int][]models.C
 		return result, nil
 
 	}
-
-
 
 	query := `
 
@@ -583,8 +499,6 @@ func (r *PostRepository) GetCommentsByPostIDs(postIDs []int) (map[int][]models.C
 
 	defer rows.Close()
 
-
-
 	for rows.Next() {
 
 		var c models.Comment
@@ -594,7 +508,6 @@ func (r *PostRepository) GetCommentsByPostIDs(postIDs []int) (map[int][]models.C
 			&c.ID, &c.PostID, &c.UserID, &c.Content, &c.IsEdited, &c.CreatedAt,
 
 			&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.Bio,
-
 		); err != nil {
 
 			return nil, fmt.Errorf("scan batch comment: %w", err)
@@ -605,13 +518,9 @@ func (r *PostRepository) GetCommentsByPostIDs(postIDs []int) (map[int][]models.C
 
 	}
 
-
-
 	return result, nil
 
 }
-
-
 
 func (r *PostRepository) GetComments(postID int) ([]models.Comment, error) {
 
@@ -643,8 +552,6 @@ func (r *PostRepository) GetComments(postID int) ([]models.Comment, error) {
 
 	defer rows.Close()
 
-
-
 	var comments []models.Comment
 
 	for rows.Next() {
@@ -656,7 +563,6 @@ func (r *PostRepository) GetComments(postID int) ([]models.Comment, error) {
 			&c.ID, &c.PostID, &c.UserID, &c.Content, &c.IsEdited, &c.CreatedAt,
 
 			&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.Bio,
-
 		); err != nil {
 
 			return nil, err
@@ -671,8 +577,6 @@ func (r *PostRepository) GetComments(postID int) ([]models.Comment, error) {
 
 }
 
-
-
 func (r *PostRepository) CreateComment(postID, userID int, content string) (*models.Comment, error) {
 
 	var commentID int
@@ -686,8 +590,6 @@ func (r *PostRepository) CreateComment(postID, userID int, content string) (*mod
 		return nil, fmt.Errorf("create comment: %w", err)
 
 	}
-
-
 
 	queryComment := `
 
@@ -712,7 +614,6 @@ func (r *PostRepository) CreateComment(postID, userID int, content string) (*mod
 		&c.ID, &c.PostID, &c.UserID, &c.Content, &c.IsEdited, &c.CreatedAt,
 
 		&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.Bio,
-
 	)
 
 	if err != nil {
@@ -721,17 +622,11 @@ func (r *PostRepository) CreateComment(postID, userID int, content string) (*mod
 
 	}
 
-
-
 	_, _ = r.db.Exec("UPDATE posts SET comments_count = comments_count + 1 WHERE id = $1", postID)
-
-
 
 	return &c, nil
 
 }
-
-
 
 func (r *PostRepository) GetCommentByID(commentID int) (*models.Comment, error) {
 
@@ -758,7 +653,6 @@ func (r *PostRepository) GetCommentByID(commentID int) (*models.Comment, error) 
 		&c.ID, &c.PostID, &c.UserID, &c.Content, &c.IsEdited, &c.CreatedAt,
 
 		&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.Bio,
-
 	)
 
 	if err != nil {
@@ -770,8 +664,6 @@ func (r *PostRepository) GetCommentByID(commentID int) (*models.Comment, error) 
 	return &c, nil
 
 }
-
-
 
 func (r *PostRepository) UpdateComment(commentID, userID int, content string) (*models.Comment, error) {
 
@@ -804,8 +696,6 @@ func (r *PostRepository) UpdateComment(commentID, userID int, content string) (*
 	return r.GetCommentByID(commentID)
 
 }
-
-
 
 func (r *PostRepository) DeleteComment(commentID, userID int) (int, error) {
 
@@ -843,15 +733,11 @@ func (r *PostRepository) DeleteComment(commentID, userID int) (int, error) {
 
 	}
 
-
-
 	_, _ = r.db.Exec("UPDATE posts SET comments_count = GREATEST(comments_count - 1, 0) WHERE id = $1", postID)
 
 	return postID, nil
 
 }
-
-
 
 func (r *PostRepository) DeletePost(postID, userID int) error {
 
@@ -882,4 +768,3 @@ func (r *PostRepository) DeletePost(postID, userID int) error {
 	return nil
 
 }
-
