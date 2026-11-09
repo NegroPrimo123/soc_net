@@ -214,35 +214,12 @@ func migrate(db *sql.DB) error {
 	UPDATE posts p SET comments_count = (SELECT count(1) FROM comments c WHERE c.post_id = p.id)
 	WHERE p.comments_count = 0 AND EXISTS (SELECT 1 FROM comments c WHERE c.post_id = p.id);
 
-	UPDATE users SET
-		music_url = CASE 
-			WHEN LOWER(username) = 'oleg' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/cyber_neon_drift.wav'
-			WHEN LOWER(username) = 'sophia' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/lofi_midnight_rain.wav'
-			WHEN LOWER(username) = 'alex' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/retro_arcade_pulse.wav'
-			WHEN LOWER(username) = 'itakwa' AND (music_url = '' OR music_url IS NULL) THEN '/static/audio/ithaqua_night_watch.wav'
-			ELSE music_url
-		END,
-		music_title = CASE 
-			WHEN LOWER(username) = 'oleg' AND (music_title = '' OR music_title IS NULL) THEN 'Neon Drift (Synthwave 2077)'
-			WHEN LOWER(username) = 'sophia' AND (music_title = '' OR music_title IS NULL) THEN 'Midnight Rain (Lofi Beats)'
-			WHEN LOWER(username) = 'alex' AND (music_title = '' OR music_title IS NULL) THEN 'Arcade Pulse (Chiptune)'
-			WHEN LOWER(username) = 'itakwa' AND (music_title = '' OR music_title IS NULL) THEN 'Whispering Blizzard (Gothic Ambient)'
-			ELSE music_title
-		END,
-		music_artist = CASE 
-			WHEN LOWER(username) = 'oleg' AND (music_artist = '' OR music_artist IS NULL) THEN 'Олег Кибер-Пилот'
-			WHEN LOWER(username) = 'sophia' AND (music_artist = '' OR music_artist IS NULL) THEN 'Sophia'
-			WHEN LOWER(username) = 'alex' AND (music_artist = '' OR music_artist IS NULL) THEN 'Alex NetRunner'
-			WHEN LOWER(username) = 'itakwa' AND (music_artist = '' OR music_artist IS NULL) THEN 'Итаква • Night Watch'
-			ELSE music_artist
-		END
-	WHERE LOWER(username) IN ('oleg', 'sophia', 'alex', 'itakwa') AND (music_url = '' OR music_url IS NULL);
+	-- Очищаем встроенные синтетические пресеты, чтобы музыка была ТОЛЬКО пользовательской
+	UPDATE users SET music_url = '', music_title = '', music_artist = ''
+	WHERE music_url LIKE '/static/audio/%';
 
-	UPDATE posts SET 
-		music_url = '/static/audio/cyber_neon_drift.wav',
-		music_title = 'Neon Drift (Synthwave 2077)',
-		music_artist = 'Олег Кибер-Пилот'
-	WHERE id = 1 AND (music_url = '' OR music_url IS NULL);
+	UPDATE posts SET music_url = '', music_title = '', music_artist = ''
+	WHERE music_url LIKE '/static/audio/%';
 
 	-- Полнотекстовый поиск с морфологией и триграммами (FTS + pg_trgm)
 	CREATE EXTENSION IF NOT EXISTS pg_trgm;

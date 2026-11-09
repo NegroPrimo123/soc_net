@@ -113,29 +113,20 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 	}
 
 	query := `
-
-	SELECT 
-
-		m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
-
+	SELECT * FROM (
+		SELECT 
+			m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
 		s.id, s.username, s.display_name, s.avatar_url, s.bio,
-
 		rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio
-
-	FROM messages m
-
-	JOIN users s ON s.id = m.sender_id
-
-	JOIN users rc ON rc.id = m.receiver_id
-
-	WHERE ((m.sender_id = $1 AND m.receiver_id = $2 AND COALESCE(m.deleted_for_sender, FALSE) = FALSE)
-
-	   OR  (m.sender_id = $2 AND m.receiver_id = $1 AND COALESCE(m.deleted_for_receiver, FALSE) = FALSE))
-
-	ORDER BY m.created_at ASC
-
-	LIMIT $3
-
+		FROM messages m
+		JOIN users s ON s.id = m.sender_id
+		JOIN users rc ON rc.id = m.receiver_id
+		WHERE ((m.sender_id = $1 AND m.receiver_id = $2 AND COALESCE(m.deleted_for_sender, FALSE) = FALSE)
+		   OR  (m.sender_id = $2 AND m.receiver_id = $1 AND COALESCE(m.deleted_for_receiver, FALSE) = FALSE))
+		ORDER BY m.created_at DESC
+		LIMIT $3
+	) sub
+	ORDER BY sub.created_at ASC
 	`
 
 	rows, err := r.db.Query(query, currentUserID, otherUserID, limit)

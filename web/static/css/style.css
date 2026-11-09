@@ -4595,7 +4595,7 @@ input:checked + .toggle-slider:before {
    GLOBAL MUSIC PLAYER (HEADER TOP BAR)
    ========================================================= */
 .header-music-player {
-    display: flex;
+    display: none;
     align-items: center;
     gap: 10px;
     padding: 4px 12px;
@@ -4611,6 +4611,9 @@ input:checked + .toggle-slider:before {
     margin: 0 12px;
     transition: all 0.3s ease;
     overflow: hidden;
+}
+.header-music-player.is-active {
+    display: flex;
 }
 .header-music-player:hover {
     border-color: rgba(0, 240, 255, 0.65);

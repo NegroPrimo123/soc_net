@@ -5902,36 +5902,17 @@ class GlobalMusicPlayer {
         this.audio = new Audio();
         this.isPlaying = false;
         this.currentTrack = null;
-        this.playlist = [
-            {
-                url: '/static/audio/cyber_neon_drift.wav',
-                title: 'Neon Drift (Synthwave 2077)',
-                artist: 'Олег Кибер-Пилот',
-                source: 'preset'
-            },
-            {
-                url: '/static/audio/ithaqua_night_watch.wav',
-                title: 'Whispering Blizzard (Gothic Ambient)',
-                artist: 'Итаква • Night Watch',
-                source: 'preset'
-            },
-            {
-                url: '/static/audio/lofi_midnight_rain.wav',
-                title: 'Midnight Rain (Lofi Beats)',
-                artist: 'Sophia',
-                source: 'preset'
-            },
-            {
-                url: '/static/audio/retro_arcade_pulse.wav',
-                title: 'Arcade Pulse (Chiptune)',
-                artist: 'Alex NetRunner',
-                source: 'preset'
-            }
-        ];
+        this.playlist = [];
         this.currentIndex = 0;
     }
 
     init() {
+        const playerHeader = document.getElementById('headerMusicPlayer');
+        if (playerHeader) {
+            playerHeader.style.display = 'none';
+            playerHeader.classList.remove('is-active', 'is-playing');
+        }
+
         this.audio.addEventListener('timeupdate', () => {
             if (this.audio.duration) {
                 const percent = (this.audio.currentTime / this.audio.duration) * 100;
@@ -5959,31 +5940,43 @@ class GlobalMusicPlayer {
             this.isPlaying = false;
             this.updateUIState();
         });
-
-        this.collectPageTracks();
     }
 
     collectPageTracks() {
-        // Добавляем треки из постов в ленте
+        const tracks = [];
+
+        // Треки из ленты постов
         document.querySelectorAll('.post-music-card').forEach(card => {
             const url = card.getAttribute('data-music-url');
             const title = card.getAttribute('data-music-title') || 'Аудиозапись';
             const artist = card.getAttribute('data-music-artist') || 'Исполнитель';
-            if (url && !this.playlist.some(t => t.url === url)) {
-                this.playlist.push({ url, title, artist, elementId: card.id, source: 'post' });
+            if (url && !tracks.some(t => t.url === url)) {
+                tracks.push({ url, title, artist, elementId: card.id, source: 'post' });
             }
         });
 
-        // Добавляем трек из профиля
+        // Трек из открытого профиля
         const profileCard = document.getElementById('heroMusicCard');
         if (profileCard) {
             const url = profileCard.getAttribute('data-music-url');
-            const title = profileCard.getAttribute('data-music-title') || 'Трек профиля';
+            const title = profileCard.getAttribute('data-music-title') || 'Музыка профиля';
             const artist = profileCard.getAttribute('data-music-artist') || 'Профиль';
-            if (url && !this.playlist.some(t => t.url === url)) {
-                this.playlist.unshift({ url, title, artist, elementId: 'heroMusicCard', source: 'profile' });
+            if (url && !tracks.some(t => t.url === url)) {
+                tracks.unshift({ url, title, artist, elementId: 'heroMusicCard', source: 'profile' });
             }
         }
+
+        // Треки из сообщений чата
+        document.querySelectorAll('.chat-audio-card').forEach(card => {
+            const url = card.getAttribute('data-audio-url');
+            const title = card.getAttribute('data-audio-title') || 'Аудиосообщение';
+            const artist = card.getAttribute('data-audio-artist') || 'Чат';
+            if (url && !tracks.some(t => t.url === url)) {
+                tracks.push({ url, title, artist, source: 'chat' });
+            }
+        });
+
+        this.playlist = tracks;
     }
 
     playTrack(trackData, event) {
@@ -5994,13 +5987,13 @@ class GlobalMusicPlayer {
 
         if (!trackData || !trackData.url) return;
 
-        // Если уже играет этот же трек: переключаем play/pause
+        // Если кликнули на уже загруженный трек: переключаем play/pause
         if (this.currentTrack && this.currentTrack.url === trackData.url) {
             this.togglePlay();
             return;
         }
 
-        // Регистрируем трек в плейлисте, если его там еще нет
+        this.collectPageTracks();
         let existingIdx = this.playlist.findIndex(t => t.url === trackData.url);
         if (existingIdx === -1) {
             this.playlist.push(trackData);
@@ -6013,11 +6006,17 @@ class GlobalMusicPlayer {
         this.audio.src = trackData.url;
         this.audio.currentTime = 0;
         
+        // Показываем плеер в верхней панели, когда пользователь запустил музыку
+        const playerHeader = document.getElementById('headerMusicPlayer');
+        if (playerHeader) {
+            playerHeader.style.display = 'flex';
+            playerHeader.classList.add('is-active');
+        }
+
         const playPromise = this.audio.play();
         if (playPromise !== undefined) {
             playPromise.catch(err => {
                 console.warn('Autoplay prevented or audio load failed:', err);
-                showToast('Нажмите в любом месте для запуска звука', 'info');
             });
         }
 
@@ -6025,14 +6024,30 @@ class GlobalMusicPlayer {
         this.updateUIState();
     }
 
+    closePlayer(event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        this.audio.pause();
+        this.audio.currentTime = 0;
+        this.isPlaying = false;
+        this.currentTrack = null;
+        const playerHeader = document.getElementById('headerMusicPlayer');
+        if (playerHeader) {
+            playerHeader.style.display = 'none';
+            playerHeader.classList.remove('is-active', 'is-playing');
+        }
+        this.updateUIState();
+    }
+
     togglePlay() {
         if (!this.currentTrack) {
-            // Если трек еще не выбран, запускаем первый трек из плейлиста или со страницы
             this.collectPageTracks();
             if (this.playlist.length > 0) {
                 this.playTrack(this.playlist[0]);
-                return;
             }
+            return;
         }
 
         if (this.audio.paused) {
@@ -6086,6 +6101,13 @@ class GlobalMusicPlayer {
 
         if (playerHeader) {
             playerHeader.classList.toggle('is-playing', this.isPlaying);
+            if (this.currentTrack) {
+                playerHeader.style.display = 'flex';
+                playerHeader.classList.add('is-active');
+            } else {
+                playerHeader.style.display = 'none';
+                playerHeader.classList.remove('is-active');
+            }
         }
         if (playIcon) {
             playIcon.textContent = this.isPlaying ? '⏸️' : '▶️';
@@ -6101,7 +6123,7 @@ class GlobalMusicPlayer {
             heroCard.classList.toggle('is-active-playing', isThisPlaying);
         }
 
-        // Синхронизация карточек постов
+        // Синхронизация постов
         document.querySelectorAll('.post-music-card').forEach(card => {
             const url = card.getAttribute('data-music-url');
             const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === url);
@@ -6110,7 +6132,7 @@ class GlobalMusicPlayer {
             card.classList.toggle('is-active-playing', isThisPlaying);
         });
 
-        // Синхронизация сообщений чата
+        // Синхронизация чата
         document.querySelectorAll('.chat-audio-card').forEach(card => {
             const url = card.getAttribute('data-audio-url');
             const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === url);

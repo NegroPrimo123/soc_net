@@ -304,63 +304,6 @@
             </div>
 
             
-            <!-- ВКЛАДКА 8: Музыка профиля -->
-            <div id="customPaneMusic" class="custom-pane" style="display: none;">
-                <div class="form-group">
-                    <label>Музыкальный трек профиля</label>
-                    <p class="field-hint" style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 0.8rem;">
-                        Музыка будет воспроизводиться на странице вашего профиля и синхронизироваться с верхним плеером.
-                    </p>
-                </div>
-
-                <div class="form-group">
-                    <label for="editMusicTitle">Название трека</label>
-                    <input type="text" id="editMusicTitle" placeholder="Название песни / трека" maxlength="100">
-                </div>
-
-                <div class="form-group">
-                    <label for="editMusicArtist">Исполнитель</label>
-                    <input type="text" id="editMusicArtist" placeholder="Имя артиста или группы" maxlength="100">
-                </div>
-
-                <div class="form-group">
-                    <label for="editMusicUrl">Аудиофайл или ссылка</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <input type="text" id="editMusicUrl" placeholder="https://... или /static/audio/... или загрузите файл" style="flex: 1;">
-                        <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('editMusicFileInput').click()" style="white-space: nowrap;">
-                            📁 Загрузить файл
-                        </button>
-                        <input type="file" id="editMusicFileInput" style="display: none;" accept="audio/*,.mp3,.wav,.ogg,.m4a" onchange="handleProfileMusicUpload(event)">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Быстрые атмосферные треки</label>
-                    <div class="chips-selector-row">
-                        <span class="choice-chip" onclick="setProfileMusicPreset('/static/audio/cyber_neon_drift.wav', 'Neon Drift (Synthwave 2077)', 'Олег Кибер-Пилот')">⚡ Neon Drift (Synthwave)</span>
-                        <span class="choice-chip" onclick="setProfileMusicPreset('/static/audio/ithaqua_night_watch.wav', 'Whispering Blizzard (Gothic Ambient)', 'Итаква • Night Watch')">❄️ Whispering Blizzard (Identity V)</span>
-                        <span class="choice-chip" onclick="setProfileMusicPreset('/static/audio/lofi_midnight_rain.wav', 'Midnight Rain (Lofi Beats)', 'Sophia')">🌧️ Midnight Rain (Lofi Chill)</span>
-                        <span class="choice-chip" onclick="setProfileMusicPreset('/static/audio/retro_arcade_pulse.wav', 'Arcade Pulse (Chiptune)', 'Alex NetRunner')">👾 Arcade Pulse (8-Bit Electro)</span>
-                        <span class="choice-chip text-danger" onclick="clearProfileMusicPreset()">✕ Удалить музыку</span>
-                    </div>
-                </div>
-
-                <div id="modalMusicPreviewWrap" style="display: none; margin-top: 1rem; padding: 12px 16px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 12px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <button type="button" class="preview-music-play-btn" onclick="previewModalAudio(event)">
-                                <span id="modalPreviewPlayIcon">▶️</span>
-                            </button>
-                            <div>
-                                <strong id="modalPreviewTitle" style="color: #00f0ff; display: block; font-size: 0.95rem;">Трек</strong>
-                                <span id="modalPreviewArtist" style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Исполнитель</span>
-                            </div>
-                        </div>
-                        <button type="button" class="btn btn-secondary btn-xs" onclick="clearProfileMusicPreset()">Убрать</button>
-                    </div>
-                </div>
-            </div>
-
             <div class="modal-actions-row">
                 <button type="button" class="btn btn-secondary" onclick="closeSendGiftModal()">Отмена</button>
                 <button type="submit" class="btn btn-primary" id="btnSubmitGift">
@@ -981,6 +924,58 @@
                 </div>
             </div>
 
+            <!-- ВКЛАДКА 8: Музыка профиля -->
+            <div id="customPaneMusic" class="custom-pane" style="display: none;">
+                <div class="form-group">
+                    <label>Музыкальный трек профиля</label>
+                    <p class="field-hint" style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin-bottom: 0.8rem;">
+                        Установите вашу любимую песню или трек в профиль. Когда посетитель или вы нажмете Play, трек заиграет и появится в верхнем плеере.
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label for="editMusicTitle">Название трека</label>
+                    <input type="text" id="editMusicTitle" placeholder="Название песни / трека" maxlength="100">
+                </div>
+
+                <div class="form-group">
+                    <label for="editMusicArtist">Исполнитель</label>
+                    <input type="text" id="editMusicArtist" placeholder="Имя артиста или группы" maxlength="100">
+                </div>
+
+                <div class="form-group">
+                    <label for="editMusicUrl">Аудиофайл или ссылка</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="text" id="editMusicUrl" placeholder="https://... или загрузите свой файл с диска" style="flex: 1;">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('editMusicFileInput').click()" style="white-space: nowrap;">
+                            📁 Загрузить файл
+                        </button>
+                        <input type="file" id="editMusicFileInput" style="display: none;" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" onchange="handleProfileMusicUpload(event)">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 0.75rem;">
+                    <button type="button" class="btn btn-outline btn-xs" onclick="clearProfileMusicPreset()" style="color: #f43f5e; border-color: rgba(244,63,94,0.4);">
+                        ✕ Удалить музыку из профиля
+                    </button>
+                </div>
+
+                <div id="modalMusicPreviewWrap" style="display: none; margin-top: 1rem; padding: 12px 16px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 12px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button type="button" class="preview-music-play-btn" onclick="previewModalAudio(event)">
+                                <span id="modalPreviewPlayIcon">▶️</span>
+                            </button>
+                            <div>
+                                <strong id="modalPreviewTitle" style="color: #00f0ff; display: block; font-size: 0.95rem;">Трек</strong>
+                                <span id="modalPreviewArtist" style="color: rgba(255,255,255,0.7); font-size: 0.8rem;">Исполнитель</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-xs" onclick="clearProfileMusicPreset()">Убрать</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="modal-actions-row" style="margin-top: 1.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
                 <button type="button" class="btn btn-outline btn-sm" onclick="closeEditProfileModal(); handleLogout();" style="border-color: rgba(244, 63, 94, 0.45); color: #f43f5e;" title="Выйти из аккаунта">
                     <span>🚪 Выйти из аккаунта</span>
@@ -1081,6 +1076,33 @@
                 {{end}}
             </div>
 
+            <!-- ГЛОБАЛЬНЫЙ МУЗЫКАЛЬНЫЙ ПЛЕЕР В ШАПКЕ (скрыт по умолчанию, появляется ТОЛЬКО когда играет трек) -->
+            <div class="header-music-player" id="headerMusicPlayer" style="display: none;">
+                <div class="header-music-disc-wrap" onclick="window.musicPlayer.togglePlay()" title="Play / Pause">
+                    <span class="header-disc-icon" id="headerDiscIcon">💿</span>
+                    <div class="header-eq-bars" id="headerEqBars">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
+                <div class="header-music-meta" id="headerMusicMeta" onclick="window.musicPlayer.togglePlay()" title="Play / Pause">
+                    <div class="header-track-title-wrap">
+                        <span class="header-track-title" id="headerMusicTitle">Аудиозапись</span>
+                    </div>
+                    <div class="header-track-artist" id="headerMusicArtist">GoSocial</div>
+                </div>
+                <div class="header-music-controls">
+                    <button type="button" class="header-music-btn" id="headerPrevBtn" onclick="window.musicPlayer.prevTrack()" title="Предыдущий трек">⏮️</button>
+                    <button type="button" class="header-music-btn header-music-play-btn" id="headerPlayBtn" onclick="window.musicPlayer.togglePlay()" title="Воспроизведение / Пауза">
+                        <span id="headerPlayIcon">▶️</span>
+                    </button>
+                    <button type="button" class="header-music-btn" id="headerNextBtn" onclick="window.musicPlayer.nextTrack()" title="Следующий трек">⏭️</button>
+                    <button type="button" class="header-music-btn header-music-close-btn" onclick="window.musicPlayer.closePlayer(event)" title="Закрыть плеер" style="font-size: 0.85rem; opacity: 0.6; margin-left: 2px;">✕</button>
+                </div>
+                <div class="header-music-progress-container" id="headerMusicProgressContainer" onclick="window.musicPlayer.handleProgressClick(event)" title="Перемотать трек">
+                    <div class="header-music-progress-bar" id="headerMusicProgressBar"></div>
+                </div>
+            </div>
+
             <div class="sensor-bar-right">
                 {{if or .SearchQuery .TagQuery}}
                 <div class="active-query-tag">
@@ -1101,7 +1123,6 @@
                     <span class="header-badge" id="headerMessagesBadge" style="{{if gt .UnreadMessagesCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadMessagesCount}}</span>
                 </button>
 
-
                 <div class="telemetry-clock" id="telemetryClock">GoSocial</div>
 
                 {{if .IsAuthenticated}}
@@ -1114,34 +1135,7 @@
                 <button class="btn btn-primary btn-sm" onclick="openAuthModal('login')" style="margin-left: 0.4rem;">Войти</button>
                 {{end}}
             </div>
-        
-            <!-- ГЛОБАЛЬНЫЙ МУЗЫКАЛЬНЫЙ ПЛЕЕР В ШАПКЕ -->
-            <div class="header-music-player" id="headerMusicPlayer">
-                <div class="header-music-disc-wrap" onclick="window.musicPlayer.togglePlay()" title="Кликните для Play/Pause">
-                    <span class="header-disc-icon" id="headerDiscIcon">💿</span>
-                    <div class="header-eq-bars" id="headerEqBars">
-                        <span></span><span></span><span></span><span></span>
-                    </div>
-                </div>
-                <div class="header-music-meta" id="headerMusicMeta" onclick="window.musicPlayer.togglePlay()" title="Воспроизвести / Пауза">
-                    <div class="header-track-title-wrap">
-                        <span class="header-track-title" id="headerMusicTitle">Включить музыку</span>
-                    </div>
-                    <div class="header-track-artist" id="headerMusicArtist">Нажмите Play для воспроизведения</div>
-                </div>
-                <div class="header-music-controls">
-                    <button type="button" class="header-music-btn" id="headerPrevBtn" onclick="window.musicPlayer.prevTrack()" title="Предыдущий трек">⏮️</button>
-                    <button type="button" class="header-music-btn header-music-play-btn" id="headerPlayBtn" onclick="window.musicPlayer.togglePlay()" title="Воспроизведение / Пауза">
-                        <span id="headerPlayIcon">▶️</span>
-                    </button>
-                    <button type="button" class="header-music-btn" id="headerNextBtn" onclick="window.musicPlayer.nextTrack()" title="Следующий трек">⏭️</button>
-                </div>
-                <div class="header-music-progress-container" id="headerMusicProgressContainer" onclick="window.musicPlayer.handleProgressClick(event)" title="Перемотать трек">
-                    <div class="header-music-progress-bar" id="headerMusicProgressBar"></div>
-                </div>
-            </div>
-
-            <div class="sensor-bar-right">
+        </header>
 
         <!-- КОНТЕЙНЕР ПРЕДСТАВЛЕНИЙ (VIEWS) -->
         <div class="content-viewport">
@@ -1204,15 +1198,8 @@
                                         <input type="text" id="composerMusicArtist" placeholder="Исполнитель (напр. Олег)" oninput="updateComposerMusicState()">
                                     </div>
                                     <div class="music-source-row">
-                                        <input type="text" id="composerMusicUrl" placeholder="URL аудиофайла (.mp3, .wav) или выберите пресет / файл" oninput="updateComposerMusicState()">
+                                        <input type="text" id="composerMusicUrl" placeholder="URL аудиофайла (.mp3, .wav) или загрузите свой файл" oninput="updateComposerMusicState()">
                                         <button type="button" class="btn btn-outline btn-xs" onclick="document.getElementById('composerAudioFileInput').click()">📁 Загрузить файл</button>
-                                    </div>
-                                    <div class="music-presets-row">
-                                        <span class="music-preset-label">Быстрые треки:</span>
-                                        <span class="choice-chip music-chip" onclick="setComposerMusicPreset('/static/audio/cyber_neon_drift.wav', 'Neon Drift (Synthwave 2077)', 'Олег Кибер-Пилот')">⚡ Neon Drift</span>
-                                        <span class="choice-chip music-chip" onclick="setComposerMusicPreset('/static/audio/ithaqua_night_watch.wav', 'Whispering Blizzard (Gothic Ambient)', 'Итаква • Night Watch')">❄️ Whispering Blizzard</span>
-                                        <span class="choice-chip music-chip" onclick="setComposerMusicPreset('/static/audio/lofi_midnight_rain.wav', 'Midnight Rain (Lofi Beats)', 'Sophia')">🌧️ Midnight Rain</span>
-                                        <span class="choice-chip music-chip" onclick="setComposerMusicPreset('/static/audio/retro_arcade_pulse.wav', 'Arcade Pulse (Chiptune)', 'Alex NetRunner')">👾 Arcade Pulse</span>
                                     </div>
                                 </div>
                             </div>
@@ -1831,11 +1818,7 @@
                                     </div>
                                     <div class="chat-music-actions-row">
                                         <button type="button" class="btn btn-primary btn-xs" onclick="document.getElementById('chatAudioFileInput').click()">📁 Выбрать аудиофайл</button>
-                                        <span style="font-size: 0.8rem; color: rgba(255,255,255,0.6);">или пресет:</span>
-                                        <button type="button" class="chip-tag" onclick="attachChatMusicPreset('/static/audio/cyber_neon_drift.wav', 'Neon Drift', 'Олег')">⚡ Neon Drift</button>
-                                        <button type="button" class="chip-tag" onclick="attachChatMusicPreset('/static/audio/ithaqua_night_watch.wav', 'Whispering Blizzard', 'Итаква')">❄️ Blizzard</button>
-                                        <button type="button" class="chip-tag" onclick="attachChatMusicPreset('/static/audio/lofi_midnight_rain.wav', 'Midnight Rain', 'Sophia')">🌧️ Lofi</button>
-                                        <button type="button" class="chip-tag" onclick="attachChatMusicPreset('/static/audio/retro_arcade_pulse.wav', 'Arcade Pulse', 'Alex')">👾 Arcade</button>
+                                        
                                     </div>
                                 </div>
                             </div>
