@@ -109,6 +109,23 @@ func migrate(db *sql.DB) error {
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS music_title VARCHAR(255) DEFAULT '';
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS music_artist VARCHAR(255) DEFAULT '';
 
+	CREATE TABLE IF NOT EXISTS user_music (
+		id SERIAL PRIMARY KEY,
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		url TEXT NOT NULL,
+		title VARCHAR(255) NOT NULL,
+		artist VARCHAR(255) DEFAULT '',
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_user_music_user_id ON user_music(user_id, id DESC);
+
+	INSERT INTO user_music (user_id, url, title, artist)
+	SELECT id, music_url, music_title, music_artist
+	FROM users
+	WHERE music_url != '' AND NOT EXISTS (
+		SELECT 1 FROM user_music WHERE user_music.user_id = users.id AND user_music.url = users.music_url
+	);
+
 
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT DEFAULT '';
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';

@@ -333,3 +333,18 @@ type GroupedNotification struct {
 type MarkNotificationsReadRequest struct {
 	IDs []int `json:"ids"`
 }
+
+type UserMusic struct {
+	ID        int       `json:"id"`
+	UserID    int       `json:"user_id"`
+	URL       string    `json:"url"`
+	Title     string    `json:"title"`
+	Artist    string    `json:"artist"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type AddUserMusicRequest struct {
+	URL    string `json:"url"`
+	Title  string `json:"title"`
+	Artist string `json:"artist"`
+}

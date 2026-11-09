@@ -41,6 +41,10 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/users/{id}/gifts", h.GetUserGifts)
 	mux.HandleFunc("PUT /api/users/profile", h.UpdateProfile)
 	mux.HandleFunc("POST /api/users/follow", h.ToggleFollow)
+	mux.HandleFunc("GET /api/users/{id}/music", h.GetUserMusic)
+	mux.HandleFunc("POST /api/users/music", h.AddUserMusic)
+	mux.HandleFunc("DELETE /api/users/music/{id}", h.DeleteUserMusic)
+	mux.HandleFunc("POST /api/users/music/{id}/delete", h.DeleteUserMusic)
 
 	// Gifts API («Цветные карандаши» + сокрытие подарков)
 	mux.HandleFunc("POST /api/gifts", h.SendGift)

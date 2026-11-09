@@ -1472,22 +1472,30 @@
                                 
                                 <!-- Музыкальный плеер профиля -->
                                 <div id="heroMusicPlayerWrap" class="hero-music-wrap" style="display: none; margin-top: 0.85rem;">
-                                    <div class="hero-music-card" id="heroMusicCard">
+                                    <div class="hero-music-card" id="heroMusicCard" onclick="openProfileMusicModal(event)" style="cursor: pointer;" title="Нажмите, чтобы открыть всю музыку профиля">
                                         <div class="hero-music-left">
                                             <div class="hero-music-disc-wrap">
                                                 <span class="hero-music-disc" id="heroMusicDisc">💿</span>
-                                                <button type="button" class="hero-music-play-btn" id="heroProfilePlayBtn" onclick="toggleHeroProfileMusic(event)" title="Слушать музыку профиля">
+                                                <button type="button" class="hero-music-play-btn" id="heroProfilePlayBtn" onclick="toggleHeroProfileMusic(event)" title="Воспроизвести">
                                                     <span id="heroProfilePlayIcon">▶️</span>
                                                 </button>
                                             </div>
                                             <div class="hero-music-meta">
-                                                <span class="hero-music-label">🎵 ТРЕК ПРОФИЛЯ</span>
+                                                <div class="hero-music-header-row">
+                                                    <span class="hero-music-badge">⭐ Лицевой трек</span>
+                                                    <span class="hero-music-count-badge" id="heroMusicCountBadge">🎵 1 трек</span>
+                                                </div>
                                                 <div class="hero-music-title" id="heroMusicTitle">Название трека</div>
                                                 <div class="hero-music-artist" id="heroMusicArtist">Исполнитель</div>
                                             </div>
                                         </div>
-                                        <div class="hero-music-eq" id="heroMusicEq">
-                                            <span></span><span></span><span></span><span></span><span></span>
+                                        <div class="hero-music-right" style="display: flex; align-items: center; gap: 10px;">
+                                            <button type="button" class="btn btn-outline btn-xs btn-open-playlist" onclick="openProfileMusicModal(event)" title="Открыть всю музыку профиля">
+                                                <span>📜 Все треки</span>
+                                            </button>
+                                            <div class="hero-music-eq" id="heroMusicEq">
+                                                <span></span><span></span><span></span><span></span><span></span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1799,36 +1807,15 @@
                                     </button>
                                     <div class="chat-audio-preview-text">
                                         <strong id="chatAudioPreviewTitle">Название трека</strong>
-                                        <span id="chatAudioPreviewArtist">Исполнитель</span>
+                                        <span id="chatAudioPreviewArtist">🎵 Аудиофайл</span>
                                     </div>
                                     <button type="button" class="upload-remove-btn" onclick="clearChatAudioAttachment()" title="Отменить аудио">✕</button>
                                 </div>
                             </div>
 
-                            <!-- Выдвижная панель прикрепления музыки в чате -->
-                            <div id="chatMusicDrawer" class="chat-music-drawer" style="display: none;">
-                                <div class="chat-music-drawer-header">
-                                    <span>🎵 Отправить музыку в диалог</span>
-                                    <button type="button" class="btn btn-secondary btn-xs" onclick="toggleChatMusicDrawer()">✕</button>
-                                </div>
-                                <div class="chat-music-drawer-body">
-                                    <div class="chat-music-inputs-row">
-                                        <input type="text" id="chatMusicTitleInput" placeholder="Название трека">
-                                        <input type="text" id="chatMusicArtistInput" placeholder="Исполнитель">
-                                    </div>
-                                    <div class="chat-music-actions-row">
-                                        <button type="button" class="btn btn-primary btn-xs" onclick="document.getElementById('chatAudioFileInput').click()">📁 Выбрать аудиофайл</button>
-                                        
-                                    </div>
-                                </div>
-                            </div>
-
                             <form class="chat-input-bar" id="chatInputForm" onsubmit="handleSendMessage(event)">
-                                <button type="button" class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()" title="Прикрепить файл или фото с диска">📎</button>
-                                <input type="file" id="chatFileInput" style="display:none;" accept="image/*,.pdf,.doc,.docx,.txt,.zip" onchange="handleChatFileUpload(event)">
-
-                                <button type="button" class="chat-attach-btn chat-attach-music-btn" onclick="toggleChatMusicDrawer()" title="Прикрепить аудио/музыку">🎵</button>
-                                <input type="file" id="chatAudioFileInput" style="display:none;" accept="audio/*,.mp3,.wav,.ogg,.m4a" onchange="handleChatAudioUpload(event)">
+                                <button type="button" class="chat-attach-btn" onclick="document.getElementById('chatFileInput').click()" title="Прикрепить фото, аудиофайл или документ">📎</button>
+                                <input type="file" id="chatFileInput" style="display:none;" accept="image/*,audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac,.webm,.pdf,.doc,.docx,.txt,.zip" onchange="handleChatFileUpload(event)">
 
                                 
                                 <input type="text" id="chatMessageInput" class="chat-text-input" placeholder="Напишите сообщение... (Enter для отправки)" autocomplete="off">
@@ -1856,6 +1843,71 @@
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
 <script src="/static/js/app.js?v=cyber_chat_v2"></script>
+
+
+<!-- ==========================================
+     МОДАЛЬНОЕ ОКНО: ВСЯ МУЗЫКА ПРОФИЛЯ
+========================================== -->
+<div id="profileMusicListModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeProfileMusicModal()">
+    <div class="modal-card modal-profile-music-card" style="max-width: 640px; width: 95%; max-height: 85vh; display: flex; flex-direction: column;">
+        <button class="modal-close-btn" onclick="closeProfileMusicModal()" title="Закрыть">✕</button>
+        <div class="modal-header" style="margin-bottom: 0.8rem;">
+            <div class="modal-header-badge">🎵 АУДИОТЕКА ПРОФИЛЯ</div>
+            <h3 id="profileMusicModalTitle">Музыка профиля</h3>
+            <p class="modal-subtext" id="profileMusicModalSubtext">Все добавленные музыкальные треки пользователя</p>
+        </div>
+
+        <!-- Быстрое добавление трека владельцем -->
+        <div id="profileMusicOwnerAddBox" style="display: none; padding: 12px 16px; background: rgba(0, 240, 255, 0.06); border: 1px dashed rgba(0, 240, 255, 0.35); border-radius: 12px; margin-bottom: 1rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                <div>
+                    <strong style="color: #00f0ff; font-size: 0.92rem;">+ Добавить трек в профиль</strong>
+                    <p style="font-size: 0.78rem; color: rgba(255,255,255,0.6); margin: 2px 0 0;">Новый трек станет лицевым на обложке вашего профиля</p>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('profileMusicQuickFileInput').click()">
+                    📁 Выбрать файл
+                </button>
+                <input type="file" id="profileMusicQuickFileInput" style="display: none;" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" onchange="handleQuickUploadMusicToProfile(event)">
+            </div>
+        </div>
+
+        <div class="profile-music-scroll-area" id="profileMusicListContainer" style="overflow-y: auto; flex: 1; max-height: 52vh; padding-right: 4px;">
+            <!-- Список треков рендерится через JS -->
+        </div>
+
+        <div class="modal-actions-row" style="margin-top: 1rem; border-top: 1px solid var(--border-subtle); padding-top: 0.8rem; display: flex; justify-content: flex-end;">
+            <button type="button" class="btn btn-secondary" onclick="closeProfileMusicModal()">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     МОДАЛЬНОЕ ОКНО: ОТПРАВИТЬ АУДИОЗАПИСЬ В ДИАЛОГ
+========================================== -->
+<div id="shareAudioModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeShareAudioModal()">
+    <div class="modal-card" style="max-width: 480px; width: 95%;">
+        <button class="modal-close-btn" onclick="closeShareAudioModal()" title="Закрыть">✕</button>
+        <div class="modal-header">
+            <div class="modal-header-badge">💬 ОТПРАВКА АУДИОЗАПИСИ</div>
+            <h3>Отправить в диалог</h3>
+            <p class="modal-subtext" id="shareAudioTrackName">Аудиозапись</p>
+        </div>
+        <div class="share-audio-body">
+            <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.8rem;">Выберите собеседника из ваших диалогов:</p>
+            <div class="share-conversations-list" id="shareAudioConversationsList" style="max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                <!-- Диалоги рендерятся через JS -->
+            </div>
+            <div style="margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" class="btn btn-outline btn-xs" onclick="copyAudioLink()">
+                    🔗 Скопировать ссылку
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeShareAudioModal()">
+                    Отмена
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

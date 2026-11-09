@@ -400,3 +400,80 @@ func (r *UserRepository) DeleteSession(token string) error {
 	_, err := r.db.Exec("DELETE FROM sessions WHERE token = $1", token)
 	return err
 }
+
+func (r *UserRepository) GetUserMusic(userID int) ([]models.UserMusic, error) {
+	query := `
+	SELECT id, user_id, url, title, COALESCE(artist, ''), created_at
+	FROM user_music
+	WHERE user_id = $1
+	ORDER BY id DESC
+	`
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user music: %w", err)
+	}
+	defer rows.Close()
+
+	var tracks []models.UserMusic
+	for rows.Next() {
+		var m models.UserMusic
+		if err := rows.Scan(&m.ID, &m.UserID, &m.URL, &m.Title, &m.Artist, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		tracks = append(tracks, m)
+	}
+	if tracks == nil {
+		tracks = []models.UserMusic{}
+	}
+	return tracks, nil
+}
+
+func (r *UserRepository) AddUserMusic(userID int, url, title, artist string) (*models.UserMusic, error) {
+	query := `
+	INSERT INTO user_music (user_id, url, title, artist)
+	VALUES ($1, $2, $3, $4)
+	RETURNING id, user_id, url, title, artist, created_at
+	`
+	var m models.UserMusic
+	err := r.db.QueryRow(query, userID, url, title, artist).Scan(
+		&m.ID, &m.UserID, &m.URL, &m.Title, &m.Artist, &m.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("add user music: %w", err)
+	}
+
+	// Обновляем users: последний добавленный трек становится лицевым (отображается в профиле)
+	_, _ = r.db.Exec(`
+	UPDATE users SET music_url = $1, music_title = $2, music_artist = $3
+	WHERE id = $4
+	`, url, title, artist, userID)
+
+	return &m, nil
+}
+
+func (r *UserRepository) DeleteUserMusic(musicID, userID int) error {
+	_, err := r.db.Exec("DELETE FROM user_music WHERE id = $1 AND user_id = $2", musicID, userID)
+	if err != nil {
+		return fmt.Errorf("delete user music: %w", err)
+	}
+
+	// Находим самый последний оставшийся трек и обновляем users
+	var latest models.UserMusic
+	err = r.db.QueryRow(`
+	SELECT url, title, COALESCE(artist, '')
+	FROM user_music
+	WHERE user_id = $1
+	ORDER BY id DESC
+	LIMIT 1
+	`, userID).Scan(&latest.URL, &latest.Title, &latest.Artist)
+
+	if err == sql.ErrNoRows {
+		// Больше нет треков
+		_, _ = r.db.Exec("UPDATE users SET music_url = '', music_title = '', music_artist = '' WHERE id = $1", userID)
+	} else if err == nil {
+		_, _ = r.db.Exec("UPDATE users SET music_url = $1, music_title = $2, music_artist = $3 WHERE id = $4",
+			latest.URL, latest.Title, latest.Artist, userID)
+	}
+
+	return nil
+}

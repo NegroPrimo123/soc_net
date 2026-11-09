@@ -1540,15 +1540,27 @@ function createPostElement(post) {
         const pArtist = post.music_artist || (post.user ? post.user.display_name : 'Исполнитель');
         postMusicHtml = `
             <div class="post-music-card" id="post-music-${post.id}" data-music-url="${escapeHtml(post.music_url)}" data-music-title="${escapeHtml(pTitle)}" data-music-artist="${escapeHtml(pArtist)}">
-                <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(post.music_url)}', title: '${escapeHtml(pTitle)}', artist: '${escapeHtml(pArtist)}', elementId: 'post-music-${post.id}'}, event)" title="Слушать">
+                <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(post.music_url)}', title: '${escapeHtml(pTitle)}', artist: '${escapeHtml(pArtist)}', elementId: 'post-music-${post.id}'}, event)" title="Воспроизвести">
                     <span class="music-play-icon">▶️</span>
                 </button>
                 <div class="post-music-info">
                     <div class="post-music-title">${escapeHtml(pTitle)}</div>
                     <div class="post-music-artist">${escapeHtml(pArtist)}</div>
                 </div>
-                <div class="post-music-eq">
-                    <span></span><span></span><span></span><span></span>
+                <div class="post-music-actions-wrap">
+                    <button type="button" class="post-music-menu-btn" onclick="togglePostMusicMenu(event, ${post.id})" title="Опции (скачать / отправить)">
+                        <span class="music-dots-icon">⋮</span>
+                    </button>
+                    <div class="post-music-dropdown" id="postMusicMenu-${post.id}" style="display: none;">
+                        <button type="button" class="post-music-action-item" onclick="downloadAudioTrack('${escapeHtml(post.music_url)}', '${escapeHtml(pTitle)}', event)">
+                            <span class="action-icon">📥</span>
+                            <span>Скачать файл</span>
+                        </button>
+                        <button type="button" class="post-music-action-item" onclick="openShareAudioModal('${escapeHtml(post.music_url)}', '${escapeHtml(pTitle)}', '${escapeHtml(pArtist)}', event)">
+                            <span class="action-icon">💬</span>
+                            <span>Отправить в сообщения</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -2112,24 +2124,10 @@ function renderUserProfile(data) {
     }
 
     // Контакты и социальные сети (Social Links)
-    // Музыкальный плеер профиля
+    // Музыкальный плеер профиля (мультитрековый плейлист с лицевым треком)
     const musicWrap = document.getElementById('heroMusicPlayerWrap');
     if (musicWrap) {
-        if (user.music_url) {
-            musicWrap.style.display = 'block';
-            const mTitle = document.getElementById('heroMusicTitle');
-            const mArtist = document.getElementById('heroMusicArtist');
-            const mCard = document.getElementById('heroMusicCard');
-            if (mTitle) mTitle.textContent = user.music_title || 'Аудиозапись';
-            if (mArtist) mArtist.textContent = user.music_artist || user.display_name;
-            if (mCard) {
-                mCard.setAttribute('data-music-url', user.music_url);
-                mCard.setAttribute('data-music-title', user.music_title || 'Аудиозапись');
-                mCard.setAttribute('data-music-artist', user.music_artist || user.display_name);
-            }
-        } else {
-            musicWrap.style.display = 'none';
-        }
+        loadUserProfileMusic(user.id, user);
     }
 
     const socialContainer = document.getElementById('heroSocialContainer');
@@ -4925,15 +4923,16 @@ function clearChatFile() {
     if (preview) preview.style.display = 'none';
 }
 
-// Загрузка фото/файла в чат
+// Загрузка фото/файла/аудио в чат через единую скрепку 📎
 async function handleChatFileUpload(e) {
     const file = e.target.files && e.target.files[0];
     if (!file || !activeChatUserId) return;
 
+    const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac|aac|webm)$/i.test(file.name);
     const formData = new FormData();
     formData.append('file', file);
 
-    showToast('Загрузка файла...', 'success');
+    showToast(isAudio ? 'Загрузка аудио...' : 'Загрузка файла...', 'info');
 
     try {
         const res = await fetch('/api/upload', {
@@ -4944,14 +4943,34 @@ async function handleChatFileUpload(e) {
         if (!res.ok) throw new Error('Ошибка при загрузке файла');
         const data = await res.json();
 
-        currentChatAttachmentUrl = data.url;
-        const preview = document.getElementById('chatUploadPreview');
-        const previewName = document.getElementById('chatPreviewName');
-        if (preview && previewName) {
-            previewName.textContent = file.name;
-            preview.style.display = 'block';
+        if (isAudio || data.is_audio) {
+            // Аудиофайл: название автоматически из имени файла, никаких запросов названия/исполнителя!
+            const cleanTitle = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+            pendingChatAudio = {
+                url: data.url,
+                title: cleanTitle || 'Аудиозапись',
+                artist: ''
+            };
+            const preview = document.getElementById('chatAudioPreview');
+            const pTitle = document.getElementById('chatAudioPreviewTitle');
+            const pArtist = document.getElementById('chatAudioPreviewArtist');
+            if (pTitle) pTitle.textContent = pendingChatAudio.title;
+            if (pArtist) pArtist.textContent = '🎵 Аудиофайл';
+            if (preview) preview.style.display = 'block';
+
+            clearChatFile();
+            showToast('Аудиозапись прикреплена! Нажмите «Отправить»', 'success');
+        } else {
+            currentChatAttachmentUrl = data.url;
+            const preview = document.getElementById('chatUploadPreview');
+            const previewName = document.getElementById('chatPreviewName');
+            if (preview && previewName) {
+                previewName.textContent = file.name;
+                preview.style.display = 'block';
+            }
+            clearChatAudioAttachment();
+            showToast('Файл прикреплен! Нажмите «Отправить»', 'success');
         }
-        showToast('Файл прикреплен! Нажмите «Отправить»', 'success');
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
@@ -6411,4 +6430,419 @@ function previewChatAudio(e) {
         artist: pendingChatAudio.artist || 'Чат',
         source: 'chat-preview'
     });
+}
+
+
+// ==========================================
+// 3-DOTS MENU & ACTIONS FOR POST MUSIC CARD
+// ==========================================
+function togglePostMusicMenu(event, postId) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const menu = document.getElementById(`postMusicMenu-${postId}`);
+    if (!menu) return;
+    const isShown = (menu.style.display === 'block');
+    closeAllMusicMenus();
+    if (!isShown) {
+        menu.style.display = 'block';
+    }
+}
+
+function closeAllMusicMenus() {
+    document.querySelectorAll('.post-music-dropdown').forEach(m => {
+        m.style.display = 'none';
+    });
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.post-music-actions-wrap')) {
+        closeAllMusicMenus();
+    }
+});
+
+function downloadAudioTrack(url, title, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    closeAllMusicMenus();
+
+    if (!url) {
+        showToast('Ссылка на аудиофайл недоступна', 'error');
+        return;
+    }
+
+    showToast(`Загрузка аудио: ${title || 'файл'}... 📥`, 'info');
+
+    let ext = '.mp3';
+    const match = url.match(/\.(mp3|wav|ogg|m4a|flac|aac|webm)($|\?)/i);
+    if (match) ext = '.' + match[1];
+
+    let safeName = (title || 'audio_track').replace(/[\/\\:*?"<>|]/g, '_');
+    if (!safeName.toLowerCase().endsWith(ext)) {
+        safeName += ext;
+    }
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+let pendingShareAudio = null;
+
+async function openShareAudioModal(url, title, artist, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    closeAllMusicMenus();
+
+    pendingShareAudio = {
+        url,
+        title: title || 'Аудиозапись',
+        artist: artist || ''
+    };
+
+    const modal = document.getElementById('shareAudioModal');
+    if (!modal) return;
+
+    const trackPreview = document.getElementById('shareAudioTrackName');
+    if (trackPreview) {
+        trackPreview.textContent = `${title || 'Аудиозапись'} ${artist ? '• ' + artist : ''}`;
+    }
+
+    const listContainer = document.getElementById('shareAudioConversationsList');
+    if (listContainer) {
+        listContainer.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-dim);">Загрузка ваших диалогов...</div>';
+    }
+
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch('/api/messages/conversations');
+        if (!res.ok) throw new Error('Не удалось загрузить список диалогов');
+        const convs = await res.json();
+        renderShareAudioConversations(convs);
+    } catch (err) {
+        if (listContainer) {
+            listContainer.innerHTML = `<div style="padding: 1rem; color: #f43f5e; text-align: center;">${err.message}</div>`;
+        }
+    }
+}
+
+function closeShareAudioModal() {
+    const modal = document.getElementById('shareAudioModal');
+    if (modal) modal.style.display = 'none';
+    pendingShareAudio = null;
+}
+
+function renderShareAudioConversations(convs) {
+    const listContainer = document.getElementById('shareAudioConversationsList');
+    if (!listContainer) return;
+
+    if (!convs || convs.length === 0) {
+        listContainer.innerHTML = `
+            <div style="padding: 1.5rem; text-align: center; color: var(--text-dim); font-size: 0.88rem;">
+                У вас пока нет активных диалогов.<br>Начните переписку на странице профиля любого пользователя!
+            </div>
+        `;
+        return;
+    }
+
+    listContainer.innerHTML = convs.map(c => `
+        <div class="share-conversation-item" onclick="sendSharedAudioToUser(${c.user.id}, '${escapeHtml(c.user.display_name)}')">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <img src="${escapeHtml(c.user.avatar_url || '/static/avatars/default.svg')}" class="share-conv-avatar" alt="avatar">
+                <div>
+                    <strong style="color: #fff; font-size: 0.88rem; display: block;">${escapeHtml(c.user.display_name)}</strong>
+                    <span style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">@${escapeHtml(c.user.username)}</span>
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary btn-xs">Отправить 💬</button>
+        </div>
+    `).join('');
+}
+
+async function sendSharedAudioToUser(partnerId, partnerName) {
+    if (!pendingShareAudio) return;
+
+    try {
+        const res = await fetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                receiver_id: partnerId,
+                content: '',
+                audio_url: pendingShareAudio.url,
+                audio_title: pendingShareAudio.title,
+                audio_artist: pendingShareAudio.artist
+            })
+        });
+
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Ошибка при отправке');
+        }
+
+        showToast(`Аудиозапись отправлена пользователю ${partnerName}! 💬`, 'success');
+        closeShareAudioModal();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function copyAudioLink() {
+    if (!pendingShareAudio || !pendingShareAudio.url) return;
+    const fullUrl = pendingShareAudio.url.startsWith('http') ? pendingShareAudio.url : (window.location.origin + pendingShareAudio.url);
+    navigator.clipboard.writeText(fullUrl).then(() => {
+        showToast('Ссылка на трек скопирована в буфер обмена! 🔗', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать ссылку', 'error');
+    });
+}
+
+// ==========================================
+// MULTI-TRACK PROFILE MUSIC & PLAYLIST MODAL
+// ==========================================
+let currentViewedUserMusic = [];
+let currentViewedProfileUser = null;
+
+async function loadUserProfileMusic(userId, user) {
+    currentViewedProfileUser = user;
+    const musicWrap = document.getElementById('heroMusicPlayerWrap');
+    if (!musicWrap) return;
+
+    // Сразу показываем текущую музыку пользователя если есть, чтобы не моргало
+    if (user && user.music_url) {
+        musicWrap.style.display = 'block';
+        const mTitle = document.getElementById('heroMusicTitle');
+        const mArtist = document.getElementById('heroMusicArtist');
+        const mCard = document.getElementById('heroMusicCard');
+        if (mTitle) mTitle.textContent = user.music_title || 'Аудиозапись';
+        if (mArtist) mArtist.textContent = user.music_artist || (user ? user.display_name : '');
+        if (mCard) {
+            mCard.setAttribute('data-music-url', user.music_url);
+            mCard.setAttribute('data-music-title', user.music_title || 'Аудиозапись');
+            mCard.setAttribute('data-music-artist', user.music_artist || (user ? user.display_name : ''));
+        }
+    }
+
+    try {
+        const res = await fetch(`/api/users/${userId}/music`);
+        let tracks = [];
+        if (res.ok) {
+            tracks = await res.json();
+        }
+
+        // Если в таблице user_music еще нет записей, но у пользователя есть music_url
+        if ((!tracks || tracks.length === 0) && user && user.music_url) {
+            tracks = [{
+                id: 0,
+                user_id: user.id,
+                url: user.music_url,
+                title: user.music_title || 'Аудиозапись',
+                artist: user.music_artist || user.display_name
+            }];
+        }
+
+        currentViewedUserMusic = tracks || [];
+
+        if (currentViewedUserMusic.length > 0) {
+            // Самый последний добавленный трек является лицевым (tracks[0])
+            const frontTrack = currentViewedUserMusic[0];
+            musicWrap.style.display = 'block';
+
+            const mTitle = document.getElementById('heroMusicTitle');
+            const mArtist = document.getElementById('heroMusicArtist');
+            const mCard = document.getElementById('heroMusicCard');
+            const mCount = document.getElementById('heroMusicCountBadge');
+
+            if (mTitle) mTitle.textContent = frontTrack.title || 'Аудиозапись';
+            if (mArtist) mArtist.textContent = frontTrack.artist || (user ? user.display_name : '');
+            if (mCard) {
+                mCard.setAttribute('data-music-url', frontTrack.url);
+                mCard.setAttribute('data-music-title', frontTrack.title || 'Аудиозапись');
+                mCard.setAttribute('data-music-artist', frontTrack.artist || (user ? user.display_name : ''));
+            }
+            if (mCount) {
+                const count = currentViewedUserMusic.length;
+                mCount.textContent = `🎵 ${count} ${count === 1 ? 'трек' : (count < 5 ? 'трека' : 'треков')}`;
+            }
+        } else {
+            musicWrap.style.display = 'none';
+        }
+    } catch (err) {
+        console.warn('Error loading user music:', err);
+    }
+}
+
+async function openProfileMusicModal(event) {
+    if (event) {
+        if (event.target.closest('#heroProfilePlayBtn')) return;
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const modal = document.getElementById('profileMusicListModal');
+    if (!modal) return;
+
+    const user = currentProfileUserData || currentViewedProfileUser;
+    const isOwner = window.IS_AUTHENTICATED && user && (window.CURRENT_USER_ID === user.id);
+
+    const titleEl = document.getElementById('profileMusicModalTitle');
+    const subtextEl = document.getElementById('profileMusicModalSubtext');
+    const addBox = document.getElementById('profileMusicOwnerAddBox');
+
+    if (titleEl) titleEl.textContent = `Музыка профиля @${user ? user.username : ''}`;
+    if (addBox) {
+        addBox.style.display = isOwner ? 'block' : 'none';
+    }
+
+    if (user && (!currentViewedUserMusic || currentViewedUserMusic.length === 0)) {
+        try {
+            const res = await fetch(`/api/users/${user.id}/music`);
+            if (res.ok) {
+                currentViewedUserMusic = await res.json();
+            }
+        } catch (e) {}
+    }
+
+    if (subtextEl) {
+        const count = currentViewedUserMusic ? currentViewedUserMusic.length : 0;
+        subtextEl.textContent = `Всего треков: ${count}. Самый последний трек является лицевым на странице профиля.`;
+    }
+
+    renderProfileMusicList(currentViewedUserMusic, isOwner);
+    modal.style.display = 'flex';
+}
+
+function closeProfileMusicModal() {
+    const modal = document.getElementById('profileMusicListModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function renderProfileMusicList(tracks, isOwner) {
+    const container = document.getElementById('profileMusicListContainer');
+    if (!container) return;
+
+    if (!tracks || tracks.length === 0) {
+        container.innerHTML = `
+            <div style="padding: 2.5rem; text-align: center; color: var(--text-dim); font-size: 0.9rem;">
+                В профиле пока нет добавленных музыкальных треков.
+                ${isOwner ? '<br><span style="color: #00f0ff; margin-top: 8px; display: inline-block;">Добавьте свой первый трек кнопкой выше! 🎵</span>' : ''}
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = tracks.map((track, idx) => {
+        const isFront = (idx === 0);
+        return `
+            <div class="profile-music-item ${isFront ? 'is-front-track' : ''}">
+                <button type="button" class="profile-item-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(track.url)}', title: '${escapeHtml(track.title)}', artist: '${escapeHtml(track.artist)}', source: 'profile-modal'}, event)" title="Воспроизвести">
+                    <span>▶️</span>
+                </button>
+                <div class="profile-item-info">
+                    <div class="profile-item-title-row">
+                        <strong class="profile-item-title">${escapeHtml(track.title)}</strong>
+                        ${isFront ? '<span class="chip-front-track">⭐ Лицевой</span>' : ''}
+                    </div>
+                    <span class="profile-item-artist">${escapeHtml(track.artist || 'Аудиозапись')}</span>
+                </div>
+                <div class="profile-item-actions">
+                    <button type="button" class="profile-item-dl-btn" onclick="downloadAudioTrack('${escapeHtml(track.url)}', '${escapeHtml(track.title)}', event)" title="Скачать файл">
+                        📥
+                    </button>
+                    ${isOwner ? `
+                    <button type="button" class="profile-item-del-btn" onclick="handleDeleteProfileMusic(${track.id}, event)" title="Удалить из профиля">
+                        ✕
+                    </button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function handleQuickUploadMusicToProfile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    showToast('Загрузка аудио в профиль... 🎵', 'info');
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) throw new Error('Ошибка загрузки файла');
+        const data = await res.json();
+
+        const cleanTitle = (data.filename || file.name).replace(/\.[^/.]+$/, '').replace(/^[\d_]+/, '');
+        const artist = (currentProfileUserData && currentProfileUserData.display_name) || window.CURRENT_USER_DISPLAY_NAME || '';
+
+        // Добавляем трек в профиль
+        const addRes = await fetch('/api/users/music', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: data.url,
+                title: cleanTitle || 'Аудиозапись',
+                artist: artist
+            })
+        });
+
+        if (!addRes.ok) {
+            const errData = await addRes.json();
+            throw new Error(errData.error || 'Ошибка добавления трека в профиль');
+        }
+
+        const addData = await addRes.json();
+        currentViewedUserMusic = addData.playlist || [];
+
+        renderProfileMusicList(currentViewedUserMusic, true);
+        const user = currentProfileUserData || currentViewedProfileUser;
+        if (user && user.id) {
+            loadUserProfileMusic(user.id, user);
+        }
+
+        showToast('Новый лицевой трек успешно добавлен в профиль! ⭐🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+async function handleDeleteProfileMusic(musicId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    if (!confirm('Удалить этот трек из профиля?')) return;
+
+    try {
+        const res = await fetch(`/api/users/music/${musicId}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) throw new Error('Ошибка удаления трека');
+        const data = await res.json();
+        currentViewedUserMusic = data.playlist || [];
+        renderProfileMusicList(currentViewedUserMusic, true);
+
+        const user = currentProfileUserData || currentViewedProfileUser;
+        if (user && user.id) {
+            loadUserProfileMusic(user.id, user);
+        }
+        showToast('Трек удален из профиля', 'info');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
 }
