@@ -295,3 +295,94 @@ func (r *PollRepository) UnvotePoll(pollID, userID int) (*models.Poll, error) {
 
 	return r.GetPollByID(pollID, userID)
 }
+
+// UpdatePoll обновляет вопрос и варианты ответов опроса его создателем
+func (r *PollRepository) UpdatePoll(pollID, currentUserID int, req models.UpdatePollRequest) (*models.Poll, error) {
+	var creatorID int
+	err := r.db.QueryRow(`SELECT creator_id FROM polls WHERE id = $1`, pollID).Scan(&creatorID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("опрос не найден")
+		}
+		return nil, fmt.Errorf("check poll owner: %w", err)
+	}
+	if creatorID != currentUserID {
+		return nil, fmt.Errorf("у вас нет прав на редактирование этого опроса")
+	}
+
+	req.Question = strings.TrimSpace(req.Question)
+	if req.Question == "" {
+		return nil, fmt.Errorf("вопрос опроса не может быть пустым")
+	}
+
+	var cleanOpts []string
+	for _, opt := range req.Options {
+		t := strings.TrimSpace(opt)
+		if t != "" {
+			cleanOpts = append(cleanOpts, t)
+		}
+	}
+	if len(cleanOpts) < 2 {
+		return nil, fmt.Errorf("опрос должен содержать минимум 2 варианта ответа")
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`UPDATE polls SET question = $1 WHERE id = $2`, req.Question, pollID)
+	if err != nil {
+		return nil, fmt.Errorf("update poll question: %w", err)
+	}
+
+	rows, err := tx.Query(`SELECT id, text, votes_count FROM poll_options WHERE poll_id = $1 ORDER BY id ASC`, pollID)
+	if err != nil {
+		return nil, fmt.Errorf("query existing options: %w", err)
+	}
+	type optInfo struct {
+		id    int
+		text  string
+		votes int
+	}
+	var existing []optInfo
+	for rows.Next() {
+		var o optInfo
+		if err := rows.Scan(&o.id, &o.text, &o.votes); err == nil {
+			existing = append(existing, o)
+		}
+	}
+	rows.Close()
+
+	// Обновляем существующие варианты
+	for i := 0; i < len(cleanOpts) && i < len(existing); i++ {
+		_, err = tx.Exec(`UPDATE poll_options SET text = $1 WHERE id = $2`, cleanOpts[i], existing[i].id)
+		if err != nil {
+			return nil, fmt.Errorf("update option: %w", err)
+		}
+	}
+
+	// Если добавлены новые варианты
+	if len(cleanOpts) > len(existing) {
+		for i := len(existing); i < len(cleanOpts); i++ {
+			_, err = tx.Exec(`INSERT INTO poll_options (poll_id, text, votes_count) VALUES ($1, $2, 0)`, pollID, cleanOpts[i])
+			if err != nil {
+				return nil, fmt.Errorf("insert new option: %w", err)
+			}
+		}
+	} else if len(cleanOpts) < len(existing) {
+		// Если удалены неиспользованные варианты
+		for i := len(cleanOpts); i < len(existing); i++ {
+			if existing[i].votes == 0 {
+				_, _ = tx.Exec(`DELETE FROM poll_options WHERE id = $1`, existing[i].id)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit update poll: %w", err)
+	}
+
+	return r.GetPollByID(pollID, currentUserID)
+}

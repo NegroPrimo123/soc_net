@@ -327,7 +327,7 @@ func (r *PostRepository) CreatePost(userID int, content, imageURL, musicURL, mus
 	return r.GetPostByID(postID, userID)
 }
 
-func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL, musicURL, musicTitle, musicArtist *string) (*models.Post, error) {
+func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL, musicURL, musicTitle, musicArtist *string, pollID *int) (*models.Post, error) {
 	var err error
 	var updatedID int
 
@@ -338,12 +338,16 @@ func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL
 	    music_url = CASE WHEN $3::text IS NOT NULL THEN $3::text ELSE music_url END,
 	    music_title = CASE WHEN $4::text IS NOT NULL THEN $4::text ELSE music_title END,
 	    music_artist = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE music_artist END,
+	    poll_id = CASE 
+	        WHEN $8::int IS NOT NULL THEN (CASE WHEN $8::int <= 0 THEN NULL ELSE $8::int END)
+	        ELSE poll_id 
+	    END,
 	    is_edited = TRUE, 
 	    updated_at = NOW() 
 	WHERE id = $6 AND user_id = $7 
 	RETURNING id
 	`
-	err = r.db.QueryRow(query, content, imageURL, musicURL, musicTitle, musicArtist, postID, userID).Scan(&updatedID)
+	err = r.db.QueryRow(query, content, imageURL, musicURL, musicTitle, musicArtist, postID, userID, pollID).Scan(&updatedID)
 
 	if err != nil {
 		return nil, fmt.Errorf("post not found or unauthorized: %w", err)

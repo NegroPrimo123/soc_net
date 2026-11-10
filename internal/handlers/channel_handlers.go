@@ -471,6 +471,9 @@ func (h *Handler) GetChannelMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Помечаем входящие сообщения в диалоге канала как прочитанные
+	_ = h.messageRepo.MarkChannelMessagesAsRead(channelID, targetSubscriberID, authUser.ID)
+
 	messages, err := h.messageRepo.GetChannelConversation(channelID, targetSubscriberID, authUser.ID, 100)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

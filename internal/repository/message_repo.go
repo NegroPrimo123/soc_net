@@ -219,6 +219,19 @@ func (r *MessageRepository) MarkAsRead(currentUserID, senderID int) error {
 
 }
 
+func (r *MessageRepository) MarkChannelMessagesAsRead(channelID, subscriberID, currentUserID int) error {
+	query := `
+	UPDATE messages
+	SET is_read = TRUE
+	WHERE channel_id = $1
+	  AND is_read = FALSE
+	  AND receiver_id = $2
+	  AND (sender_id = $3 OR is_from_channel = TRUE)
+	`
+	_, err := r.db.Exec(query, channelID, currentUserID, subscriberID)
+	return err
+}
+
 func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Conversation, error) {
 
 	query := `

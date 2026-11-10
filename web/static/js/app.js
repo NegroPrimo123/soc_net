@@ -503,6 +503,7 @@ async function createPost() {
         handleComposerInput();
         clearComposerFile();
         clearComposerMusic();
+        clearComposerPoll();
         const imageBox = document.getElementById('composerImageBox');
         if (imageBox) imageBox.style.display = 'none';
 
@@ -610,7 +611,74 @@ function openEditPostModal(postId, clickedBtn) {
         if (mAddBox) mAddBox.style.display = 'block';
     }
 
+    // Заполняем секцию опроса
+    const pollCard = postEl.querySelector('.poll-card');
+    const editPollSection = document.getElementById('editPostPollSection');
+    const editPollAddBox = document.getElementById('editPostPollAddBtnBox');
+    const editPollId = document.getElementById('editPostPollId');
+    const editPollQuestion = document.getElementById('editPostPollQuestion');
+    const editPollContainer = document.getElementById('editPostPollOptionsContainer');
+
+    if (pollCard) {
+        const pollId = pollCard.getAttribute('data-poll-id') || '';
+        const qEl = pollCard.querySelector('.poll-question');
+        const qText = qEl ? qEl.innerText.trim() : '';
+
+        if (editPollId) editPollId.value = pollId;
+        if (editPollQuestion) editPollQuestion.value = qText;
+        if (editPollContainer) {
+            editPollContainer.innerHTML = '';
+            pollCard.querySelectorAll('.poll-option-text').forEach(tEl => {
+                addEditPostPollOptionRow(tEl.innerText.trim());
+            });
+        }
+        if (editPollSection) editPollSection.style.display = 'block';
+        if (editPollAddBox) editPollAddBox.style.display = 'none';
+    } else {
+        if (editPollId) editPollId.value = '';
+        if (editPollQuestion) editPollQuestion.value = '';
+        if (editPollContainer) editPollContainer.innerHTML = '';
+        if (editPollSection) editPollSection.style.display = 'none';
+        if (editPollAddBox) editPollAddBox.style.display = 'block';
+    }
+
     if (modal) modal.style.display = 'flex';
+}
+
+function removeEditPostPoll() {
+    const editPollId = document.getElementById('editPostPollId');
+    const editPollSection = document.getElementById('editPostPollSection');
+    const editPollAddBox = document.getElementById('editPostPollAddBtnBox');
+    if (editPollId) editPollId.value = '0';
+    if (editPollSection) editPollSection.style.display = 'none';
+    if (editPollAddBox) editPollAddBox.style.display = 'block';
+}
+
+function enableEditPostPoll() {
+    const editPollId = document.getElementById('editPostPollId');
+    const editPollSection = document.getElementById('editPostPollSection');
+    const editPollAddBox = document.getElementById('editPostPollAddBtnBox');
+    const editPollContainer = document.getElementById('editPostPollOptionsContainer');
+    if (editPollId) editPollId.value = '-1';
+    if (editPollContainer && editPollContainer.children.length === 0) {
+        addEditPostPollOptionRow('');
+        addEditPostPollOptionRow('');
+    }
+    if (editPollSection) editPollSection.style.display = 'block';
+    if (editPollAddBox) editPollAddBox.style.display = 'none';
+}
+
+function addEditPostPollOptionRow(initialText = '') {
+    const container = document.getElementById('editPostPollOptionsContainer');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'edit-post-poll-row';
+    row.style.cssText = 'display: flex; gap: 6px; align-items: center;';
+    row.innerHTML = `
+        <input type="text" class="form-control edit-post-poll-opt-input" placeholder="Вариант ответа..." value="${escapeHtml(initialText)}" style="flex: 1; padding: 6px 10px; border-radius: var(--radius-sm); background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: var(--text-pure); font-size: 0.85rem;">
+        <button type="button" class="btn btn-outline btn-xs" onclick="this.closest('.edit-post-poll-row').remove()" title="Удалить вариант" style="color: #f43f5e; border-color: rgba(244,63,94,0.3); padding: 3px 6px;">✕</button>
+    `;
+    container.appendChild(row);
 }
 
 function openEditPost(postId) {
@@ -785,6 +853,9 @@ async function saveEditedPostModal() {
     const musicUrlInput = document.getElementById('editPostMusicUrl');
     const musicTitleInput = document.getElementById('editPostMusicTitle');
     const musicArtistInput = document.getElementById('editPostMusicArtist');
+    const pollIdInput = document.getElementById('editPostPollId');
+    const pollQuestionInput = document.getElementById('editPostPollQuestion');
+    const pollContainer = document.getElementById('editPostPollOptionsContainer');
     const saveBtn = document.getElementById('btnSaveEditedPost');
 
     if (!idInput || !idInput.value) return;
@@ -795,7 +866,36 @@ async function saveEditedPostModal() {
     const musicTitle = musicTitleInput ? musicTitleInput.value.trim() : '';
     const musicArtist = musicArtistInput ? musicArtistInput.value.trim() : '';
 
-    if (!content && !imageUrl && !musicUrl) {
+    let pollIdVal = null;
+    if (pollIdInput && pollIdInput.value !== '') {
+        const pid = parseInt(pollIdInput.value);
+        if (pid === 0) {
+            pollIdVal = 0;
+        } else if (pid > 0) {
+            pollIdVal = pid;
+            const q = pollQuestionInput ? pollQuestionInput.value.trim() : '';
+            const opts = [];
+            if (pollContainer) {
+                pollContainer.querySelectorAll('.edit-post-poll-opt-input').forEach(inp => {
+                    const v = inp.value.trim();
+                    if (v) opts.push(v);
+                });
+            }
+            if (q && opts.length >= 2) {
+                try {
+                    await fetch(`/api/polls/${pid}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: q, options: opts })
+                    });
+                } catch (e) {
+                    console.error('Error saving edited poll in post:', e);
+                }
+            }
+        }
+    }
+
+    if (!content && !imageUrl && !musicUrl && !pollIdVal) {
         showToast('Публикация не может быть полностью пустой', 'error');
         return;
     }
@@ -810,6 +910,9 @@ async function saveEditedPostModal() {
             music_title: musicTitle,
             music_artist: musicArtist
         };
+        if (pollIdVal !== null) {
+            payload.poll_id = pollIdVal;
+        }
 
         const res = await fetch(`/api/posts/${postId}`, {
             method: 'PUT',
@@ -915,6 +1018,12 @@ async function saveEditedPostModal() {
                 musicCard.remove();
             }
 
+            // Обновляем опрос
+            if (payload.poll_id === 0) {
+                const pCard = postCard.querySelector('.poll-card');
+                if (pCard) pCard.remove();
+            }
+
             const metaLine = postCard.querySelector('.meta-line');
             if (metaLine && !metaLine.querySelector('.edited-badge')) {
                 const badge = document.createElement('span');
@@ -923,6 +1032,10 @@ async function saveEditedPostModal() {
                 metaLine.appendChild(badge);
             }
         });
+
+        if (post.poll) {
+            updatePollDOM(post.poll);
+        }
 
         closeEditPostModal();
         showToast('Публикация успешно обновлена!', 'success');
@@ -2270,7 +2383,10 @@ let currentProfileUserData = null;
 function navigateTo(view, userId = null) {
     ['feed', 'profile', 'showcase', 'messages', 'channels', 'channelMessages'].forEach(v => {
         const el = document.getElementById(`${v}View`);
-        if (el) el.style.display = 'none';
+        if (el) {
+            el.style.display = 'none';
+            el.classList.remove('active');
+        }
     });
 
     ['Feed', 'Profile', 'Gifts', 'Messages', 'Channels'].forEach(t => {
@@ -2278,35 +2394,44 @@ function navigateTo(view, userId = null) {
         if (btn) btn.classList.remove('active');
     });
 
+    const vp = document.querySelector('.content-viewport');
+    if (vp) {
+        if (view === 'messages' || view === 'channel-messages') {
+            vp.classList.add('viewport-workspace-mode');
+        } else {
+            vp.classList.remove('viewport-workspace-mode');
+        }
+    }
+
     if (view === 'feed') {
         const el = document.getElementById('feedView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavFeed');
         if (btn) btn.classList.add('active');
     } else if (view === 'profile' || view === 'my-profile') {
         const el = document.getElementById('profileView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavProfile');
         if (btn) btn.classList.add('active');
     } else if (view === 'showcase') {
         const el = document.getElementById('showcaseView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavGifts');
         if (btn) btn.classList.add('active');
     } else if (view === 'messages') {
         const el = document.getElementById('messagesView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavMessages');
         if (btn) btn.classList.add('active');
     } else if (view === 'channels') {
         const el = document.getElementById('channelsView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavChannels');
         if (btn) btn.classList.add('active');
         loadChannels();
     } else if (view === 'channel-messages') {
         const el = document.getElementById('channelMessagesView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavChannels');
         if (btn) btn.classList.add('active');
         if (userId) {
@@ -7764,6 +7889,11 @@ function renderPollWidget(poll) {
         `;
     }).join('');
 
+    const canEdit = (window.CURRENT_USER_ID && poll.creator_id === window.CURRENT_USER_ID);
+    const editBtn = canEdit 
+        ? `<button type="button" class="poll-edit-btn" onclick="openEditPollModal(${poll.id}, event)" title="Редактировать опрос">✏️ Редактировать</button>` 
+        : '';
+
     return `
         <div class="poll-card" id="poll-card-${poll.id}" data-poll-id="${poll.id}">
             <div class="poll-header">
@@ -7771,6 +7901,7 @@ function renderPollWidget(poll) {
                 ${isMultiple ? '<span class="poll-type-subbadge">⚡ Несколько вариантов</span>' : '<span class="poll-type-subbadge-single">🎯 Один вариант</span>'}
                 ${isAnonymous ? '<span class="poll-type-subbadge-anon">🔒 Анонимно</span>' : ''}
                 <span class="poll-total-votes" id="poll-total-${poll.id}">👥 ${totalVotes} ${pluralizeVotes(totalVotes)}</span>
+                ${editBtn}
             </div>
             <div class="poll-question-wrap">
                 <div class="poll-question-accent"></div>
@@ -7805,7 +7936,6 @@ async function voteInPoll(pollId, optionId, event) {
         }
         const updatedPoll = await res.json();
         updatePollDOM(updatedPoll);
-        if (typeof playChatSoundFx === 'function') playChatSoundFx('send');
     } catch (err) {
         showToast(err.message, 'error');
     }
@@ -7822,6 +7952,115 @@ function updatePollDOM(poll) {
             card.parentNode.replaceChild(newCard, card);
         }
     });
+}
+
+async function openEditPollModal(pollId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const modal = document.getElementById('editPollModal');
+    const idInput = document.getElementById('modalEditPollId');
+    const qInput = document.getElementById('modalEditPollQuestion');
+    const container = document.getElementById('modalEditPollOptionsContainer');
+    if (!modal || !idInput || !qInput || !container) return;
+
+    idInput.value = pollId;
+    qInput.value = '';
+    container.innerHTML = '<div class="chat-empty-hint">Загрузка опроса...</div>';
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch(`/api/polls/${pollId}`);
+        if (!res.ok) throw new Error('Не удалось загрузить данные опроса');
+        const poll = await res.json();
+        qInput.value = poll.question || '';
+        container.innerHTML = '';
+        (poll.options || []).forEach(opt => {
+            addModalEditPollOptionRow(opt.text || '');
+        });
+        if (!poll.options || poll.options.length < 2) {
+            addModalEditPollOptionRow('');
+            addModalEditPollOptionRow('');
+        }
+    } catch (err) {
+        // Запасной вариант: извлекаем текущее состояние из карточки в DOM
+        const card = document.getElementById(`poll-card-${pollId}`);
+        if (card) {
+            const qEl = card.querySelector('.poll-question');
+            if (qEl) qInput.value = qEl.textContent.trim();
+            container.innerHTML = '';
+            card.querySelectorAll('.poll-option-text').forEach(tEl => {
+                addModalEditPollOptionRow(tEl.textContent.trim());
+            });
+        } else {
+            showToast(err.message, 'error');
+        }
+    }
+}
+
+function closeEditPollModal() {
+    const modal = document.getElementById('editPollModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function addModalEditPollOptionRow(initialText = '') {
+    const container = document.getElementById('modalEditPollOptionsContainer');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'modal-poll-option-row';
+    row.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+    row.innerHTML = `
+        <input type="text" class="form-control modal-poll-opt-input" placeholder="Вариант ответа..." value="${escapeHtml(initialText)}" style="flex: 1; padding: 8px 12px; border-radius: var(--radius-sm); background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: var(--text-pure);">
+        <button type="button" class="btn btn-outline btn-xs" onclick="this.closest('.modal-poll-option-row').remove()" title="Удалить вариант" style="color: #f43f5e; border-color: rgba(244,63,94,0.3); padding: 4px 8px;">✕</button>
+    `;
+    container.appendChild(row);
+}
+
+async function saveEditedPoll() {
+    const idInput = document.getElementById('modalEditPollId');
+    const qInput = document.getElementById('modalEditPollQuestion');
+    const container = document.getElementById('modalEditPollOptionsContainer');
+    const saveBtn = document.getElementById('btnSaveEditedPoll');
+    if (!idInput || !idInput.value) return;
+
+    const pollId = parseInt(idInput.value);
+    const question = qInput ? qInput.value.trim() : '';
+    if (!question) {
+        showToast('Введите вопрос опроса', 'warning');
+        return;
+    }
+    const optInputs = container.querySelectorAll('.modal-poll-opt-input');
+    const options = [];
+    optInputs.forEach(inp => {
+        const val = inp.value.trim();
+        if (val) options.push(val);
+    });
+    if (options.length < 2) {
+        showToast('Опрос должен содержать минимум 2 варианта ответа', 'warning');
+        return;
+    }
+
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/polls/${pollId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, options })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка при сохранении опроса');
+        }
+        const updatedPoll = await res.json();
+        updatePollDOM(updatedPoll);
+        closeEditPollModal();
+        showToast('Опрос успешно обновлен! 📊', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
+    }
 }
 
 function addPollOptionField(containerId, callback) {
@@ -7886,8 +8125,14 @@ function clearComposerPoll() {
             <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 2" oninput="updateComposerPollState()"></div>
         `;
     }
+    const multEl = document.getElementById('composerPollIsMultiple');
+    if (multEl) multEl.checked = false;
+    const anonEl = document.getElementById('composerPollIsAnonymous');
+    if (anonEl) anonEl.checked = false;
     const prev = document.getElementById('composerPollPreview');
     if (prev) prev.style.display = 'none';
+    const box = document.getElementById('composerPollBox');
+    if (box) box.style.display = 'none';
 }
 function updateComposerPollState() {
     const data = collectPollData('composerPollQuestion', 'composerPollOptionsInputs', 'composerPollIsMultiple', 'composerPollIsAnonymous');
@@ -7919,8 +8164,14 @@ function clearProfComposerPoll() {
             <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 2" oninput="updateProfPollState()"></div>
         `;
     }
+    const multEl = document.getElementById('profPollIsMultiple');
+    if (multEl) multEl.checked = false;
+    const anonEl = document.getElementById('profPollIsAnonymous');
+    if (anonEl) anonEl.checked = false;
     const prev = document.getElementById('profPollPreview');
     if (prev) prev.style.display = 'none';
+    const box = document.getElementById('profPollBox');
+    if (box) box.style.display = 'none';
 }
 function updateProfPollState() {
     const data = collectPollData('profPollQuestion', 'profPollOptionsInputs', 'profPollIsMultiple', 'profPollIsAnonymous');
@@ -8302,8 +8553,14 @@ function clearChannelComposerPoll() {
             <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 2" oninput="updateChannelComposerPollState()"></div>
         `;
     }
+    const multEl = document.getElementById('channelPollIsMultiple');
+    if (multEl) multEl.checked = false;
+    const anonEl = document.getElementById('channelPollIsAnonymous');
+    if (anonEl) anonEl.checked = false;
     const prev = document.getElementById('channelComposerPollPreview');
     if (prev) prev.style.display = 'none';
+    const box = document.getElementById('channelPollBox');
+    if (box) box.style.display = 'none';
 }
 function clearChannelComposerFile() {
     channelComposerImage = '';
@@ -8805,6 +9062,12 @@ async function selectChannelSubscriberChat(subscriberId, name, avatar) {
 
     // Подсветка в сайдбаре
     document.querySelectorAll('.channel-subscriber-item').forEach(el => el.classList.remove('active'));
+    const activeSubItem = document.querySelector(`.channel-subscriber-item[onclick*="selectChannelSubscriberChat(${subscriberId},"]`);
+    if (activeSubItem) {
+        activeSubItem.classList.add('active');
+        const badgeEl = activeSubItem.querySelector('.channel-subscriber-badge');
+        if (badgeEl) badgeEl.remove();
+    }
 
     loadChannelMessagesForSubscriber(currentChannelMessagesChannelId, subscriberId);
 }
@@ -8820,6 +9083,9 @@ async function loadChannelMessagesForSubscriber(channelId, subscriberId) {
         let msgs = await res.json();
         if (!Array.isArray(msgs)) msgs = [];
         renderChannelStreamMessages(msgs, true);
+        if (typeof updateUnreadMessagesCountBadge === 'function') {
+            updateUnreadMessagesCountBadge();
+        }
     } catch (err) {
         stream.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
     }
@@ -8836,6 +9102,9 @@ async function loadSubscriberChannelChatMessages(channelId) {
         let msgs = await res.json();
         if (!Array.isArray(msgs)) msgs = [];
         renderChannelStreamMessages(msgs, false);
+        if (typeof updateUnreadMessagesCountBadge === 'function') {
+            updateUnreadMessagesCountBadge();
+        }
     } catch (err) {
         stream.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
     }

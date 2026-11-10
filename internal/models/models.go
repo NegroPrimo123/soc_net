@@ -259,6 +259,7 @@ type UpdatePostRequest struct {
 	MusicURL    *string `json:"music_url,omitempty"`
 	MusicTitle  *string `json:"music_title,omitempty"`
 	MusicArtist *string `json:"music_artist,omitempty"`
+	PollID      *int    `json:"poll_id,omitempty"`
 }
 
 type CreateCommentRequest struct {
@@ -457,6 +458,11 @@ type CreatePollRequest struct {
 	Options     []string `json:"options"`
 	IsMultiple  bool     `json:"is_multiple"`
 	IsAnonymous bool     `json:"is_anonymous"`
+}
+
+type UpdatePollRequest struct {
+	Question string   `json:"question"`
+	Options  []string `json:"options"`
 }
 
 type VotePollRequest struct {

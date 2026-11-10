@@ -85,6 +85,8 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	// Polls & Voting API (Опросы и голосования)
 	mux.HandleFunc("POST /api/polls", h.CreatePoll)
 	mux.HandleFunc("GET /api/polls/{id}", h.GetPoll)
+	mux.HandleFunc("PUT /api/polls/{id}", h.UpdatePoll)
+	mux.HandleFunc("POST /api/polls/{id}/edit", h.UpdatePoll)
 	mux.HandleFunc("POST /api/polls/{id}/vote", h.VotePoll)
 	mux.HandleFunc("POST /api/polls/vote", h.VotePoll)
 	mux.HandleFunc("POST /api/polls/{id}/unvote", h.UnvotePoll)

@@ -136,3 +136,43 @@ func (h *Handler) UnvotePoll(w http.ResponseWriter, r *http.Request) {
 
 	respondJSON(w, http.StatusOK, poll)
 }
+
+// UpdatePoll редактирует вопрос и варианты ответов опроса
+func (h *Handler) UpdatePoll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "метод не поддерживается"})
+		return
+	}
+
+	authUser := h.getUserFromRequest(r)
+	if authUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "необходима авторизация"})
+		return
+	}
+
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathParts) < 3 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "не указан ID опроса"})
+		return
+	}
+
+	pollID, err := strconv.Atoi(pathParts[2])
+	if err != nil || pollID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "неверный ID опроса"})
+		return
+	}
+
+	var req models.UpdatePollRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "неверный формат запроса"})
+		return
+	}
+
+	updatedPoll, err := h.pollRepo.UpdatePoll(pollID, authUser.ID, req)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, updatedPoll)
+}

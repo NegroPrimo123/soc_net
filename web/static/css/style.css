@@ -55,6 +55,24 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 240, 255, 0.35) rgba(10, 15, 26, 0.7);
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(10, 15, 26, 0.75);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 240, 255, 0.32);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 240, 255, 0.65);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
 
 html, body {
@@ -579,6 +597,16 @@ input:focus, textarea:focus, select:focus {
 .content-viewport {
     flex: 1;
     padding: 1.5rem 2rem 3rem 2rem;
+}
+
+.content-viewport.viewport-workspace-mode,
+.content-viewport:has(#messagesView.active),
+.content-viewport:has(#messagesView[style*="display: block"]),
+.content-viewport:has(#channelMessagesView.active),
+.content-viewport:has(#channelMessagesView[style*="display: block"]),
+.view-workspace-active .content-viewport {
+    padding: 8px 1.5rem 8px 1.5rem !important;
+    overflow: hidden !important;
 }
 
 /* ==========================================
@@ -1682,7 +1710,8 @@ input:focus, textarea:focus, select:focus {
 ========================================== */
 .chat-layout-card {
     display: flex;
-    height: 75vh;
+    height: calc(100vh - 100px);
+    min-height: 500px;
     background-color: var(--bg-surface);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-xl);
@@ -6242,6 +6271,26 @@ input:checked + .toggle-slider:before {
     flex-wrap: wrap;
     margin-bottom: 10px;
 }
+.poll-edit-btn {
+    background: rgba(0, 240, 255, 0.1);
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    color: #00f0ff;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-left: auto;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.poll-edit-btn:hover {
+    background: #00f0ff;
+    color: #020617;
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
 .poll-type-badge {
     font-size: 0.68rem;
     font-weight: 800;
@@ -6752,8 +6801,8 @@ input:checked + .toggle-slider:before {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 120px);
-    min-height: 560px;
+    height: calc(100vh - 100px);
+    min-height: 500px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 240, 255, 0.06);
 }
 .channel-messages-header {
