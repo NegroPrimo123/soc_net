@@ -21,6 +21,8 @@ type Handler struct {
 	giftRepo    *repository.GiftRepository
 	messageRepo *repository.MessageRepository
 	notifRepo   *repository.NotificationRepository
+	channelRepo *repository.ChannelRepository
+	pollRepo    *repository.PollRepository
 	hub         *events.Hub
 	tmpl        *template.Template
 }
@@ -31,6 +33,8 @@ func NewHandler(
 	giftRepo *repository.GiftRepository,
 	messageRepo *repository.MessageRepository,
 	notifRepo *repository.NotificationRepository,
+	channelRepo *repository.ChannelRepository,
+	pollRepo *repository.PollRepository,
 	hub *events.Hub,
 ) (*Handler, error) {
 	tmplPath := filepath.Join("web", "templates", "index.html")
@@ -48,6 +52,8 @@ func NewHandler(
 		giftRepo:    giftRepo,
 		messageRepo: messageRepo,
 		notifRepo:   notifRepo,
+		channelRepo: channelRepo,
+		pollRepo:    pollRepo,
 		hub:         hub,
 		tmpl:        tmpl,
 	}, nil

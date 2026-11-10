@@ -219,6 +219,82 @@ func migrate(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read);
 
+	-- =========================================================
+	-- КАНАЛЫ (CHANNELS)
+	-- =========================================================
+	CREATE TABLE IF NOT EXISTS channels (
+		id SERIAL PRIMARY KEY,
+		creator_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		name VARCHAR(100) NOT NULL,
+		handle VARCHAR(60) UNIQUE NOT NULL,
+		description TEXT DEFAULT '',
+		avatar_url TEXT DEFAULT '/static/avatars/default_channel.svg',
+		banner_url TEXT DEFAULT '',
+		subscribers_count INT DEFAULT 1,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_channels_handle ON channels(handle);
+	CREATE INDEX IF NOT EXISTS idx_channels_creator_id ON channels(creator_id);
+	CREATE INDEX IF NOT EXISTS idx_channels_created_at ON channels(created_at DESC);
+
+	CREATE TABLE IF NOT EXISTS channel_members (
+		id SERIAL PRIMARY KEY,
+		channel_id INT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		role VARCHAR(20) DEFAULT 'member',
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		UNIQUE(channel_id, user_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_channel_members_channel_id ON channel_members(channel_id);
+	CREATE INDEX IF NOT EXISTS idx_channel_members_user_id ON channel_members(user_id);
+
+	-- =========================================================
+	-- ОПРОСЫ И ГОЛОСОВАНИЯ (POLLS & VOTES)
+	-- =========================================================
+	CREATE TABLE IF NOT EXISTS polls (
+		id SERIAL PRIMARY KEY,
+		creator_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		question TEXT NOT NULL,
+		is_multiple BOOLEAN DEFAULT FALSE,
+		is_anonymous BOOLEAN DEFAULT FALSE,
+		total_votes INT DEFAULT 0,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	);
+	ALTER TABLE polls ADD COLUMN IF NOT EXISTS is_anonymous BOOLEAN DEFAULT FALSE;
+	CREATE INDEX IF NOT EXISTS idx_polls_creator_id ON polls(creator_id);
+
+	CREATE TABLE IF NOT EXISTS poll_options (
+		id SERIAL PRIMARY KEY,
+		poll_id INT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+		text TEXT NOT NULL,
+		votes_count INT DEFAULT 0
+	);
+	CREATE INDEX IF NOT EXISTS idx_poll_options_poll_id ON poll_options(poll_id);
+
+	CREATE TABLE IF NOT EXISTS poll_votes (
+		id SERIAL PRIMARY KEY,
+		poll_id INT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+		option_id INT NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE,
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		UNIQUE(poll_id, user_id, option_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_poll_votes_poll_id ON poll_votes(poll_id);
+	CREATE INDEX IF NOT EXISTS idx_poll_votes_user_id ON poll_votes(user_id);
+
+	-- Связка постов с каналами и опросами
+	ALTER TABLE posts ADD COLUMN IF NOT EXISTS channel_id INT REFERENCES channels(id) ON DELETE CASCADE;
+	ALTER TABLE posts ADD COLUMN IF NOT EXISTS poll_id INT REFERENCES polls(id) ON DELETE SET NULL;
+	CREATE INDEX IF NOT EXISTS idx_posts_channel_id ON posts(channel_id);
+	CREATE INDEX IF NOT EXISTS idx_posts_poll_id ON posts(poll_id);
+
+	-- Связка сообщений с каналами и опросами (Анонимные личные сообщения с каналом)
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel_id INT REFERENCES channels(id) ON DELETE CASCADE;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_from_channel BOOLEAN DEFAULT FALSE;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS poll_id INT REFERENCES polls(id) ON DELETE SET NULL;
+	CREATE INDEX IF NOT EXISTS idx_messages_channel_id ON messages(channel_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_poll_id ON messages(poll_id);
+
 	UPDATE users SET password_hash = '$2b$10$VjKN/Wou1MxkZTTqqCfI9u1fx13uG6DbuQkSY1L6Emy2ZwpazYsE6' WHERE password_hash = '' OR password_hash IS NULL;
 
 	-- Миграция подарков на коллекцию из 9 Cyberpunk 3D-подарков (без фона)

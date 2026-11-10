@@ -2,12 +2,16 @@
 Thumbs.db
 desktop.ini
 
-# Скомпилированные бинарники
+# Исполняемые файлы
 *.exe
 server.exe
 
-# Загруженные пользователями файлы
+# Загрузки пользователей
 web/uploads/
+internal/handlers/web/
+
+# Тестовые скрипты
+scratch/
 
 # Логи
 *.log

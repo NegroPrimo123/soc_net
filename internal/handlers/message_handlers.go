@@ -96,22 +96,24 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	req.AudioURL = strings.TrimSpace(req.AudioURL)
 	req.AudioTitle = strings.TrimSpace(req.AudioTitle)
 	req.AudioArtist = strings.TrimSpace(req.AudioArtist)
-	if req.Content == "" && req.AudioURL == "" {
+	if req.Content == "" && req.AudioURL == "" && req.PollID == nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "сообщение не может быть пустым"})
 		return
 	}
 
-	if req.ReceiverID <= 0 {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "не указан получатель"})
-		return
+	if req.ChannelID == nil {
+		if req.ReceiverID <= 0 {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "не указан получатель"})
+			return
+		}
+
+		if req.ReceiverID == currentUser.ID {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "нельзя отправить сообщение самому себе"})
+			return
+		}
 	}
 
-	if req.ReceiverID == currentUser.ID {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "нельзя отправить сообщение самому себе"})
-		return
-	}
-
-	msg, err := h.messageRepo.SendMessage(currentUser.ID, req.ReceiverID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist)
+	msg, err := h.messageRepo.SendMessage(currentUser.ID, req.ReceiverID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist, req.ChannelID, req.IsFromChannel, req.PollID)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

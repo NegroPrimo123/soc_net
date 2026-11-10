@@ -442,8 +442,26 @@ async function createPost() {
         content = '';
     }
 
-    if (!content && !imageUrl && !musicUrl) {
-        showToast('Введите текст публикации или прикрепите файл', 'error');
+    let pollData = collectPollData('composerPollQuestion', 'composerPollOptionsInputs', 'composerPollIsMultiple', 'composerPollIsAnonymous');
+    let pollId = null;
+    if (pollData && pollData.question && pollData.options.length >= 2) {
+        try {
+            const pRes = await fetch('/api/polls', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pollData)
+            });
+            if (pRes.ok) {
+                const pollObj = await pRes.json();
+                pollId = pollObj.id;
+            }
+        } catch (e) {
+            console.error('Failed to create poll:', e);
+        }
+    }
+
+    if (!content && !imageUrl && !musicUrl && !pollId) {
+        showToast('Введите текст публикации, прикрепите файл или опрос', 'error');
         return;
     }
 
@@ -462,7 +480,8 @@ async function createPost() {
                 image_url: imageUrl,
                 music_url: musicUrl,
                 music_title: musicTitle,
-                music_artist: musicArtist
+                music_artist: musicArtist,
+                poll_id: pollId
             })
         });
 
@@ -1766,6 +1785,7 @@ function createPostElement(post) {
 
     const isOwner = (window.IS_AUTHENTICATED && (window.CURRENT_USER_ID == post.user_id || (post.user && window.CURRENT_USER_ID == post.user.id)));
     let postMusicHtml = '';
+    let postPollHtml = (post.poll ? renderPollWidget(post.poll) : '');
     if (post.music_url) {
         const pTitle = post.music_title || 'Аудиозапись';
         const pArtist = post.music_artist || (post.user ? post.user.display_name : 'Исполнитель');
@@ -1860,14 +1880,34 @@ function createPostElement(post) {
     `;
 
     article.setAttribute('data-owner-id', post.user_id);
+
+    let authorAvatarUrl = (post.user && post.user.avatar_url) ? post.user.avatar_url : '/static/avatars/default.png';
+    let authorDisplayName = (post.user && post.user.display_name) ? post.user.display_name : 'Пользователь';
+    let authorHandle = (post.user && post.user.username) ? `@${post.user.username}` : '';
+    let authorClickAction = (post.user && post.user.id) ? `openUserProfile(${post.user.id})` : '';
+    let channelBadgeHtml = '';
+
+    if (post.channel && post.channel.id) {
+        authorAvatarUrl = post.channel.avatar_url || '/static/avatars/default_channel.svg';
+        authorDisplayName = post.channel.name || 'Канал';
+        authorHandle = post.channel.handle ? `@${post.channel.handle}` : '';
+        authorClickAction = `openChannelPage(${post.channel.id})`;
+        channelBadgeHtml = `
+            <span class="channel-post-badge cursor-pointer" onclick="openChannelPage(${post.channel.id})" title="Официальный пост канала">
+                📢 Канал
+            </span>
+        `;
+    }
+
     article.innerHTML = `
         <div class="post-header">
             <div class="author-block">
-                <img src="${escapeHtml(post.user.avatar_url)}" alt="avatar" class="author-avatar cursor-pointer" onclick="openUserProfile(${post.user.id})">
+                <img src="${escapeHtml(authorAvatarUrl)}" alt="avatar" class="author-avatar cursor-pointer" onclick="${authorClickAction}">
                 <div class="author-meta">
                     <div class="author-name-row">
-                        <span class="author-name cursor-pointer" onclick="openUserProfile(${post.user.id})">${escapeHtml(post.user.display_name)}</span>
-                        <span class="author-handle cursor-pointer" onclick="openUserProfile(${post.user.id})">@${escapeHtml(post.user.username)}</span>
+                        <span class="author-name cursor-pointer" onclick="${authorClickAction}">${escapeHtml(authorDisplayName)}</span>
+                        ${authorHandle ? `<span class="author-handle cursor-pointer" onclick="${authorClickAction}">${escapeHtml(authorHandle)}</span>` : ''}
+                        ${channelBadgeHtml}
                     </div>
                     <div class="meta-line">
                         <time class="post-time">${formattedDate}</time>
@@ -1888,6 +1928,7 @@ function createPostElement(post) {
             </div>
         </div>
 
+        ${postPollHtml}
         ${postMusicHtml}
         ${mediaHtml}
 
@@ -2177,12 +2218,12 @@ let currentProfileUserId = null;
 let currentProfileUserData = null;
 
 function navigateTo(view, userId = null) {
-    ['feed', 'profile', 'showcase', 'messages'].forEach(v => {
+    ['feed', 'profile', 'showcase', 'messages', 'channels'].forEach(v => {
         const el = document.getElementById(`${v}View`);
         if (el) el.style.display = 'none';
     });
 
-    ['Feed', 'Profile', 'Gifts', 'Messages'].forEach(t => {
+    ['Feed', 'Profile', 'Gifts', 'Messages', 'Channels'].forEach(t => {
         const btn = document.getElementById(`tabNav${t}`);
         if (btn) btn.classList.remove('active');
     });
@@ -2207,6 +2248,12 @@ function navigateTo(view, userId = null) {
         if (el) el.style.display = 'block';
         const btn = document.getElementById('tabNavMessages');
         if (btn) btn.classList.add('active');
+    } else if (view === 'channels') {
+        const el = document.getElementById('channelsView');
+        if (el) el.style.display = 'block';
+        const btn = document.getElementById('tabNavChannels');
+        if (btn) btn.classList.add('active');
+        loadChannels();
     }
 
     if (view === 'profile') {
@@ -3634,7 +3681,8 @@ async function handleProfileUpdate(e) {
                 pinned_gift_id: pinnedGiftId,
                 music_url: musicUrl,
                 music_title: musicTitle,
-                music_artist: musicArtist
+                music_artist: musicArtist,
+                poll_id: pollId
             })
         });
 
@@ -3921,7 +3969,8 @@ async function createProfilePost() {
                 image_url: imageUrl,
                 music_url: musicUrl,
                 music_title: musicTitle,
-                music_artist: musicArtist
+                music_artist: musicArtist,
+                poll_id: pollId
             })
         });
 
@@ -5210,6 +5259,10 @@ function buildChatMessageBubbleHtml(m, isOut) {
         contentHtml = `<a href="${escapeHtml(trimmed)}" target="_blank" download class="chat-file-attachment" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(255,255,255,0.08); border-radius: 10px; color: #fff; text-decoration: none; font-weight: 500;">📎 <span>${escapeHtml(fileName || 'Скачать файл')}</span></a>`;
     } else {
         contentHtml = formatChatMessageText(m.content || '');
+    }
+    if (m.poll) {
+        const pollWidgetHtml = renderPollWidget(m.poll);
+        contentHtml = (contentHtml ? contentHtml + '<div style="margin-top: 6px;"></div>' : '') + pollWidgetHtml;
     }
     return contentHtml;
 }
@@ -7486,6 +7539,1146 @@ async function handleDeleteProfileMusic(musicId, event) {
             loadUserProfileMusic(user.id, user);
         }
         showToast('Трек удален из профиля', 'info');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+
+// =========================================================
+// CHANNELS & POLLS SYSTEM CLIENT SUITE
+// =========================================================
+
+// --- POLLS LOGIC ---
+function pluralizeVotes(n) {
+    n = Math.abs(n) % 100;
+    const n1 = n % 10;
+    if (n > 10 && n < 20) return 'голосов';
+    if (n1 > 1 && n1 < 5) return 'голоса';
+    if (n1 === 1) return 'голос';
+    return 'голосов';
+}
+
+function renderPollWidget(poll) {
+    if (!poll) return '';
+    const totalVotes = poll.total_votes || 0;
+    const isMultiple = !!poll.is_multiple;
+
+    let optionsHtml = (poll.options || []).map(opt => {
+        const percent = Math.round(opt.percentage || 0);
+        const isSelected = !!opt.is_voted;
+        const checkIcon = isMultiple ? (isSelected ? '☑' : '☐') : (isSelected ? '●' : '○');
+        const selectedClass = isSelected ? ' selected' : '';
+
+        return `
+            <div class="poll-option-row${selectedClass}" 
+                 onclick="voteInPoll(${poll.id}, ${opt.id}, event)" 
+                 title="Нажмите, чтобы проголосовать"
+                 data-poll-id="${poll.id}" 
+                 data-option-id="${opt.id}">
+                <div class="poll-bar-fill" style="width: ${percent}%;"></div>
+                <div class="poll-option-inner">
+                    <span class="poll-option-radio">${checkIcon}</span>
+                    <span class="poll-option-text">${escapeHtml(opt.text)}</span>
+                    <div class="poll-option-meta">
+                        <span class="poll-option-percent">${percent}%</span>
+                        <span class="poll-option-count">(${opt.votes_count || 0})</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="poll-card" id="poll-card-${poll.id}" data-poll-id="${poll.id}">
+            <div class="poll-header">
+                <span class="poll-type-badge">📊 ОПРОС</span>
+                ${isMultiple ? '<span class="poll-type-subbadge">Множественный выбор</span>' : ''}
+                <span class="poll-total-votes" id="poll-total-${poll.id}">👥 ${totalVotes} ${pluralizeVotes(totalVotes)}</span>
+            </div>
+            <div class="poll-question">${escapeHtml(poll.question)}</div>
+            <div class="poll-options-list">
+                ${optionsHtml}
+            </div>
+        </div>
+    `;
+}
+
+async function voteInPoll(pollId, optionId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите, чтобы участвовать в голосовании', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    try {
+        const res = await fetch('/api/polls/vote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ poll_id: pollId, option_id: optionId })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка при голосовании');
+        }
+        const updatedPoll = await res.json();
+        updatePollDOM(updatedPoll);
+        if (typeof playChatSoundFx === 'function') playChatSoundFx('send');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function updatePollDOM(poll) {
+    if (!poll) return;
+    const cards = document.querySelectorAll(`.poll-card[data-poll-id="${poll.id}"]`);
+    cards.forEach(card => {
+        const temp = document.createElement('div');
+        temp.innerHTML = renderPollWidget(poll);
+        const newCard = temp.firstElementChild;
+        if (newCard) {
+            card.parentNode.replaceChild(newCard, card);
+        }
+    });
+}
+
+function addPollOptionField(containerId, callback) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const count = container.querySelectorAll('.poll-opt-input').length + 1;
+    if (count > 10) {
+        showToast('Максимум 10 вариантов ответа', 'warning');
+        return;
+    }
+    const row = document.createElement('div');
+    row.className = 'poll-opt-input-row';
+    row.innerHTML = `
+        <input type="text" class="poll-opt-input" placeholder="Вариант ${count}">
+        <button type="button" class="btn btn-secondary btn-xs" style="padding: 2px 8px;">✕</button>
+    `;
+    const btn = row.querySelector('button');
+    btn.onclick = () => {
+        row.remove();
+        if (typeof callback === 'function') callback();
+    };
+    const input = row.querySelector('input');
+    if (typeof callback === 'function') {
+        input.oninput = callback;
+    }
+    container.appendChild(row);
+    input.focus();
+}
+
+function collectPollData(qId, optsContainerId, isMultipleId, isAnonId) {
+    const qEl = document.getElementById(qId);
+    const question = qEl ? qEl.value.trim() : '';
+    const container = document.getElementById(optsContainerId);
+    if (!container) return null;
+    const inputs = container.querySelectorAll('.poll-opt-input');
+    const options = [];
+    inputs.forEach(inp => {
+        const val = inp.value.trim();
+        if (val) options.push(val);
+    });
+    if (!question && options.length === 0) return null;
+    const isMultiple = document.getElementById(isMultipleId)?.checked || false;
+    const isAnonymous = document.getElementById(isAnonId)?.checked || false;
+    return { question, options, is_multiple: isMultiple, is_anonymous: isAnonymous };
+}
+
+// Feed Composer Poll Controls
+function toggleComposerPollBox() {
+    const box = document.getElementById('composerPollBox');
+    if (!box) return;
+    const drawer = document.getElementById('composerDrawer');
+    if (drawer && drawer.style.display === 'none') drawer.style.display = 'block';
+    box.style.display = (box.style.display === 'none' ? 'block' : 'none');
+}
+function clearComposerPoll() {
+    const qEl = document.getElementById('composerPollQuestion');
+    if (qEl) qEl.value = '';
+    const cEl = document.getElementById('composerPollOptionsInputs');
+    if (cEl) {
+        cEl.innerHTML = `
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 1" oninput="updateComposerPollState()"></div>
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 2" oninput="updateComposerPollState()"></div>
+        `;
+    }
+    const prev = document.getElementById('composerPollPreview');
+    if (prev) prev.style.display = 'none';
+}
+function updateComposerPollState() {
+    const data = collectPollData('composerPollQuestion', 'composerPollOptionsInputs', 'composerPollIsMultiple', 'composerPollIsAnonymous');
+    const prev = document.getElementById('composerPollPreview');
+    const qPrev = document.getElementById('composerPollPreviewQuestion');
+    const oPrev = document.getElementById('composerPollPreviewOpts');
+    if (!data || (!data.question && data.options.length === 0)) {
+        if (prev) prev.style.display = 'none';
+        return;
+    }
+    if (prev) prev.style.display = 'block';
+    if (qPrev) qPrev.textContent = data.question || 'Новый опрос';
+    if (oPrev) oPrev.textContent = `${data.options.length} варианта(-ов)`;
+}
+
+// Profile Composer Poll Controls
+function toggleProfPollBox() {
+    const box = document.getElementById('profPollBox');
+    if (!box) return;
+    box.style.display = (box.style.display === 'none' ? 'block' : 'none');
+}
+function clearProfComposerPoll() {
+    const qEl = document.getElementById('profPollQuestion');
+    if (qEl) qEl.value = '';
+    const cEl = document.getElementById('profPollOptionsInputs');
+    if (cEl) {
+        cEl.innerHTML = `
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 1" oninput="updateProfPollState()"></div>
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 2" oninput="updateProfPollState()"></div>
+        `;
+    }
+    const prev = document.getElementById('profPollPreview');
+    if (prev) prev.style.display = 'none';
+}
+function updateProfPollState() {
+    const data = collectPollData('profPollQuestion', 'profPollOptionsInputs', 'profPollIsMultiple', 'profPollIsAnonymous');
+    const prev = document.getElementById('profPollPreview');
+    const qPrev = document.getElementById('profPollPreviewQuestion');
+    const oPrev = document.getElementById('profPollPreviewOpts');
+    if (!data || (!data.question && data.options.length === 0)) {
+        if (prev) prev.style.display = 'none';
+        return;
+    }
+    if (prev) prev.style.display = 'block';
+    if (qPrev) qPrev.textContent = data.question || 'Новый опрос';
+    if (oPrev) oPrev.textContent = `${data.options.length} варианта(-ов)`;
+}
+
+// Chat Poll Modal Controls
+function openChatPollModal() {
+    if (!activeChatUserId) {
+        showToast('Выберите диалог для отправки опроса', 'warning');
+        return;
+    }
+    const modal = document.getElementById('chatPollModal');
+    if (modal) modal.style.display = 'flex';
+}
+function closeChatPollModal() {
+    const modal = document.getElementById('chatPollModal');
+    if (modal) modal.style.display = 'none';
+}
+async function handleSendChatPollSubmit(e) {
+    if (e) e.preventDefault();
+    const data = collectPollData('chatPollQuestion', 'chatPollModalOptionsInputs', 'chatPollIsMultiple', 'chatPollIsAnonymous');
+    if (!data || !data.question) {
+        showToast('Введите вопрос опроса', 'warning');
+        return;
+    }
+    if (data.options.length < 2) {
+        showToast('Добавьте минимум 2 варианта ответа', 'warning');
+        return;
+    }
+    try {
+        const res = await fetch('/api/polls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка при создании опроса');
+        }
+        const createdPoll = await res.json();
+        closeChatPollModal();
+
+        if (activeChatUserId) {
+            const sendRes = await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    receiver_id: activeChatUserId,
+                    content: '',
+                    poll_id: createdPoll.id
+                })
+            });
+            if (sendRes.ok) {
+                const msg = await sendRes.json();
+                appendChatMessageElement(msg);
+                scrollChatToBottom();
+                showToast('Опрос успешно отправлен в диалог 📊', 'success');
+            }
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// --- CHANNELS SYSTEM CORE ---
+let currentChannelId = null;
+let currentChannelData = null;
+let channelsListCache = [];
+let activeChannelsTab = 'all';
+
+let channelComposerImage = '';
+let channelComposerAudioUrl = '';
+let channelComposerAudioTitle = '';
+let channelComposerAudioArtist = '';
+
+let currentChannelAudioUrl = '';
+let currentChannelAudioTitle = '';
+let currentChannelAudioArtist = '';
+
+let currentActiveInboxSubscriberId = null;
+
+function pluralizeMembers(n) {
+    n = Math.abs(n) % 100;
+    const n1 = n % 10;
+    if (n > 10 && n < 20) return 'участников';
+    if (n1 > 1 && n1 < 5) return 'участника';
+    if (n1 === 1) return 'участник';
+    return 'участников';
+}
+
+async function loadChannels(filter = activeChannelsTab) {
+    const grid = document.getElementById('channelsCardsGrid');
+    if (!grid) return;
+    grid.innerHTML = '<div class="channels-loading">Загрузка каталога каналов...</div>';
+
+    try {
+        const res = await fetch(`/api/channels?filter=${filter}`);
+        if (!res.ok) throw new Error('Ошибка загрузки каналов');
+        const channels = await res.json();
+        channelsListCache = channels || [];
+        renderChannelsGrid(channelsListCache);
+    } catch (err) {
+        grid.innerHTML = `<div class="channels-loading" style="color: #f43f5e;">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function switchChannelsTab(tab) {
+    activeChannelsTab = tab;
+    ['tabChannelsAll', 'tabChannelsSubscribed', 'tabChannelsMy'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.remove('active');
+    });
+    if (tab === 'all') document.getElementById('tabChannelsAll')?.classList.add('active');
+    else if (tab === 'subscribed') document.getElementById('tabChannelsSubscribed')?.classList.add('active');
+    else if (tab === 'my') document.getElementById('tabChannelsMy')?.classList.add('active');
+    loadChannels(tab);
+}
+
+function handleChannelsSearch(e) {
+    const q = (e.target.value || '').toLowerCase().trim();
+    if (!q) {
+        renderChannelsGrid(channelsListCache);
+        return;
+    }
+    const filtered = channelsListCache.filter(ch =>
+        (ch.name || '').toLowerCase().includes(q) ||
+        (ch.handle || '').toLowerCase().includes(q) ||
+        (ch.description || '').toLowerCase().includes(q)
+    );
+    renderChannelsGrid(filtered);
+}
+
+function renderChannelsGrid(channels) {
+    const grid = document.getElementById('channelsCardsGrid');
+    if (!grid) return;
+    if (!channels || channels.length === 0) {
+        grid.innerHTML = `
+            <div class="channels-loading" style="grid-column: 1 / -1;">
+                <span style="font-size: 2rem; display: block; margin-bottom: 8px;">📢</span>
+                Пока нет каналов в этом разделе.<br>
+                <button class="btn btn-outline btn-xs" style="margin-top: 10px;" onclick="openCreateChannelModal()">Создать первый канал</button>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = channels.map(ch => {
+        const bannerStyle = ch.banner_url ? `style="background-image: url('${escapeHtml(ch.banner_url)}');"` : '';
+        const isSub = !!ch.is_subscribed;
+        const subBtnText = isSub ? '✓ Подписан' : '+ Подписаться';
+        const subBtnClass = isSub ? 'btn-secondary' : 'btn-primary';
+
+        return `
+            <div class="channel-grid-card" onclick="openChannelDetail(${ch.id})">
+                <div class="channel-card-banner" ${bannerStyle}>
+                    <div class="channel-card-avatar-wrap">
+                        <img src="${escapeHtml(ch.avatar_url || '/static/avatars/default_channel.svg')}" alt="Канал" class="channel-card-avatar">
+                    </div>
+                </div>
+                <div class="channel-card-body">
+                    <div class="channel-card-name-row">
+                        <span class="channel-card-name" title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</span>
+                        <span class="channel-badge">📢</span>
+                    </div>
+                    <span class="channel-card-handle">${escapeHtml(ch.handle)}</span>
+                    <span class="channel-card-subscribers">👥 ${ch.subscribers_count || 0} ${pluralizeMembers(ch.subscribers_count || 0)}</span>
+                    <p class="channel-card-desc">${escapeHtml(ch.description || 'Нет описания канала')}</p>
+                    <div class="channel-card-footer" onclick="event.stopPropagation()">
+                        <button class="btn ${subBtnClass} btn-xs" onclick="quickToggleChannelSub(${ch.id}, this, event)">
+                            ${subBtnText}
+                        </button>
+                        <button class="btn btn-outline btn-xs" onclick="openChannelDetail(${ch.id})">
+                            Открыть →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function quickToggleChannelSub(channelId, btn, event) {
+    if (event) event.stopPropagation();
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите для подписки на канал', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    const isSub = btn.textContent.includes('✓');
+    const endpoint = isSub ? `/api/channels/${channelId}/unsubscribe` : `/api/channels/${channelId}/subscribe`;
+    try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        if (res.ok) {
+            const data = await res.json();
+            btn.textContent = data.is_subscribed ? '✓ Подписан' : '+ Подписаться';
+            btn.className = data.is_subscribed ? 'btn btn-secondary btn-xs' : 'btn btn-primary btn-xs';
+            showToast(data.is_subscribed ? 'Подписка оформлена' : 'Подписка отменена', 'success');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function openChannelDetail(channelIdOrHandle) {
+    navigateTo('channels');
+    const catalogSec = document.getElementById('channelsCatalogSection');
+    const detailSec = document.getElementById('channelDetailSection');
+    if (catalogSec) catalogSec.style.display = 'none';
+    if (detailSec) detailSec.style.display = 'block';
+
+    try {
+        const res = await fetch(`/api/channels/${channelIdOrHandle}`);
+        if (!res.ok) throw new Error('Канал не найден');
+        const ch = await res.json();
+        currentChannelId = ch.id;
+        currentChannelData = ch;
+        renderChannelDetailPage(ch);
+        loadChannelPosts(ch.id);
+    } catch (err) {
+        showToast(err.message, 'error');
+        closeChannelDetail();
+    }
+}
+
+function closeChannelDetail() {
+    const catalogSec = document.getElementById('channelsCatalogSection');
+    const detailSec = document.getElementById('channelDetailSection');
+    if (catalogSec) catalogSec.style.display = 'block';
+    if (detailSec) detailSec.style.display = 'none';
+    currentChannelId = null;
+    currentChannelData = null;
+    loadChannels();
+}
+
+function renderChannelDetailPage(ch) {
+    document.getElementById('channelHeroName').textContent = ch.name;
+    document.getElementById('channelHeroHandle').textContent = ch.handle;
+    document.getElementById('channelHeroSubscribers').textContent = `👥 ${ch.subscribers_count || 0} ${pluralizeMembers(ch.subscribers_count || 0)}`;
+    document.getElementById('channelHeroDesc').textContent = ch.description || 'У канала пока нет описания';
+
+    const avatarImg = document.getElementById('channelHeroAvatar');
+    if (avatarImg) avatarImg.src = ch.avatar_url || '/static/avatars/default_channel.svg';
+
+    const bannerEl = document.getElementById('channelHeroBanner');
+    if (bannerEl) {
+        if (ch.banner_url) bannerEl.style.backgroundImage = `url('${ch.banner_url}')`;
+        else bannerEl.style.backgroundImage = '';
+    }
+
+    const subBtn = document.getElementById('btnChannelSubscribe');
+    if (subBtn) {
+        if (ch.is_subscribed) {
+            subBtn.textContent = '✓ Вы подписаны';
+            subBtn.className = 'btn btn-secondary btn-sm';
+        } else {
+            subBtn.textContent = '+ Подписаться';
+            subBtn.className = 'btn btn-primary btn-sm';
+        }
+    }
+
+    const isManager = (ch.is_creator || ch.role === 'creator' || ch.role === 'admin');
+    const editBtn = document.getElementById('btnChannelEdit');
+    const manageChatsBtn = document.getElementById('btnChannelManageChats');
+    const composerCard = document.getElementById('channelPostComposerCard');
+
+    if (editBtn) editBtn.style.display = isManager ? 'inline-flex' : 'none';
+    if (manageChatsBtn) manageChatsBtn.style.display = isManager ? 'inline-flex' : 'none';
+    if (composerCard) composerCard.style.display = isManager ? 'block' : 'none';
+
+    const compAvatar = document.getElementById('channelComposerAvatar');
+    if (compAvatar) compAvatar.src = ch.avatar_url || '/static/avatars/default_channel.svg';
+}
+
+async function toggleChannelSubscription() {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите, чтобы подписаться на канал', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    if (!currentChannelId) return;
+    const isSub = currentChannelData && currentChannelData.is_subscribed;
+    const endpoint = isSub ? `/api/channels/${currentChannelId}/unsubscribe` : `/api/channels/${currentChannelId}/subscribe`;
+
+    try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        if (!res.ok) throw new Error('Ошибка обновления подписки');
+        const data = await res.json();
+        currentChannelData.is_subscribed = data.is_subscribed;
+        currentChannelData.subscribers_count = data.subscribers_count;
+        renderChannelDetailPage(currentChannelData);
+        showToast(data.is_subscribed ? 'Вы успешно подписались на канал! 📢' : 'Вы отписались от канала', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Channel Posts Loading
+async function loadChannelPosts(channelId) {
+    const stream = document.getElementById('channelPostsStream');
+    if (!stream) return;
+    stream.innerHTML = '<div class="channels-loading">Загрузка постов канала...</div>';
+
+    try {
+        const res = await fetch(`/api/channels/${channelId}/posts`);
+        if (!res.ok) throw new Error('Ошибка загрузки постов канала');
+        const posts = await res.json();
+
+        stream.innerHTML = '';
+        if (!posts || posts.length === 0) {
+            stream.innerHTML = `
+                <div class="cyber-empty-card" style="margin-top: 1rem;">
+                    <h3>В канале пока нет постов</h3>
+                    <p>Новые публикации автора появятся здесь.</p>
+                </div>
+            `;
+            return;
+        }
+
+        posts.forEach(p => {
+            const postEl = createPostElement(p);
+            stream.appendChild(postEl);
+        });
+    } catch (err) {
+        stream.innerHTML = `<div class="channels-loading" style="color: #f43f5e;">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+// Channel Composer Actions
+function expandChannelComposer() {
+    const drawer = document.getElementById('channelComposerDrawer');
+    if (drawer) drawer.style.display = 'block';
+}
+function toggleChannelComposerMusicBox() {
+    const box = document.getElementById('channelComposerMusicBox');
+    if (box) box.style.display = (box.style.display === 'none' ? 'block' : 'none');
+}
+function toggleChannelComposerPollBox() {
+    const box = document.getElementById('channelComposerPollBox');
+    if (box) box.style.display = (box.style.display === 'none' ? 'block' : 'none');
+}
+function updateChannelComposerPollState() {
+    const data = collectPollData('channelPollQuestion', 'channelPollOptionsInputs', 'channelPollIsMultiple', 'channelPollIsAnonymous');
+    const prev = document.getElementById('channelComposerPollPreview');
+    const qPrev = document.getElementById('channelComposerPollPreviewQuestion');
+    const oPrev = document.getElementById('channelComposerPollPreviewOpts');
+    if (!data || (!data.question && data.options.length === 0)) {
+        if (prev) prev.style.display = 'none';
+        return;
+    }
+    if (prev) prev.style.display = 'block';
+    if (qPrev) qPrev.textContent = data.question || 'Новый опрос';
+    if (oPrev) oPrev.textContent = `${data.options.length} варианта(-ов)`;
+}
+function clearChannelComposerPoll() {
+    const qEl = document.getElementById('channelPollQuestion');
+    if (qEl) qEl.value = '';
+    const cEl = document.getElementById('channelPollOptionsInputs');
+    if (cEl) {
+        cEl.innerHTML = `
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 1" oninput="updateChannelComposerPollState()"></div>
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 2" oninput="updateChannelComposerPollState()"></div>
+        `;
+    }
+    const prev = document.getElementById('channelComposerPollPreview');
+    if (prev) prev.style.display = 'none';
+}
+function clearChannelComposerFile() {
+    channelComposerImage = '';
+    const prev = document.getElementById('channelComposerUploadPreview');
+    if (prev) prev.style.display = 'none';
+}
+function clearChannelComposerMusic() {
+    channelComposerAudioUrl = '';
+    channelComposerAudioTitle = '';
+    channelComposerAudioArtist = '';
+    const prev = document.getElementById('channelComposerMusicPreview');
+    if (prev) prev.style.display = 'none';
+}
+
+async function handleChannelComposerFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Ошибка загрузки файла');
+        const data = await res.json();
+        channelComposerImage = data.url;
+        const prev = document.getElementById('channelComposerUploadPreview');
+        const img = document.getElementById('channelComposerPreviewImg');
+        const name = document.getElementById('channelComposerPreviewName');
+        if (img) img.src = data.url;
+        if (name) name.textContent = file.name;
+        if (prev) prev.style.display = 'block';
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function handleChannelComposerAudioUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Ошибка загрузки аудио');
+        const data = await res.json();
+        channelComposerAudioUrl = data.url;
+        channelComposerAudioTitle = file.name.replace(/\.[^/.]+$/, "");
+        channelComposerAudioArtist = currentChannelData ? currentChannelData.name : 'Канал';
+
+        const prev = document.getElementById('channelComposerMusicPreview');
+        const t = document.getElementById('channelComposerPreviewTitle');
+        const a = document.getElementById('channelComposerPreviewArtist');
+        if (t) t.textContent = channelComposerAudioTitle;
+        if (a) a.textContent = channelComposerAudioArtist;
+        if (prev) prev.style.display = 'block';
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function submitChannelPost() {
+    if (!currentChannelId) return;
+    const textarea = document.getElementById('channelPostContent');
+    const content = textarea ? textarea.value.trim() : '';
+
+    // Опрос
+    let pollData = collectPollData('channelPollQuestion', 'channelPollOptionsInputs', 'channelPollIsMultiple', 'channelPollIsAnonymous');
+    let pollId = null;
+    if (pollData && pollData.question && pollData.options.length >= 2) {
+        try {
+            const pRes = await fetch('/api/polls', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pollData)
+            });
+            if (pRes.ok) {
+                const pollObj = await pRes.json();
+                pollId = pollObj.id;
+            }
+        } catch (e) {
+            console.error('Failed to create channel poll:', e);
+        }
+    }
+
+    if (!content && !channelComposerImage && !channelComposerAudioUrl && !pollId) {
+        showToast('Введите текст публикации, прикрепите фото, музыку или опрос', 'warning');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}/posts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: content,
+                image_url: channelComposerImage,
+                music_url: channelComposerAudioUrl,
+                music_title: channelComposerAudioTitle,
+                music_artist: channelComposerAudioArtist,
+                poll_id: pollId
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка публикации поста');
+        }
+        if (textarea) textarea.value = '';
+        clearChannelComposerFile();
+        clearChannelComposerMusic();
+        clearChannelComposerPoll();
+        showToast('Пост успешно опубликован в канале! 📢', 'success');
+        loadChannelPosts(currentChannelId);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Channel CRUD Modals
+function openCreateChannelModal() {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите, чтобы создать канал', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    const modal = document.getElementById('createChannelModal');
+    if (modal) modal.style.display = 'flex';
+}
+function closeCreateChannelModal() {
+    const modal = document.getElementById('createChannelModal');
+    if (modal) modal.style.display = 'none';
+}
+function selectChannelAvatarPreset(el, url, mode) {
+    const parent = el.parentElement;
+    parent.querySelectorAll('.preset-avatar-thumb').forEach(t => t.classList.remove('selected'));
+    el.classList.add('selected');
+    if (mode === 'create') {
+        const inp = document.getElementById('createChannelAvatarUrl');
+        if (inp) inp.value = url;
+    } else {
+        const inp = document.getElementById('editChannelAvatarUrl');
+        if (inp) inp.value = url;
+    }
+}
+async function handleUploadChannelAvatar(e, mode) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Ошибка загрузки аватарки');
+        const data = await res.json();
+        if (mode === 'create') {
+            document.getElementById('createChannelAvatarUrl').value = data.url;
+            showToast('Аватарка загружена', 'success');
+        } else {
+            document.getElementById('editChannelAvatarUrl').value = data.url;
+            const prev = document.getElementById('editChannelAvatarPreview');
+            if (prev) prev.src = data.url;
+            showToast('Аватарка загружена', 'success');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+async function handleUploadChannelBanner(e, mode) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Ошибка загрузки баннера');
+        const data = await res.json();
+        if (mode === 'create') {
+            document.getElementById('createChannelBannerUrl').value = data.url;
+            showToast('Баннер загружен', 'success');
+        } else {
+            document.getElementById('editChannelBannerUrl').value = data.url;
+            showToast('Баннер загружен', 'success');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function handleCreateChannelSubmit(e) {
+    if (e) e.preventDefault();
+    const name = document.getElementById('createChannelName')?.value.trim();
+    let handle = document.getElementById('createChannelHandle')?.value.trim();
+    const desc = document.getElementById('createChannelDesc')?.value.trim();
+    const avatar = document.getElementById('createChannelAvatarUrl')?.value.trim() || '/static/avatars/default_channel.svg';
+    const banner = document.getElementById('createChannelBannerUrl')?.value.trim();
+
+    if (!name || !handle) {
+        showToast('Заполните название и юзернейм канала', 'warning');
+        return;
+    }
+    if (!handle.startsWith('@')) handle = '@' + handle;
+
+    try {
+        const res = await fetch('/api/channels', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                handle: handle,
+                description: desc,
+                avatar_url: avatar,
+                banner_url: banner
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка при создании канала');
+        }
+        const created = await res.json();
+        closeCreateChannelModal();
+        showToast(`Канал ${created.name} успешно создан! 📢`, 'success');
+        openChannelDetail(created.id);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Edit Channel Modal
+function openEditChannelModal() {
+    if (!currentChannelData) return;
+    const modal = document.getElementById('editChannelModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    document.getElementById('editChannelId').value = currentChannelData.id;
+    document.getElementById('editChannelName').value = currentChannelData.name;
+    document.getElementById('editChannelDesc').value = currentChannelData.description || '';
+    document.getElementById('editChannelAvatarUrl').value = currentChannelData.avatar_url || '';
+    document.getElementById('editChannelBannerUrl').value = currentChannelData.banner_url || '';
+
+    const prev = document.getElementById('editChannelAvatarPreview');
+    if (prev) prev.src = currentChannelData.avatar_url || '/static/avatars/default_channel.svg';
+}
+
+function closeEditChannelModal() {
+    const modal = document.getElementById('editChannelModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleEditChannelSubmit(e) {
+    if (e) e.preventDefault();
+    if (!currentChannelId) return;
+
+    const name = document.getElementById('editChannelName')?.value.trim();
+    const desc = document.getElementById('editChannelDesc')?.value.trim();
+    const avatar = document.getElementById('editChannelAvatarUrl')?.value.trim();
+    const banner = document.getElementById('editChannelBannerUrl')?.value.trim();
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                description: desc,
+                avatar_url: avatar,
+                banner_url: banner
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка сохранения канала');
+        }
+        const updated = await res.json();
+        currentChannelData = updated;
+        renderChannelDetailPage(updated);
+        closeEditChannelModal();
+        showToast('Оформление канала сохранено! ✨', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function deleteCurrentChannel() {
+    if (!currentChannelId) return;
+    if (!confirm('Вы уверены, что хотите удалить этот канал со всеми постами?')) return;
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Ошибка при удалении канала');
+        closeEditChannelModal();
+        showToast('Канал удален', 'success');
+        closeChannelDetail();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Anonymous Channel Chat Modal (Subscriber Perspective)
+async function openChannelChatModal() {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите, чтобы написать каналу', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    if (!currentChannelId || !currentChannelData) return;
+    const modal = document.getElementById('channelChatModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    document.getElementById('channelChatModalTitle').textContent = `Чат с каналом ${currentChannelData.name}`;
+    const av = document.getElementById('channelChatModalAvatar');
+    if (av) av.src = currentChannelData.avatar_url || '/static/avatars/default_channel.svg';
+
+    loadChannelChatMessages();
+}
+
+function closeChannelChatModal() {
+    const modal = document.getElementById('channelChatModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function loadChannelChatMessages() {
+    const container = document.getElementById('channelChatMessagesContainer');
+    if (!container || !currentChannelId) return;
+    container.innerHTML = '<div class="chat-empty-hint">Загрузка диалога с каналом...</div>';
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}/messages`);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
+        const msgs = await res.json();
+        renderChannelChatMessages(msgs);
+    } catch (err) {
+        container.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function renderChannelChatMessages(messages) {
+    const container = document.getElementById('channelChatMessagesContainer');
+    if (!container) return;
+    if (!messages || messages.length === 0) {
+        container.innerHTML = `
+            <div class="chat-empty-hint">
+                🔒 Здесь вы можете написать каналу анонимно.<br>
+                Создатель канала получит ваше сообщение и сможет ответить от имени канала.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = messages.map(m => {
+        const isOut = (m.sender_id === window.CURRENT_USER_ID && !m.is_from_channel);
+        let audioHtml = '';
+        if (m.audio_url) {
+            audioHtml = `
+                <div class="chat-audio-bubble" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 8px; margin-bottom: 4px;">
+                    <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(m.audio_url)}', title: '${escapeHtml(m.audio_title || 'Аудио')}', artist: '${escapeHtml(m.audio_artist || '')}'}, event)" title="Слушать">▶️</button>
+                    <div><strong>${escapeHtml(m.audio_title || 'Аудио')}</strong><div style="font-size: 0.72rem; color: var(--text-dim);">${escapeHtml(m.audio_artist || '')}</div></div>
+                </div>
+            `;
+        }
+        let pollHtml = m.poll ? renderPollWidget(m.poll) : '';
+        const authorName = m.is_from_channel ? (m.channel ? m.channel.name : 'Канал') : (m.sender ? m.sender.display_name : 'Вы');
+        const authorBadge = m.is_from_channel ? ' <span class="channel-badge" style="font-size: 0.65rem;">📢 КАНАЛ</span>' : '';
+
+        return `
+            <div class="chat-bubble-row ${isOut ? 'out' : 'in'}">
+                <div class="chat-bubble ${isOut ? 'out' : 'in'}">
+                    <div style="font-size: 0.72rem; color: #00f0ff; margin-bottom: 2px; font-weight: 700;">${escapeHtml(authorName)}${authorBadge}</div>
+                    ${audioHtml}
+                    ${m.content ? `<div class="chat-bubble-content">${escapeHtml(m.content)}</div>` : ''}
+                    ${pollHtml}
+                    <div class="chat-bubble-footer">
+                        <time class="chat-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</time>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    container.scrollTop = container.scrollHeight;
+}
+
+async function handleChannelChatAudioUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Ошибка загрузки аудио');
+        const data = await res.json();
+        currentChannelAudioUrl = data.url;
+        currentChannelAudioTitle = file.name.replace(/\.[^/.]+$/, "");
+        showToast('Аудиозапись прикреплена к сообщению 🎵', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function handleSendChannelChatMessage(e) {
+    if (e) e.preventDefault();
+    const input = document.getElementById('channelChatMessageInput');
+    const content = input ? input.value.trim() : '';
+    if (!content && !currentChannelAudioUrl) return;
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: content,
+                audio_url: currentChannelAudioUrl || '',
+                audio_title: currentChannelAudioTitle || '',
+                audio_artist: currentChannelAudioArtist || ''
+            })
+        });
+        if (!res.ok) throw new Error('Ошибка отправки сообщения');
+        if (input) input.value = '';
+        currentChannelAudioUrl = '';
+        currentChannelAudioTitle = '';
+        loadChannelChatMessages();
+        if (typeof playChatSoundFx === 'function') playChatSoundFx('send');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Channel Creator Inbox Modal (Manager Perspective)
+async function openChannelConversationsModal() {
+    if (!currentChannelId || !currentChannelData) return;
+    const modal = document.getElementById('channelConversationsModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    document.getElementById('channelInboxModalTitle').textContent = `Сообщения канала ${currentChannelData.name}`;
+    loadChannelInbox();
+}
+
+function closeChannelConversationsModal() {
+    const modal = document.getElementById('channelConversationsModal');
+    if (modal) modal.style.display = 'none';
+    currentActiveInboxSubscriberId = null;
+}
+
+async function loadChannelInbox() {
+    const listEl = document.getElementById('channelInboxSubscribersList');
+    if (!listEl || !currentChannelId) return;
+    listEl.innerHTML = '<div class="chat-empty-hint">Загрузка диалогов...</div>';
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}/conversations`);
+        if (!res.ok) throw new Error('Ошибка загрузки входящих');
+        const convs = await res.json();
+
+        if (!convs || convs.length === 0) {
+            listEl.innerHTML = '<div class="chat-empty-hint">Пока нет входящих сообщений от подписчиков</div>';
+            return;
+        }
+
+        listEl.innerHTML = convs.map(c => {
+            const sub = c.subscriber || c.user || {};
+            const subId = c.user_id || sub.id;
+            const subName = sub.display_name || sub.username || 'Подписчик';
+            const subAvatar = sub.avatar_url || '/static/avatars/default_avatar.svg';
+            const lastText = c.last_text || (c.last_message ? (c.last_message.content || 'Вложение') : 'Вложение');
+            const isActive = (currentActiveInboxSubscriberId === subId);
+
+            return `
+                <div class="channel-inbox-user-item ${isActive ? 'active' : ''}" onclick="selectChannelInboxSubscriber(${subId}, '${escapeHtml(subName)}', '${escapeHtml(subAvatar)}')">
+                    <img src="${escapeHtml(subAvatar)}" alt="Аватар" class="channel-inbox-user-avatar">
+                    <div class="channel-inbox-user-info">
+                        <div class="channel-inbox-user-name">${escapeHtml(subName)}</div>
+                        <div class="channel-inbox-user-msg">${escapeHtml(lastText)}</div>
+                    </div>
+                    ${c.unread_count > 0 ? `<span class="badge-accent">${c.unread_count}</span>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        if (convs.length > 0) {
+            const first = convs[0];
+            const firstSub = first.subscriber || first.user || {};
+            const firstId = first.user_id || firstSub.id;
+            const firstName = firstSub.display_name || firstSub.username || 'Подписчик';
+            const firstAvatar = firstSub.avatar_url || '/static/avatars/default_avatar.svg';
+            if (!currentActiveInboxSubscriberId || currentActiveInboxSubscriberId === firstId) {
+                selectChannelInboxSubscriber(firstId, firstName, firstAvatar);
+            }
+        }
+    } catch (err) {
+        listEl.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+async function selectChannelInboxSubscriber(userId, name, avatar) {
+    if (!userId) return;
+    currentActiveInboxSubscriberId = userId;
+    const header = document.getElementById('channelInboxChatHeader');
+    if (header && name) {
+        header.innerHTML = `Диалог с: <strong>${escapeHtml(name)}</strong> (вы отвечаете от лица канала)`;
+    }
+    const form = document.getElementById('channelInboxReplyForm');
+    if (form) form.style.display = 'flex';
+
+    // Подсветка активного пользователя
+    document.querySelectorAll('.channel-inbox-user-item').forEach(el => el.classList.remove('active'));
+
+    // Загрузка сообщений этого диалога
+    const stream = document.getElementById('channelInboxMessagesStream');
+    if (!stream) return;
+    stream.innerHTML = '<div class="chat-empty-hint">Загрузка сообщений...</div>';
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}/messages?subscriber_id=${userId}`);
+        if (!res.ok) throw new Error('Ошибка загрузки переписки');
+        let msgs = await res.json();
+        if (!Array.isArray(msgs)) msgs = [];
+
+        if (msgs.length === 0) {
+            stream.innerHTML = '<div class="chat-empty-hint">Нет сообщений в этом диалоге</div>';
+            return;
+        }
+
+        stream.innerHTML = msgs.map(m => {
+            const isFromChannel = m.is_from_channel;
+            const senderLabel = isFromChannel ? `📢 ${currentChannelData.name} (Вы)` : (m.sender ? m.sender.display_name : 'Подписчик');
+            return `
+                <div class="chat-bubble-row ${isFromChannel ? 'out' : 'in'}">
+                    <div class="chat-bubble ${isFromChannel ? 'out' : 'in'}">
+                        <div style="font-size: 0.72rem; color: #00f0ff; margin-bottom: 2px; font-weight: 700;">${escapeHtml(senderLabel)}</div>
+                        ${m.content ? `<div class="chat-bubble-content">${escapeHtml(m.content)}</div>` : ''}
+                        ${m.poll ? renderPollWidget(m.poll) : ''}
+                        <div class="chat-bubble-footer">
+                            <time class="chat-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</time>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        stream.scrollTop = stream.scrollHeight;
+    } catch (err) {
+        stream.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+async function handleSendChannelInboxReply(e) {
+    if (e) e.preventDefault();
+    if (!currentChannelId || !currentActiveInboxSubscriberId) return;
+    const input = document.getElementById('channelInboxReplyInput');
+    const content = input ? input.value.trim() : '';
+    if (!content) return;
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                receiver_id: currentActiveInboxSubscriberId,
+                content: content
+            })
+        });
+        if (!res.ok) throw new Error('Ошибка отправки ответа');
+        if (input) input.value = '';
+        selectChannelInboxSubscriber(currentActiveInboxSubscriberId, '', '');
+        if (typeof playChatSoundFx === 'function') playChatSoundFx('send');
     } catch (err) {
         showToast(err.message, 'error');
     }

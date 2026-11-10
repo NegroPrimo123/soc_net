@@ -108,6 +108,11 @@ type Message struct {
 	AudioURL           string            `json:"audio_url,omitempty"`
 	AudioTitle         string            `json:"audio_title,omitempty"`
 	AudioArtist        string            `json:"audio_artist,omitempty"`
+	ChannelID          *int              `json:"channel_id,omitempty"`
+	IsFromChannel      bool              `json:"is_from_channel"`
+	Channel            *Channel          `json:"channel,omitempty"`
+	PollID             *int              `json:"poll_id,omitempty"`
+	Poll               *Poll             `json:"poll,omitempty"`
 	Reactions          []MessageReaction `json:"reactions,omitempty"`
 }
 
@@ -137,12 +142,14 @@ type Conversation struct {
 }
 
 type SendMessageRequest struct {
-	ReceiverID int `json:"receiver_id"`
-
-	Content     string `json:"content"`
-	AudioURL    string `json:"audio_url,omitempty"`
-	AudioTitle  string `json:"audio_title,omitempty"`
-	AudioArtist string `json:"audio_artist,omitempty"`
+	ReceiverID    int    `json:"receiver_id"`
+	Content       string `json:"content"`
+	AudioURL      string `json:"audio_url,omitempty"`
+	AudioTitle    string `json:"audio_title,omitempty"`
+	AudioArtist   string `json:"audio_artist,omitempty"`
+	ChannelID     *int   `json:"channel_id,omitempty"`
+	IsFromChannel bool   `json:"is_from_channel,omitempty"`
+	PollID        *int   `json:"poll_id,omitempty"`
 }
 
 type UpdateProfileRequest struct {
@@ -210,6 +217,11 @@ type Post struct {
 	MusicTitle  string `json:"music_title,omitempty"`
 	MusicArtist string `json:"music_artist,omitempty"`
 
+	ChannelID   *int      `json:"channel_id,omitempty"`
+	Channel     *Channel  `json:"channel,omitempty"`
+	PollID      *int      `json:"poll_id,omitempty"`
+	Poll        *Poll     `json:"poll,omitempty"`
+
 	IsEdited bool `json:"is_edited"`
 
 	CreatedAt time.Time `json:"created_at"`
@@ -236,6 +248,8 @@ type CreatePostRequest struct {
 	MusicURL    string `json:"music_url,omitempty"`
 	MusicTitle  string `json:"music_title,omitempty"`
 	MusicArtist string `json:"music_artist,omitempty"`
+	ChannelID   *int   `json:"channel_id,omitempty"`
+	PollID      *int   `json:"poll_id,omitempty"`
 }
 
 type UpdatePostRequest struct {
@@ -355,4 +369,96 @@ type AddUserMusicRequest struct {
 	URL    string `json:"url"`
 	Title  string `json:"title"`
 	Artist string `json:"artist"`
+}
+
+
+// ==========================================
+// CHANNELS (КАНАЛЫ)
+// ==========================================
+type Channel struct {
+	ID               int       `json:"id"`
+	CreatorID        int       `json:"creator_id"`
+	Name             string    `json:"name"`
+	Handle           string    `json:"handle"`
+	Description      string    `json:"description"`
+	AvatarURL        string    `json:"avatar_url"`
+	BannerURL        string    `json:"banner_url"`
+	SubscribersCount int       `json:"subscribers_count"`
+	CreatedAt        time.Time `json:"created_at"`
+	IsCreator        bool      `json:"is_creator,omitempty"`
+	IsSubscribed     bool      `json:"is_subscribed,omitempty"`
+	Role             string    `json:"role,omitempty"`
+	Creator          *User     `json:"creator,omitempty"`
+}
+
+type ChannelMember struct {
+	ID        int       `json:"id"`
+	ChannelID int       `json:"channel_id"`
+	UserID    int       `json:"user_id"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	User      *User     `json:"user,omitempty"`
+}
+
+type CreateChannelRequest struct {
+	Name        string `json:"name"`
+	Handle      string `json:"handle"`
+	Description string `json:"description"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	BannerURL   string `json:"banner_url,omitempty"`
+}
+
+type UpdateChannelRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	BannerURL   string `json:"banner_url,omitempty"`
+}
+
+type ChannelConversation struct {
+	Channel     Channel  `json:"channel"`
+	Subscriber  User     `json:"subscriber"`
+	User        *User    `json:"user,omitempty"`
+	UserID      int      `json:"user_id"`
+	LastMessage *Message `json:"last_message,omitempty"`
+	LastText    string   `json:"last_text,omitempty"`
+	UnreadCount int      `json:"unread_count"`
+}
+
+// ==========================================
+// POLLS & VOTING (ОПРОСЫ И ГОЛОСОВАНИЯ)
+// ==========================================
+type PollOption struct {
+	ID         int     `json:"id"`
+	PollID     int     `json:"poll_id"`
+	Text       string  `json:"text"`
+	VotesCount int     `json:"votes_count"`
+	Percentage float64 `json:"percentage"`
+	IsVoted    bool    `json:"is_voted"`
+}
+
+type Poll struct {
+	ID                 int          `json:"id"`
+	CreatorID          int          `json:"creator_id"`
+	Question           string       `json:"question"`
+	IsMultiple         bool         `json:"is_multiple"`
+	IsAnonymous        bool         `json:"is_anonymous"`
+	TotalVotes         int          `json:"total_votes"`
+	Options            []PollOption `json:"options"`
+	UserVotedOptionIDs []int        `json:"user_voted_option_ids,omitempty"`
+	HasVoted           bool         `json:"has_voted"`
+	CreatedAt          time.Time    `json:"created_at"`
+	Creator            *User        `json:"creator,omitempty"`
+}
+
+type CreatePollRequest struct {
+	Question    string   `json:"question"`
+	Options     []string `json:"options"`
+	IsMultiple  bool     `json:"is_multiple"`
+	IsAnonymous bool     `json:"is_anonymous"`
+}
+
+type VotePollRequest struct {
+	PollID   int `json:"poll_id"`
+	OptionID int `json:"option_id"`
 }

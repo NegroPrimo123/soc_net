@@ -5698,3 +5698,719 @@ input:checked + .toggle-slider:before {
         transform: scale(1);
     }
 }
+
+
+/* =========================================================
+   CHANNELS SYSTEM (КАНАЛЫ) & POLLS (ОПРОСЫ И ГОЛОСОВАНИЯ)
+   ========================================================= */
+
+/* Кнопка навигации Каналы */
+#tabNavChannels {
+    position: relative;
+}
+#tabNavChannels.active {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(0, 240, 255, 0.04) 100%);
+    border-left: 3px solid #00f0ff;
+    color: #00f0ff;
+}
+
+/* Каталог каналов */
+.channels-catalog-section {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 1rem 0 3rem;
+}
+.channels-hero-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(8, 12, 22, 0.95) 100%);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 16px;
+    padding: 1.5rem 1.8rem;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+.channels-badge-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #00f0ff;
+    background: rgba(0, 240, 255, 0.12);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    border-radius: 9999px;
+    margin-bottom: 0.4rem;
+}
+.channels-main-title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0 0 0.3rem 0;
+    text-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+}
+.channels-desc {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin: 0;
+}
+.btn-cyber-glow {
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+    font-weight: 700;
+}
+.btn-cyber-glow:hover {
+    box-shadow: 0 0 25px rgba(0, 240, 255, 0.8);
+    transform: translateY(-2px);
+}
+
+/* Табы каналов */
+.channels-tabs-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 8px;
+}
+.channels-tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.channels-tab-btn:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.05);
+}
+.channels-tab-btn.active {
+    color: #00f0ff;
+    background: rgba(0, 240, 255, 0.1);
+    border-color: rgba(0, 240, 255, 0.3);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
+}
+
+/* Поиск по каналам */
+.channels-search-bar {
+    position: relative;
+    margin-bottom: 1.2rem;
+}
+.channels-search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-size: 0.95rem;
+}
+.channels-search-bar input {
+    width: 100%;
+    padding: 10px 14px 10px 40px;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #f8fafc;
+    font-size: 0.92rem;
+    transition: all 0.2s;
+}
+.channels-search-bar input:focus {
+    border-color: #00f0ff;
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);
+    outline: none;
+}
+
+/* Сетка карточек каналов */
+.channels-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.2rem;
+}
+.channels-loading {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-dim);
+    font-size: 0.95rem;
+}
+
+/* Карточка канала в каталоге */
+.channel-grid-card {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(8, 12, 22, 0.95) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    cursor: pointer;
+}
+.channel-grid-card:hover {
+    border-color: rgba(0, 240, 255, 0.45);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 240, 255, 0.2);
+}
+.channel-card-banner {
+    height: 75px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0369a1 100%);
+    background-size: cover;
+    background-position: center;
+    position: relative;
+}
+.channel-card-avatar-wrap {
+    position: absolute;
+    bottom: -22px;
+    left: 14px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid #00f0ff;
+    overflow: hidden;
+    background: #0b0f19;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+.channel-card-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.channel-card-body {
+    padding: 28px 14px 14px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+.channel-card-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+.channel-card-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f8fafc;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.channel-card-handle {
+    font-size: 0.8rem;
+    color: #00f0ff;
+    margin-bottom: 6px;
+}
+.channel-card-subscribers {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.channel-card-desc {
+    font-size: 0.83rem;
+    color: #94a3b8;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 12px;
+    flex: 1;
+}
+.channel-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Детальная страница канала */
+.channel-detail-section {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 1rem 0 3rem;
+}
+.channel-nav-back {
+    margin-bottom: 1rem;
+}
+.channel-page-hero {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(8, 12, 22, 0.98) 100%);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 240, 255, 0.12);
+    margin-bottom: 1.5rem;
+}
+.channel-hero-banner {
+    height: 140px;
+    background: linear-gradient(135deg, #090d16 0%, #1e1b4b 40%, #0369a1 80%, #00f0ff 100%);
+    background-size: cover;
+    background-position: center;
+    position: relative;
+}
+.channel-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(10, 15, 29, 0.9) 100%);
+}
+.channel-hero-body {
+    padding: 0 24px 20px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.channel-avatar-column {
+    margin-top: -45px;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+.channel-avatar-frame {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    border: 3px solid #00f0ff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 0 16px rgba(0, 240, 255, 0.4);
+    background: #090d16;
+    overflow: hidden;
+}
+.channel-avatar-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.channel-info-column {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.channel-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.channel-hero-name {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0;
+}
+.channel-official-badge, .channel-badge {
+    background: linear-gradient(90deg, #00f0ff, #38bdf8);
+    color: #020617;
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+.channel-post-badge {
+    background: rgba(0, 240, 255, 0.12);
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    color: #00f0ff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    cursor: pointer;
+}
+.channel-sub-info-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+}
+.channel-hero-handle {
+    color: #00f0ff;
+    font-weight: 600;
+}
+.channel-info-sep {
+    color: var(--text-dim);
+}
+.channel-hero-subscribers {
+    color: #e2e8f0;
+    font-weight: 600;
+}
+.channel-hero-desc {
+    color: #cbd5e1;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    white-space: pre-line;
+    margin-top: 4px;
+}
+.channel-hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.channel-chat-badge {
+    background: #f43f5e;
+    color: #fff;
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    font-weight: 700;
+    margin-left: 4px;
+}
+
+/* Композер канала */
+.channel-post-composer {
+    border-color: rgba(0, 240, 255, 0.3);
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 15, 29, 0.95) 100%);
+    margin-bottom: 1.5rem;
+}
+.channel-composer-badge {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #00f0ff;
+    margin-bottom: 8px;
+    display: inline-block;
+}
+
+/* =========================================================
+   POLLS & VOTING SYSTEM (ОПРОСЫ И ГОЛОСОВАНИЯ)
+   ========================================================= */
+
+/* Карточка опроса в постах и сообщениях */
+.poll-card {
+    background: linear-gradient(135deg, rgba(13, 20, 36, 0.95) 0%, rgba(8, 12, 22, 0.98) 100%);
+    border: 1px solid rgba(0, 240, 255, 0.22);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin: 10px 0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.poll-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.poll-type-badge {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    color: #00f0ff;
+    background: rgba(0, 240, 255, 0.12);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    padding: 2px 8px;
+    border-radius: 9999px;
+}
+.poll-type-subbadge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #c084fc;
+    background: rgba(192, 132, 252, 0.12);
+    border: 1px solid rgba(192, 132, 252, 0.3);
+    padding: 2px 8px;
+    border-radius: 9999px;
+}
+.poll-total-votes {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    font-weight: 600;
+}
+.poll-question {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+.poll-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Строка варианта ответа */
+.poll-option-row {
+    position: relative;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.poll-option-row:hover {
+    border-color: rgba(0, 240, 255, 0.5);
+    background: rgba(0, 240, 255, 0.05);
+    transform: translateX(2px);
+}
+.poll-option-row.selected {
+    border-color: #00f0ff;
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+    background: rgba(0, 240, 255, 0.08);
+}
+.poll-bar-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.25) 0%, rgba(56, 189, 248, 0.15) 100%);
+    transition: width 0.35s ease;
+    z-index: 1;
+    pointer-events: none;
+}
+.poll-option-row.selected .poll-bar-fill {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.4) 0%, rgba(56, 189, 248, 0.22) 100%);
+}
+.poll-option-inner {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    gap: 10px;
+}
+.poll-option-radio {
+    font-size: 1.1rem;
+    color: #00f0ff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    flex-shrink: 0;
+}
+.poll-option-text {
+    flex: 1;
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: #e2e8f0;
+    word-break: break-word;
+}
+.poll-option-row.selected .poll-option-text {
+    color: #fff;
+    font-weight: 600;
+}
+.poll-option-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.poll-option-percent {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #00f0ff;
+}
+.poll-option-count {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+}
+
+/* Формы создания опросов в композерах */
+.composer-poll-input-box {
+    background: rgba(0, 240, 255, 0.035);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+}
+.poll-box-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.poll-box-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #00f0ff;
+}
+.poll-inputs-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.poll-input-question {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.9rem;
+}
+.poll-input-question:focus {
+    border-color: #00f0ff;
+    outline: none;
+}
+.poll-options-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.poll-opt-input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.poll-opt-input {
+    flex: 1;
+    padding: 6px 10px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 0.85rem;
+}
+.poll-opt-input:focus {
+    border-color: #00f0ff;
+    outline: none;
+}
+.poll-box-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+.poll-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+.poll-checkbox-label input {
+    cursor: pointer;
+}
+
+/* Превью опроса в композере */
+.composer-poll-preview {
+    margin-bottom: 10px;
+}
+.composer-poll-preview-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    border-radius: 10px;
+}
+.preview-poll-icon {
+    font-size: 1.2rem;
+}
+.preview-poll-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+.preview-poll-question {
+    font-size: 0.88rem;
+    color: #f8fafc;
+}
+.preview-poll-opts {
+    font-size: 0.78rem;
+    color: #00f0ff;
+}
+
+/* Пресеты аватарок для создания канала */
+.channel-preset-avatars {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.preset-avatar-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    background: #090d16;
+    object-fit: cover;
+    transition: all 0.2s;
+}
+.preset-avatar-thumb:hover {
+    border-color: #00f0ff;
+    transform: scale(1.08);
+}
+.preset-avatar-thumb.selected {
+    border-color: #00f0ff;
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+}
+.channel-banner-inputs {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+.channel-banner-inputs input {
+    flex: 1;
+}
+
+/* Входящие сообщения канала в модальном окне */
+.channel-inbox-user-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 1px solid transparent;
+}
+.channel-inbox-user-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.channel-inbox-user-item.active {
+    background: rgba(0, 240, 255, 0.1);
+    border-color: rgba(0, 240, 255, 0.3);
+}
+.channel-inbox-user-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.channel-inbox-user-info {
+    flex: 1;
+    overflow: hidden;
+}
+.channel-inbox-user-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #f8fafc;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.channel-inbox-user-msg {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
