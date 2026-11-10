@@ -152,7 +152,7 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	req.Content = strings.TrimSpace(req.Content)
 
-	if req.Content == "" && req.ImageURL == "" && req.MusicURL == "" {
+	if req.Content == "" && req.ImageURL == "" && req.MusicURL == "" && req.PollID == nil {
 
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "публикация не может быть пустой"})
 
@@ -162,7 +162,7 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	req.ImageURL = strings.TrimSpace(req.ImageURL)
 
-	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist)
+	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, req.ChannelID, req.PollID)
 
 	if err != nil {
 
@@ -230,12 +230,13 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	hasContent := req.Content != ""
 	hasImage := req.ImageURL != nil && strings.TrimSpace(*req.ImageURL) != ""
 	hasMusic := req.MusicURL != nil && strings.TrimSpace(*req.MusicURL) != ""
-	if !hasContent && !hasImage && !hasMusic {
+	hasPoll := req.PollID != nil && *req.PollID > 0
+	if !hasContent && !hasImage && !hasMusic && !hasPoll {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "публикация не может быть полностью пустой"})
 		return
 	}
 
-	post, err := h.postRepo.UpdatePost(postID, authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist)
+	post, err := h.postRepo.UpdatePost(postID, authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, req.PollID)
 
 	if err != nil {
 

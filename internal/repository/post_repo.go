@@ -7,6 +7,7 @@ import (
 
 	"strings"
 
+	"math"
 	"social-network/internal/models"
 
 	"github.com/lib/pq"
@@ -45,21 +46,16 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 	query := `
 
 	SELECT 
-
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
-
+		p.channel_id, p.poll_id,
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
-
 		COALESCE(p.likes_count, 0) as likes_count,
-
 		COALESCE(p.comments_count, 0) as comments_count,
-
-		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked
-
+		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked,
+		ch.id, COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, ''), COALESCE(ch.subscribers_count, 0)
 	FROM posts p
-
 	JOIN users u ON u.id = p.user_id
-
+	LEFT JOIN channels ch ON ch.id = p.channel_id
 	WHERE 1=1
 
 	`
@@ -164,17 +160,27 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 		var p models.Post
 
+		var chID sql.NullInt64
+		var chName, chHandle, chAvatar sql.NullString
+		var chSubs sql.NullInt64
 		if err := rows.Scan(
-
 			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
-
+			&p.ChannelID, &p.PollID,
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
-
 			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
+			&chID, &chName, &chHandle, &chAvatar, &chSubs,
 		); err != nil {
-
 			return nil, fmt.Errorf("scan post: %w", err)
-
+		}
+		if chID.Valid {
+			cID := int(chID.Int64)
+			p.Channel = &models.Channel{
+				ID:               cID,
+				Name:             chName.String,
+				Handle:           chHandle.String,
+				AvatarURL:        chAvatar.String,
+				SubscribersCount: int(chSubs.Int64),
+			}
 		}
 
 		p.Comments = []models.Comment{}
@@ -208,8 +214,8 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 
 	}
 
+	r.attachPollsToPosts(posts, currentUserID)
 	return posts, nil
-
 }
 
 func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models.Post, error) {
@@ -217,22 +223,17 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 	query := `
 
 	SELECT 
-
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
-
+		p.channel_id, p.poll_id,
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
-
 		COALESCE(p.likes_count, 0) as likes_count,
-
 		COALESCE(p.comments_count, 0) as comments_count,
-
-		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked
-
+		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked,
+		ch.id, COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, ''), COALESCE(ch.subscribers_count, 0)
 	FROM posts p
-
 	JOIN users u ON u.id = p.user_id
-
-	WHERE p.user_id = $2
+	LEFT JOIN channels ch ON ch.id = p.channel_id
+	WHERE p.user_id = $2 AND p.channel_id IS NULL
 
 	ORDER BY p.created_at DESC
 
@@ -258,17 +259,27 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 
 		var p models.Post
 
+		var chID sql.NullInt64
+		var chName, chHandle, chAvatar sql.NullString
+		var chSubs sql.NullInt64
 		if err := rows.Scan(
-
 			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
-
+			&p.ChannelID, &p.PollID,
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
-
 			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
+			&chID, &chName, &chHandle, &chAvatar, &chSubs,
 		); err != nil {
-
-			return nil, fmt.Errorf("scan user post: %w", err)
-
+			return nil, fmt.Errorf("scan post: %w", err)
+		}
+		if chID.Valid {
+			cID := int(chID.Int64)
+			p.Channel = &models.Channel{
+				ID:               cID,
+				Name:             chName.String,
+				Handle:           chHandle.String,
+				AvatarURL:        chAvatar.String,
+				SubscribersCount: int(chSubs.Int64),
+			}
 		}
 
 		p.Comments = []models.Comment{}
@@ -302,29 +313,21 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 
 	}
 
+	r.attachPollsToPosts(posts, currentUserID)
 	return posts, nil
-
 }
 
-func (r *PostRepository) CreatePost(userID int, content, imageURL, musicURL, musicTitle, musicArtist string) (*models.Post, error) {
-
+func (r *PostRepository) CreatePost(userID int, content, imageURL, musicURL, musicTitle, musicArtist string, channelID, pollID *int) (*models.Post, error) {
 	var postID int
-
-	query := `INSERT INTO posts (user_id, content, image_url, music_url, music_title, music_artist) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
-
-	err := r.db.QueryRow(query, userID, content, imageURL, musicURL, musicTitle, musicArtist).Scan(&postID)
-
+	query := `INSERT INTO posts (user_id, content, image_url, music_url, music_title, music_artist, channel_id, poll_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`
+	err := r.db.QueryRow(query, userID, content, imageURL, musicURL, musicTitle, musicArtist, channelID, pollID).Scan(&postID)
 	if err != nil {
-
 		return nil, fmt.Errorf("create post: %w", err)
-
 	}
-
 	return r.GetPostByID(postID, userID)
-
 }
 
-func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL, musicURL, musicTitle, musicArtist *string) (*models.Post, error) {
+func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL, musicURL, musicTitle, musicArtist *string, pollID *int) (*models.Post, error) {
 	var err error
 	var updatedID int
 
@@ -335,12 +338,16 @@ func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL
 	    music_url = CASE WHEN $3::text IS NOT NULL THEN $3::text ELSE music_url END,
 	    music_title = CASE WHEN $4::text IS NOT NULL THEN $4::text ELSE music_title END,
 	    music_artist = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE music_artist END,
+	    poll_id = CASE 
+	        WHEN $8::int IS NOT NULL THEN (CASE WHEN $8::int <= 0 THEN NULL ELSE $8::int END)
+	        ELSE poll_id 
+	    END,
 	    is_edited = TRUE, 
 	    updated_at = NOW() 
 	WHERE id = $6 AND user_id = $7 
 	RETURNING id
 	`
-	err = r.db.QueryRow(query, content, imageURL, musicURL, musicTitle, musicArtist, postID, userID).Scan(&updatedID)
+	err = r.db.QueryRow(query, content, imageURL, musicURL, musicTitle, musicArtist, postID, userID, pollID).Scan(&updatedID)
 
 	if err != nil {
 		return nil, fmt.Errorf("post not found or unauthorized: %w", err)
@@ -350,39 +357,43 @@ func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL
 }
 
 func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, error) {
-
 	query := `
-
 	SELECT 
-
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
-
+		p.channel_id, p.poll_id,
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
-
 		COALESCE(p.likes_count, 0) as likes_count,
-
 		COALESCE(p.comments_count, 0) as comments_count,
-
-		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked
-
+		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked,
+		ch.id, COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, ''), COALESCE(ch.subscribers_count, 0)
 	FROM posts p
-
 	JOIN users u ON u.id = p.user_id
-
+	LEFT JOIN channels ch ON ch.id = p.channel_id
 	WHERE p.id = $2
-
 	`
 
 	var p models.Post
+	var chID sql.NullInt64
+	var chName, chHandle, chAvatar sql.NullString
+	var chSubs sql.NullInt64
 
 	err := r.db.QueryRow(query, currentUserID, postID).Scan(
-
 		&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
-
+		&p.ChannelID, &p.PollID,
 		&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
-
 		&p.LikesCount, &p.CommentsCount, &p.IsLiked,
+		&chID, &chName, &chHandle, &chAvatar, &chSubs,
 	)
+	if err == nil && chID.Valid {
+		cID := int(chID.Int64)
+		p.Channel = &models.Channel{
+			ID:               cID,
+			Name:             chName.String,
+			Handle:           chHandle.String,
+			AvatarURL:        chAvatar.String,
+			SubscribersCount: int(chSubs.Int64),
+		}
+	}
 
 	if err != nil {
 
@@ -394,6 +405,10 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 	if len(p.Comments) > p.CommentsCount {
 		p.CommentsCount = len(p.Comments)
 	}
+
+	postsSlice := []models.Post{p}
+	r.attachPollsToPosts(postsSlice, currentUserID)
+	p = postsSlice[0]
 
 	return &p, nil
 
@@ -767,4 +782,186 @@ func (r *PostRepository) DeletePost(postID, userID int) error {
 
 	return nil
 
+}
+
+
+func (r *PostRepository) attachPollsToPosts(posts []models.Post, currentUserID int) {
+	if len(posts) == 0 {
+		return
+	}
+	var pollIDs []int
+	for _, p := range posts {
+		if p.PollID != nil && *p.PollID > 0 {
+			pollIDs = append(pollIDs, *p.PollID)
+		}
+	}
+	if len(pollIDs) == 0 {
+		return
+	}
+
+	rows, err := r.db.Query(`
+		SELECT id, creator_id, question, is_multiple, is_anonymous, total_votes, created_at
+		FROM polls WHERE id = ANY($1)
+	`, pq.Array(pollIDs))
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	pollsMap := make(map[int]*models.Poll)
+	for rows.Next() {
+		var poll models.Poll
+		if err := rows.Scan(&poll.ID, &poll.CreatorID, &poll.Question, &poll.IsMultiple, &poll.IsAnonymous, &poll.TotalVotes, &poll.CreatedAt); err == nil {
+			poll.Options = make([]models.PollOption, 0)
+			poll.UserVotedOptionIDs = make([]int, 0)
+			pollsMap[poll.ID] = &poll
+		}
+	}
+
+	optRows, err := r.db.Query(`
+		SELECT id, poll_id, text, votes_count
+		FROM poll_options WHERE poll_id = ANY($1)
+		ORDER BY id ASC
+	`, pq.Array(pollIDs))
+	if err == nil {
+		defer optRows.Close()
+		for optRows.Next() {
+			var opt models.PollOption
+			if err := optRows.Scan(&opt.ID, &opt.PollID, &opt.Text, &opt.VotesCount); err == nil {
+				if poll, ok := pollsMap[opt.PollID]; ok {
+					poll.Options = append(poll.Options, opt)
+				}
+			}
+		}
+	}
+
+	if currentUserID > 0 {
+		vRows, err := r.db.Query(`
+			SELECT poll_id, option_id
+			FROM poll_votes WHERE poll_id = ANY($1) AND user_id = $2
+		`, pq.Array(pollIDs), currentUserID)
+		if err == nil {
+			defer vRows.Close()
+			for vRows.Next() {
+				var pID, oID int
+				if err := vRows.Scan(&pID, &oID); err == nil {
+					if poll, ok := pollsMap[pID]; ok {
+						poll.UserVotedOptionIDs = append(poll.UserVotedOptionIDs, oID)
+						poll.HasVoted = true
+						for i := range poll.Options {
+							if poll.Options[i].ID == oID {
+								poll.Options[i].IsVoted = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for _, poll := range pollsMap {
+		for i := range poll.Options {
+			opt := &poll.Options[i]
+			if poll.TotalVotes > 0 {
+				opt.Percentage = math.Round((float64(opt.VotesCount) / float64(poll.TotalVotes)) * 100)
+			} else {
+				opt.Percentage = 0
+			}
+		}
+	}
+
+	for i := range posts {
+		if posts[i].PollID != nil {
+			if poll, ok := pollsMap[*posts[i].PollID]; ok {
+				posts[i].Poll = poll
+			}
+		}
+	}
+}
+
+func (r *PostRepository) GetChannelPosts(channelID, currentUserID int, limit, offset int) ([]models.Post, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := `
+	SELECT 
+		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
+		p.channel_id, p.poll_id,
+		u.id, u.username, u.display_name, u.avatar_url, u.bio,
+		COALESCE(p.likes_count, 0) as likes_count,
+		COALESCE(p.comments_count, 0) as comments_count,
+		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked,
+		ch.id, COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, ''), COALESCE(ch.subscribers_count, 0)
+	FROM posts p
+	JOIN users u ON u.id = p.user_id
+	LEFT JOIN channels ch ON ch.id = p.channel_id
+	WHERE p.channel_id = $2
+	ORDER BY p.created_at DESC
+	LIMIT $3 OFFSET $4
+	`
+
+	rows, err := r.db.Query(query, currentUserID, channelID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("query channel posts: %w", err)
+	}
+	defer rows.Close()
+
+	var posts []models.Post
+	var postIDs []int
+
+	for rows.Next() {
+		var p models.Post
+		var chID sql.NullInt64
+		var chName, chHandle, chAvatar sql.NullString
+		var chSubs sql.NullInt64
+
+		if err := rows.Scan(
+			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
+			&p.ChannelID, &p.PollID,
+			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
+			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
+			&chID, &chName, &chHandle, &chAvatar, &chSubs,
+		); err != nil {
+			return nil, fmt.Errorf("scan channel post: %w", err)
+		}
+
+		if chID.Valid {
+			cID := int(chID.Int64)
+			p.Channel = &models.Channel{
+				ID:               cID,
+				Name:             chName.String,
+				Handle:           chHandle.String,
+				AvatarURL:        chAvatar.String,
+				SubscribersCount: int(chSubs.Int64),
+			}
+		}
+
+		p.Comments = []models.Comment{}
+		posts = append(posts, p)
+		postIDs = append(postIDs, p.ID)
+	}
+
+	if len(postIDs) > 0 {
+		commentsMap, err := r.GetCommentsByPostIDs(postIDs)
+		if err == nil {
+			for i := range posts {
+				if cmts, ok := commentsMap[posts[i].ID]; ok {
+					posts[i].Comments = cmts
+					if len(cmts) > posts[i].CommentsCount {
+						posts[i].CommentsCount = len(cmts)
+					}
+				}
+			}
+		}
+	}
+
+	r.attachPollsToPosts(posts, currentUserID)
+	return posts, nil
 }

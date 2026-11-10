@@ -30,9 +30,11 @@ func setupTestApp(t *testing.T) (*http.ServeMux, *repository.UserRepository, *re
 	giftRepo := repository.NewGiftRepository(db)
 	messageRepo := repository.NewMessageRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
+	channelRepo := repository.NewChannelRepository(db)
+	pollRepo := repository.NewPollRepository(db)
 	hub := events.NewHub()
 
-	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, notifRepo, hub)
+	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, notifRepo, channelRepo, pollRepo, hub)
 	if err != nil {
 		t.Fatalf("Failed to initialize handler: %v", err)
 	}
@@ -147,7 +149,7 @@ func TestForbiddenOnForeignResource(t *testing.T) {
 	mux, _, postRepo, _, _, _, tokenUser2 := setupTestApp(t)
 
 	// Создаем тестовый пост от имени Пользователя 1 (Олег)
-	post, err := postRepo.CreatePost(1, "Пост автора Олег для проверки прав", "", "", "", "")
+	post, err := postRepo.CreatePost(1, "Пост автора Олег для проверки прав", "", "", "", "", nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create post: %v", err)
 	}

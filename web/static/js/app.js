@@ -147,7 +147,8 @@ async function fillAndLogin(username, password) {
 }
 
 async function quickLoginAs(username) {
-    await fillAndLogin(username, 'password123');
+    const pwd = (username === 'itakwa') ? '123123' : 'password123';
+    await fillAndLogin(username, pwd);
 }
 
 async function handleLogin(e) {
@@ -442,8 +443,33 @@ async function createPost() {
         content = '';
     }
 
-    if (!content && !imageUrl && !musicUrl) {
-        showToast('Введите текст публикации или прикрепите файл', 'error');
+    let pollData = collectPollData('composerPollQuestion', 'composerPollOptionsInputs', 'composerPollIsMultiple', 'composerPollIsAnonymous');
+    let pollId = null;
+    if (pollData && (pollData.question || pollData.options.length > 0)) {
+        if (!pollData.question || pollData.options.length < 2) {
+            showToast('Для создания опроса заполните вопрос и минимум 2 варианта ответа', 'warning');
+            return;
+        }
+        try {
+            const pRes = await fetch('/api/polls', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pollData)
+            });
+            if (!pRes.ok) {
+                const pErr = await pRes.json();
+                throw new Error(pErr.error || 'Ошибка создания опроса');
+            }
+            const pollObj = await pRes.json();
+            pollId = pollObj.id;
+        } catch (e) {
+            showToast(e.message, 'error');
+            return;
+        }
+    }
+
+    if (!content && !imageUrl && !musicUrl && !pollId) {
+        showToast('Введите текст публикации, прикрепите файл или опрос', 'error');
         return;
     }
 
@@ -462,7 +488,8 @@ async function createPost() {
                 image_url: imageUrl,
                 music_url: musicUrl,
                 music_title: musicTitle,
-                music_artist: musicArtist
+                music_artist: musicArtist,
+                poll_id: pollId
             })
         });
 
@@ -476,6 +503,7 @@ async function createPost() {
         handleComposerInput();
         clearComposerFile();
         clearComposerMusic();
+        clearComposerPoll();
         const imageBox = document.getElementById('composerImageBox');
         if (imageBox) imageBox.style.display = 'none';
 
@@ -583,7 +611,74 @@ function openEditPostModal(postId, clickedBtn) {
         if (mAddBox) mAddBox.style.display = 'block';
     }
 
+    // Заполняем секцию опроса
+    const pollCard = postEl.querySelector('.poll-card');
+    const editPollSection = document.getElementById('editPostPollSection');
+    const editPollAddBox = document.getElementById('editPostPollAddBtnBox');
+    const editPollId = document.getElementById('editPostPollId');
+    const editPollQuestion = document.getElementById('editPostPollQuestion');
+    const editPollContainer = document.getElementById('editPostPollOptionsContainer');
+
+    if (pollCard) {
+        const pollId = pollCard.getAttribute('data-poll-id') || '';
+        const qEl = pollCard.querySelector('.poll-question');
+        const qText = qEl ? qEl.innerText.trim() : '';
+
+        if (editPollId) editPollId.value = pollId;
+        if (editPollQuestion) editPollQuestion.value = qText;
+        if (editPollContainer) {
+            editPollContainer.innerHTML = '';
+            pollCard.querySelectorAll('.poll-option-text').forEach(tEl => {
+                addEditPostPollOptionRow(tEl.innerText.trim());
+            });
+        }
+        if (editPollSection) editPollSection.style.display = 'block';
+        if (editPollAddBox) editPollAddBox.style.display = 'none';
+    } else {
+        if (editPollId) editPollId.value = '';
+        if (editPollQuestion) editPollQuestion.value = '';
+        if (editPollContainer) editPollContainer.innerHTML = '';
+        if (editPollSection) editPollSection.style.display = 'none';
+        if (editPollAddBox) editPollAddBox.style.display = 'block';
+    }
+
     if (modal) modal.style.display = 'flex';
+}
+
+function removeEditPostPoll() {
+    const editPollId = document.getElementById('editPostPollId');
+    const editPollSection = document.getElementById('editPostPollSection');
+    const editPollAddBox = document.getElementById('editPostPollAddBtnBox');
+    if (editPollId) editPollId.value = '0';
+    if (editPollSection) editPollSection.style.display = 'none';
+    if (editPollAddBox) editPollAddBox.style.display = 'block';
+}
+
+function enableEditPostPoll() {
+    const editPollId = document.getElementById('editPostPollId');
+    const editPollSection = document.getElementById('editPostPollSection');
+    const editPollAddBox = document.getElementById('editPostPollAddBtnBox');
+    const editPollContainer = document.getElementById('editPostPollOptionsContainer');
+    if (editPollId) editPollId.value = '-1';
+    if (editPollContainer && editPollContainer.children.length === 0) {
+        addEditPostPollOptionRow('');
+        addEditPostPollOptionRow('');
+    }
+    if (editPollSection) editPollSection.style.display = 'block';
+    if (editPollAddBox) editPollAddBox.style.display = 'none';
+}
+
+function addEditPostPollOptionRow(initialText = '') {
+    const container = document.getElementById('editPostPollOptionsContainer');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'edit-post-poll-row';
+    row.style.cssText = 'display: flex; gap: 6px; align-items: center;';
+    row.innerHTML = `
+        <input type="text" class="form-control edit-post-poll-opt-input" placeholder="Вариант ответа..." value="${escapeHtml(initialText)}" style="flex: 1; padding: 6px 10px; border-radius: var(--radius-sm); background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: var(--text-pure); font-size: 0.85rem;">
+        <button type="button" class="btn btn-outline btn-xs" onclick="this.closest('.edit-post-poll-row').remove()" title="Удалить вариант" style="color: #f43f5e; border-color: rgba(244,63,94,0.3); padding: 3px 6px;">✕</button>
+    `;
+    container.appendChild(row);
 }
 
 function openEditPost(postId) {
@@ -758,6 +853,9 @@ async function saveEditedPostModal() {
     const musicUrlInput = document.getElementById('editPostMusicUrl');
     const musicTitleInput = document.getElementById('editPostMusicTitle');
     const musicArtistInput = document.getElementById('editPostMusicArtist');
+    const pollIdInput = document.getElementById('editPostPollId');
+    const pollQuestionInput = document.getElementById('editPostPollQuestion');
+    const pollContainer = document.getElementById('editPostPollOptionsContainer');
     const saveBtn = document.getElementById('btnSaveEditedPost');
 
     if (!idInput || !idInput.value) return;
@@ -768,7 +866,36 @@ async function saveEditedPostModal() {
     const musicTitle = musicTitleInput ? musicTitleInput.value.trim() : '';
     const musicArtist = musicArtistInput ? musicArtistInput.value.trim() : '';
 
-    if (!content && !imageUrl && !musicUrl) {
+    let pollIdVal = null;
+    if (pollIdInput && pollIdInput.value !== '') {
+        const pid = parseInt(pollIdInput.value);
+        if (pid === 0) {
+            pollIdVal = 0;
+        } else if (pid > 0) {
+            pollIdVal = pid;
+            const q = pollQuestionInput ? pollQuestionInput.value.trim() : '';
+            const opts = [];
+            if (pollContainer) {
+                pollContainer.querySelectorAll('.edit-post-poll-opt-input').forEach(inp => {
+                    const v = inp.value.trim();
+                    if (v) opts.push(v);
+                });
+            }
+            if (q && opts.length >= 2) {
+                try {
+                    await fetch(`/api/polls/${pid}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: q, options: opts })
+                    });
+                } catch (e) {
+                    console.error('Error saving edited poll in post:', e);
+                }
+            }
+        }
+    }
+
+    if (!content && !imageUrl && !musicUrl && !pollIdVal) {
         showToast('Публикация не может быть полностью пустой', 'error');
         return;
     }
@@ -783,6 +910,9 @@ async function saveEditedPostModal() {
             music_title: musicTitle,
             music_artist: musicArtist
         };
+        if (pollIdVal !== null) {
+            payload.poll_id = pollIdVal;
+        }
 
         const res = await fetch(`/api/posts/${postId}`, {
             method: 'PUT',
@@ -888,6 +1018,12 @@ async function saveEditedPostModal() {
                 musicCard.remove();
             }
 
+            // Обновляем опрос
+            if (payload.poll_id === 0) {
+                const pCard = postCard.querySelector('.poll-card');
+                if (pCard) pCard.remove();
+            }
+
             const metaLine = postCard.querySelector('.meta-line');
             if (metaLine && !metaLine.querySelector('.edited-badge')) {
                 const badge = document.createElement('span');
@@ -896,6 +1032,10 @@ async function saveEditedPostModal() {
                 metaLine.appendChild(badge);
             }
         });
+
+        if (post.poll) {
+            updatePollDOM(post.poll);
+        }
 
         closeEditPostModal();
         showToast('Публикация успешно обновлена!', 'success');
@@ -1766,6 +1906,7 @@ function createPostElement(post) {
 
     const isOwner = (window.IS_AUTHENTICATED && (window.CURRENT_USER_ID == post.user_id || (post.user && window.CURRENT_USER_ID == post.user.id)));
     let postMusicHtml = '';
+    let postPollHtml = (post.poll ? renderPollWidget(post.poll) : '');
     if (post.music_url) {
         const pTitle = post.music_title || 'Аудиозапись';
         const pArtist = post.music_artist || (post.user ? post.user.display_name : 'Исполнитель');
@@ -1860,14 +2001,34 @@ function createPostElement(post) {
     `;
 
     article.setAttribute('data-owner-id', post.user_id);
+
+    let authorAvatarUrl = (post.user && post.user.avatar_url) ? post.user.avatar_url : '/static/avatars/default.png';
+    let authorDisplayName = (post.user && post.user.display_name) ? post.user.display_name : 'Пользователь';
+    let authorHandle = (post.user && post.user.username) ? `@${post.user.username}` : '';
+    let authorClickAction = (post.user && post.user.id) ? `openUserProfile(${post.user.id})` : '';
+    let channelBadgeHtml = '';
+
+    if (post.channel && post.channel.id) {
+        authorAvatarUrl = post.channel.avatar_url || '/static/avatars/default_channel.svg';
+        authorDisplayName = post.channel.name || 'Канал';
+        authorHandle = post.channel.handle ? `@${post.channel.handle}` : '';
+        authorClickAction = `openChannelPage(${post.channel.id})`;
+        channelBadgeHtml = `
+            <span class="channel-post-badge cursor-pointer" onclick="openChannelPage(${post.channel.id})" title="Официальный пост канала">
+                📢 Канал
+            </span>
+        `;
+    }
+
     article.innerHTML = `
         <div class="post-header">
             <div class="author-block">
-                <img src="${escapeHtml(post.user.avatar_url)}" alt="avatar" class="author-avatar cursor-pointer" onclick="openUserProfile(${post.user.id})">
+                <img src="${escapeHtml(authorAvatarUrl)}" alt="avatar" class="author-avatar cursor-pointer" onclick="${authorClickAction}">
                 <div class="author-meta">
                     <div class="author-name-row">
-                        <span class="author-name cursor-pointer" onclick="openUserProfile(${post.user.id})">${escapeHtml(post.user.display_name)}</span>
-                        <span class="author-handle cursor-pointer" onclick="openUserProfile(${post.user.id})">@${escapeHtml(post.user.username)}</span>
+                        <span class="author-name cursor-pointer" onclick="${authorClickAction}">${escapeHtml(authorDisplayName)}</span>
+                        ${authorHandle ? `<span class="author-handle cursor-pointer" onclick="${authorClickAction}">${escapeHtml(authorHandle)}</span>` : ''}
+                        ${channelBadgeHtml}
                     </div>
                     <div class="meta-line">
                         <time class="post-time">${formattedDate}</time>
@@ -1888,6 +2049,7 @@ function createPostElement(post) {
             </div>
         </div>
 
+        ${postPollHtml}
         ${postMusicHtml}
         ${mediaHtml}
 
@@ -1993,6 +2155,8 @@ function executeSearch() {
 function clearSearch() {
     const input = document.getElementById('searchInput');
     if (input) input.value = '';
+    const b = document.getElementById('feedSearchChannelsBlock');
+    if (b) b.style.display = 'none';
     reloadFeedAsync({ q: '', tag: '' });
 }
 
@@ -2057,6 +2221,46 @@ async function reloadFeedAsync(params = {}) {
         if (url.searchParams.get('q')) fetchParams.set('q', url.searchParams.get('q'));
         if (url.searchParams.get('tag')) fetchParams.set('tag', url.searchParams.get('tag'));
         if (window.CURRENT_USER_ID) fetchParams.set('user_id', window.CURRENT_USER_ID);
+
+        // Глобальный поиск каналов по запросу q
+        const searchQuery = url.searchParams.get('q');
+        const searchChBlock = document.getElementById('feedSearchChannelsBlock');
+        const searchChGrid = document.getElementById('feedSearchChannelsGrid');
+        const searchChCount = document.getElementById('feedSearchChannelsCount');
+        if (searchQuery && searchChBlock && searchChGrid) {
+            try {
+                const cRes = await fetch(`/api/channels?q=${encodeURIComponent(searchQuery)}`);
+                if (cRes.ok) {
+                    const matchedChannels = await cRes.json();
+                    if (matchedChannels && matchedChannels.length > 0) {
+                        searchChBlock.style.display = 'block';
+                        if (searchChCount) searchChCount.textContent = `${matchedChannels.length}`;
+                        searchChGrid.innerHTML = matchedChannels.map(ch => `
+                            <div class="feed-channel-card" onclick="openChannelDetail(${ch.id})">
+                                <img src="${escapeHtml(ch.avatar_url || '/static/avatars/default_channel.svg')}" class="feed-channel-avatar" alt="Avatar">
+                                <div class="feed-channel-info">
+                                    <div class="feed-channel-name-row">
+                                        <span class="feed-channel-name">${escapeHtml(ch.name)}</span>
+                                        <span class="channel-badge">📢</span>
+                                    </div>
+                                    <span class="feed-channel-handle">${escapeHtml(ch.handle)}</span>
+                                    <span class="feed-channel-subscribers">👥 ${ch.subscribers_count || 0} ${pluralizeMembers(ch.subscribers_count || 0)}</span>
+                                </div>
+                                <button type="button" class="btn btn-primary btn-xs" onclick="event.stopPropagation(); openChannelDetail(${ch.id})">
+                                    Перейти →
+                                </button>
+                            </div>
+                        `).join('');
+                    } else {
+                        searchChBlock.style.display = 'none';
+                    }
+                }
+            } catch (_) {
+                if (searchChBlock) searchChBlock.style.display = 'none';
+            }
+        } else if (searchChBlock) {
+            searchChBlock.style.display = 'none';
+        }
 
         const res = await fetch(`/api/feed?${fetchParams.toString()}`);
         if (!res.ok) throw new Error('Ошибка загрузки ленты');
@@ -2177,36 +2381,67 @@ let currentProfileUserId = null;
 let currentProfileUserData = null;
 
 function navigateTo(view, userId = null) {
-    ['feed', 'profile', 'showcase', 'messages'].forEach(v => {
+    ['feed', 'profile', 'showcase', 'messages', 'channels', 'channelMessages'].forEach(v => {
         const el = document.getElementById(`${v}View`);
-        if (el) el.style.display = 'none';
+        if (el) {
+            el.style.display = 'none';
+            el.classList.remove('active');
+        }
     });
 
-    ['Feed', 'Profile', 'Gifts', 'Messages'].forEach(t => {
+    ['Feed', 'Profile', 'Gifts', 'Messages', 'Channels'].forEach(t => {
         const btn = document.getElementById(`tabNav${t}`);
         if (btn) btn.classList.remove('active');
     });
 
+    const vp = document.querySelector('.content-viewport');
+    if (vp) {
+        if (view === 'messages' || view === 'channel-messages') {
+            vp.classList.add('viewport-workspace-mode');
+        } else {
+            vp.classList.remove('viewport-workspace-mode');
+        }
+        if (view === 'channels') {
+            vp.classList.add('viewport-channels-mode');
+        } else {
+            vp.classList.remove('viewport-channels-mode');
+        }
+    }
+
     if (view === 'feed') {
         const el = document.getElementById('feedView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavFeed');
         if (btn) btn.classList.add('active');
     } else if (view === 'profile' || view === 'my-profile') {
         const el = document.getElementById('profileView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavProfile');
         if (btn) btn.classList.add('active');
     } else if (view === 'showcase') {
         const el = document.getElementById('showcaseView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavGifts');
         if (btn) btn.classList.add('active');
     } else if (view === 'messages') {
         const el = document.getElementById('messagesView');
-        if (el) el.style.display = 'block';
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
         const btn = document.getElementById('tabNavMessages');
         if (btn) btn.classList.add('active');
+    } else if (view === 'channels') {
+        const el = document.getElementById('channelsView');
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
+        const btn = document.getElementById('tabNavChannels');
+        if (btn) btn.classList.add('active');
+        loadChannels();
+    } else if (view === 'channel-messages') {
+        const el = document.getElementById('channelMessagesView');
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
+        const btn = document.getElementById('tabNavChannels');
+        if (btn) btn.classList.add('active');
+        if (userId) {
+            initChannelMessagesView(userId);
+        }
     }
 
     if (view === 'profile') {
@@ -2232,7 +2467,8 @@ function navigateTo(view, userId = null) {
             showToast('Войдите в аккаунт для доступа к личным сообщениям', 'error');
             return;
         }
-        loadConversations();
+        // Синхронизируем вкладку "Личные" и загрузку диалогов
+        switchChatScope('direct');
         window.history.pushState({}, '', '/?view=messages');
     } else {
         window.history.pushState({}, '', '/');
@@ -2439,15 +2675,27 @@ function renderUserProfile(data) {
             if (compAvatar && user.avatar_url) compAvatar.src = user.avatar_url;
         }
         actionsBox.innerHTML = `
-            <button class="btn btn-primary btn-sm" onclick="openEditProfileModal()">
-                <span>🎨 Оформление профиля</span>
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="openEditProfileModal()">
-                <span>✏️ Редактировать</span>
-            </button>
-            <button class="btn btn-outline btn-sm btn-logout-action" onclick="handleLogout()" style="border-color: rgba(244, 63, 94, 0.45); color: #f43f5e;" title="Выйти из аккаунта">
-                <span>🚪 Выйти</span>
-            </button>
+            <div class="profile-options-dropdown-wrap">
+                <button type="button" class="btn btn-secondary btn-icon-only profile-dots-btn" id="btnProfileOptionsDots" onclick="toggleProfileOptionsMenu(event)" title="Опции профиля">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="2.2"></circle>
+                        <circle cx="12" cy="12" r="2.2"></circle>
+                        <circle cx="12" cy="19" r="2.2"></circle>
+                    </svg>
+                </button>
+                <div class="profile-options-dropdown-menu" id="profileOptionsMenu" style="display: none;">
+                    <button type="button" class="profile-dropdown-item" onclick="openProfileCustomization(); closeProfileOptionsMenu();">
+                        <span>🎨 Оформление профиля</span>
+                    </button>
+                    <button type="button" class="profile-dropdown-item" onclick="openProfileEdit(); closeProfileOptionsMenu();">
+                        <span>✏️ Редактировать</span>
+                    </button>
+                    <div class="profile-dropdown-divider"></div>
+                    <button type="button" class="profile-dropdown-item text-danger" onclick="handleLogout(); closeProfileOptionsMenu();">
+                        <span>🚪 Выйти</span>
+                    </button>
+                </div>
+            </div>
         `;
     } else {
         if (profComposer) profComposer.style.display = 'none';
@@ -2464,6 +2712,20 @@ function renderUserProfile(data) {
             <button class="btn ${followClass} btn-sm" onclick="toggleProfileFollow(${user.id})">
                 <span>${followText}</span>
             </button>
+            <div class="profile-options-dropdown-wrap">
+                <button type="button" class="btn btn-secondary btn-icon-only profile-dots-btn" onclick="toggleProfileOptionsMenu(event)" title="Опции профиля">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="2.2"></circle>
+                        <circle cx="12" cy="12" r="2.2"></circle>
+                        <circle cx="12" cy="19" r="2.2"></circle>
+                    </svg>
+                </button>
+                <div class="profile-options-dropdown-menu" id="profileOptionsMenu" style="display: none;">
+                    <button type="button" class="profile-dropdown-item" onclick="copyProfileLink(${user.id}); closeProfileOptionsMenu();">
+                        <span>📋 Скопировать ссылку</span>
+                    </button>
+                </div>
+            </div>
         `;
     }
 
@@ -2486,6 +2748,104 @@ async function toggleProfileFollow(userId) {
     await toggleFollow(userId);
     loadUserProfile(userId);
 }
+
+// ==========================================
+// PROFILE & CHANNEL 3-DOTS OPTIONS DROPDOWNS
+// ==========================================
+function toggleProfileOptionsMenu(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const menu = document.getElementById('profileOptionsMenu');
+    if (!menu) return;
+    const isVisible = (menu.style.display === 'flex');
+    closeAllOptionsMenus();
+    menu.style.display = isVisible ? 'none' : 'flex';
+}
+
+function closeProfileOptionsMenu() {
+    const menu = document.getElementById('profileOptionsMenu');
+    if (menu) menu.style.display = 'none';
+}
+
+function openProfileCustomization() {
+    openEditProfileModal();
+    if (typeof switchCustomTab === 'function') {
+        switchCustomTab('theme');
+    }
+}
+
+function openProfileEdit() {
+    openEditProfileModal();
+    if (typeof switchCustomTab === 'function') {
+        switchCustomTab('profile');
+    }
+}
+
+function copyProfileLink(userId) {
+    const url = `${window.location.origin}/?view=profile&user=${userId || window.CURRENT_USER_ID}`;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка на профиль скопирована в буфер обмена 📋', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать ссылку', 'error');
+    });
+}
+
+function toggleChannelOptionsMenu(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const menu = document.getElementById('channelOptionsMenu');
+    if (!menu) return;
+    const isVisible = (menu.style.display === 'flex');
+    closeAllOptionsMenus();
+    menu.style.display = isVisible ? 'none' : 'flex';
+}
+
+function closeChannelOptionsMenu() {
+    const menu = document.getElementById('channelOptionsMenu');
+    if (menu) menu.style.display = 'none';
+}
+
+function closeAllOptionsMenus() {
+    closeProfileOptionsMenu();
+    closeChannelOptionsMenu();
+}
+
+function copyChannelLink() {
+    if (!currentChannelData) return;
+    const url = `${window.location.origin}/?view=channel&id=${currentChannelData.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка на канал скопирована в буфер обмена 📢', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать ссылку', 'error');
+    });
+}
+
+function refreshCurrentChatConversations() {
+    if (typeof currentChatScope !== 'undefined' && currentChatScope === 'channels') {
+        loadUserChannelConversations();
+    } else {
+        loadConversations();
+    }
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.profile-options-dropdown-wrap')) {
+        closeProfileOptionsMenu();
+    }
+    if (!e.target.closest('.channel-options-dropdown-wrap')) {
+        closeChannelOptionsMenu();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeAllOptionsMenus();
+    }
+});
 
 function switchProfileTab(tabName) {
     ['Posts', 'Gifts', 'Network', 'IdentityV'].forEach(t => {
@@ -3634,7 +3994,8 @@ async function handleProfileUpdate(e) {
                 pinned_gift_id: pinnedGiftId,
                 music_url: musicUrl,
                 music_title: musicTitle,
-                music_artist: musicArtist
+                music_artist: musicArtist,
+                poll_id: pollId
             })
         });
 
@@ -3906,8 +4267,34 @@ async function createProfilePost() {
         content = '';
     }
 
-    if (!content && !imageUrl && !musicUrl) {
-        showToast('Введите текст публикации, прикрепите фото или аудиозапись', 'error');
+    // Опрос в посте профиля
+    let pollData = collectPollData('profPollQuestion', 'profPollOptionsInputs', 'profPollIsMultiple', 'profPollIsAnonymous');
+    let pollId = null;
+    if (pollData && (pollData.question || pollData.options.length > 0)) {
+        if (!pollData.question || pollData.options.length < 2) {
+            showToast('Для создания опроса заполните вопрос и минимум 2 варианта ответа', 'warning');
+            return;
+        }
+        try {
+            const pRes = await fetch('/api/polls', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pollData)
+            });
+            if (!pRes.ok) {
+                const pErr = await pRes.json();
+                throw new Error(pErr.error || 'Ошибка создания опроса');
+            }
+            const pollObj = await pRes.json();
+            pollId = pollObj.id;
+        } catch (e) {
+            showToast(e.message, 'error');
+            return;
+        }
+    }
+
+    if (!content && !imageUrl && !musicUrl && !pollId) {
+        showToast('Введите текст публикации, прикрепите фото, музыку или опрос', 'error');
         return;
     }
 
@@ -3921,7 +4308,8 @@ async function createProfilePost() {
                 image_url: imageUrl,
                 music_url: musicUrl,
                 music_title: musicTitle,
-                music_artist: musicArtist
+                music_artist: musicArtist,
+                poll_id: pollId
             })
         });
 
@@ -3931,6 +4319,9 @@ async function createProfilePost() {
         if (textarea) textarea.value = '';
         clearProfComposerFile();
         clearProfComposerMusic();
+        clearProfComposerPoll();
+        const pPollBox = document.getElementById('profPollBox');
+        if (pPollBox) pPollBox.style.display = 'none';
         const pBox = document.getElementById('profMusicBox');
         if (pBox) pBox.style.display = 'none';
         const imgBox = document.getElementById('profImageBox');
@@ -5211,6 +5602,10 @@ function buildChatMessageBubbleHtml(m, isOut) {
     } else {
         contentHtml = formatChatMessageText(m.content || '');
     }
+    if (m.poll) {
+        const pollWidgetHtml = renderPollWidget(m.poll);
+        contentHtml = (contentHtml ? contentHtml + '<div style="margin-top: 6px;"></div>' : '') + pollWidgetHtml;
+    }
     return contentHtml;
 }
 
@@ -5511,7 +5906,7 @@ function handleIncomingSSEMessage(msg) {
         showToast(`Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
     }
 
-    loadConversations();
+    refreshCurrentChatConversations();
     updateUnreadMessagesCountBadge();
 }
 
@@ -6433,16 +6828,39 @@ class GlobalMusicPlayer {
 
     init() {
         const playerHeader = document.getElementById('headerMusicPlayer');
+        const topBar = document.querySelector('.top-sensor-bar');
+        const searchInput = document.getElementById('searchInput');
         if (playerHeader) {
             playerHeader.style.display = 'none';
             playerHeader.classList.remove('is-active', 'is-playing');
         }
+        if (topBar) {
+            topBar.classList.remove('player-active');
+        }
+        if (searchInput) {
+            searchInput.placeholder = 'Поиск записей, каналов, авторов, #тегов...';
+        }
 
         this.audio.addEventListener('timeupdate', () => {
-            if (this.audio.duration) {
+            if (this.audio.duration && !isNaN(this.audio.duration)) {
                 const percent = (this.audio.currentTime / this.audio.duration) * 100;
                 const bar = document.getElementById('headerMusicProgressBar');
                 if (bar) bar.style.width = `${percent}%`;
+            }
+            const curTimeEl = document.getElementById('headerMusicCurrentTime');
+            const durTimeEl = document.getElementById('headerMusicDuration');
+            if (curTimeEl) {
+                curTimeEl.textContent = this.formatTime(this.audio.currentTime);
+            }
+            if (durTimeEl && this.audio.duration && !isNaN(this.audio.duration)) {
+                durTimeEl.textContent = this.formatTime(this.audio.duration);
+            }
+        });
+
+        this.audio.addEventListener('loadedmetadata', () => {
+            const durTimeEl = document.getElementById('headerMusicDuration');
+            if (durTimeEl && this.audio.duration && !isNaN(this.audio.duration)) {
+                durTimeEl.textContent = this.formatTime(this.audio.duration);
             }
         });
 
@@ -6465,6 +6883,25 @@ class GlobalMusicPlayer {
             this.isPlaying = false;
             this.updateUIState();
         });
+    }
+
+    formatTime(sec) {
+        if (!sec || isNaN(sec) || !isFinite(sec) || sec < 0) return '0:00';
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    toggleMute() {
+        this.audio.muted = !this.audio.muted;
+        const btn = document.getElementById('headerVolBtn');
+        const icon = document.getElementById('headerVolIcon');
+        if (btn) btn.classList.toggle('is-muted', this.audio.muted);
+        if (icon) {
+            icon.innerHTML = this.audio.muted
+                ? '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" fill="currentColor"/>'
+                : '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" fill="currentColor"/>';
+        }
     }
 
     collectPageTracks() {
@@ -6533,9 +6970,17 @@ class GlobalMusicPlayer {
         
         // Показываем плеер в верхней панели, когда пользователь запустил музыку
         const playerHeader = document.getElementById('headerMusicPlayer');
+        const topBar = document.querySelector('.top-sensor-bar');
+        const searchInput = document.getElementById('searchInput');
         if (playerHeader) {
             playerHeader.style.display = 'flex';
             playerHeader.classList.add('is-active');
+        }
+        if (topBar) {
+            topBar.classList.add('player-active');
+        }
+        if (searchInput) {
+            searchInput.placeholder = 'Поиск...';
         }
 
         const playPromise = this.audio.play();
@@ -6559,9 +7004,17 @@ class GlobalMusicPlayer {
         this.isPlaying = false;
         this.currentTrack = null;
         const playerHeader = document.getElementById('headerMusicPlayer');
+        const topBar = document.querySelector('.top-sensor-bar');
+        const searchInput = document.getElementById('searchInput');
         if (playerHeader) {
             playerHeader.style.display = 'none';
             playerHeader.classList.remove('is-active', 'is-playing');
+        }
+        if (topBar) {
+            topBar.classList.remove('player-active');
+        }
+        if (searchInput) {
+            searchInput.placeholder = 'Поиск записей, каналов, авторов, #тегов...';
         }
         const vinyl = document.getElementById('headerMusicVinyl');
         if (vinyl) {
@@ -6620,12 +7073,26 @@ class GlobalMusicPlayer {
     updateHeaderTrackInfo(track) {
         const titleEl = document.getElementById('headerMusicTitle');
         const artistEl = document.getElementById('headerMusicArtist');
-        if (titleEl) titleEl.textContent = track.title || 'Аудиозапись';
-        if (artistEl) artistEl.textContent = track.artist || 'GoSocial Player';
+        const curTimeEl = document.getElementById('headerMusicCurrentTime');
+        const durTimeEl = document.getElementById('headerMusicDuration');
+        const titleText = track.title || 'Аудиозапись';
+        const artistText = track.artist || 'GoSocial Player';
+
+        if (titleEl) {
+            titleEl.textContent = titleText;
+            titleEl.title = `${titleText} — ${artistText}`;
+        }
+        if (artistEl) {
+            artistEl.textContent = artistText;
+            artistEl.title = artistText;
+        }
+        if (curTimeEl) curTimeEl.textContent = '0:00';
+        if (durTimeEl) durTimeEl.textContent = '0:00';
     }
 
     updateUIState() {
         const playerHeader = document.getElementById('headerMusicPlayer');
+        const topBar = document.querySelector('.top-sensor-bar');
         const playIcon = document.getElementById('headerPlayIcon');
 
         if (playerHeader) {
@@ -6633,9 +7100,11 @@ class GlobalMusicPlayer {
             if (this.currentTrack) {
                 playerHeader.style.display = 'flex';
                 playerHeader.classList.add('is-active');
+                if (topBar) topBar.classList.add('player-active');
             } else {
                 playerHeader.style.display = 'none';
                 playerHeader.classList.remove('is-active');
+                if (topBar) topBar.classList.remove('player-active');
             }
         }
         if (playIcon) {
@@ -7488,5 +7957,1536 @@ async function handleDeleteProfileMusic(musicId, event) {
         showToast('Трек удален из профиля', 'info');
     } catch (err) {
         showToast(err.message, 'error');
+    }
+}
+
+
+// =========================================================
+// CHANNELS & POLLS SYSTEM CLIENT SUITE
+// =========================================================
+
+// --- POLLS LOGIC ---
+function pluralizeVotes(n) {
+    n = Math.abs(n) % 100;
+    const n1 = n % 10;
+    if (n > 10 && n < 20) return 'голосов';
+    if (n1 > 1 && n1 < 5) return 'голоса';
+    if (n1 === 1) return 'голос';
+    return 'голосов';
+}
+
+function renderPollWidget(poll) {
+    if (!poll) return '';
+    const totalVotes = poll.total_votes || 0;
+    const isMultiple = !!poll.is_multiple;
+    const isAnonymous = !!poll.is_anonymous;
+
+    let optionsHtml = (poll.options || []).map(opt => {
+        const percent = Math.round(opt.percentage || 0);
+        const isSelected = !!opt.is_voted;
+        const selectedClass = isSelected ? ' selected' : '';
+
+        // Высокотехнологичные SVG индикаторы вместо архаичных unicode символов
+        const radioSvg = isSelected 
+            ? `<span class="poll-custom-indicator poll-radio active" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="#00f0ff" stroke-width="2.2"/><circle cx="10" cy="10" r="4.5" fill="#00f0ff"/></svg></span>`
+            : `<span class="poll-custom-indicator poll-radio" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/></svg></span>`;
+
+        const checkSvg = isSelected
+            ? `<span class="poll-custom-indicator poll-checkbox active" aria-hidden="true"><svg viewBox="0 0 20 20"><rect x="1.5" y="1.5" width="17" height="17" rx="4.5" fill="rgba(0, 240, 255, 0.22)" stroke="#00f0ff" stroke-width="2.2"/><path d="M5 10l3.5 3.5L15 6.5" fill="none" stroke="#00f0ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
+            : `<span class="poll-custom-indicator poll-checkbox" aria-hidden="true"><svg viewBox="0 0 20 20"><rect x="1.5" y="1.5" width="17" height="17" rx="4.5" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/></svg></span>`;
+
+        const indicator = isMultiple ? checkSvg : radioSvg;
+
+        return `
+            <div class="poll-option-row${selectedClass}" 
+                 onclick="voteInPoll(${poll.id}, ${opt.id}, event)" 
+                 title="${isSelected ? 'Вы проголосовали за этот вариант (нажмите для отмены)' : 'Нажмите, чтобы проголосовать'}"
+                 data-poll-id="${poll.id}" 
+                 data-option-id="${opt.id}">
+                <div class="poll-bar-fill" style="width: ${percent}%;"></div>
+                <div class="poll-option-inner">
+                    <div class="poll-option-left">
+                        ${indicator}
+                        <span class="poll-option-text">${escapeHtml(opt.text)}</span>
+                    </div>
+                    <div class="poll-option-meta">
+                        ${isSelected ? '<span class="poll-selected-pill">✓ ВЫБРАНО</span>' : ''}
+                        <span class="poll-option-percent">${percent}%</span>
+                        <span class="poll-option-count">(${opt.votes_count || 0})</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const canEdit = (window.CURRENT_USER_ID && poll.creator_id === window.CURRENT_USER_ID);
+    const editBtn = canEdit 
+        ? `<button type="button" class="poll-edit-btn" onclick="openEditPollModal(${poll.id}, event)" title="Редактировать опрос">✏️ Редактировать</button>` 
+        : '';
+
+    return `
+        <div class="poll-card" id="poll-card-${poll.id}" data-poll-id="${poll.id}">
+            <div class="poll-header">
+                <span class="poll-type-badge">📊 ОПРОС</span>
+                ${isMultiple ? '<span class="poll-type-subbadge">⚡ Несколько вариантов</span>' : '<span class="poll-type-subbadge-single">🎯 Один вариант</span>'}
+                ${isAnonymous ? '<span class="poll-type-subbadge-anon">🔒 Анонимно</span>' : ''}
+                <span class="poll-total-votes" id="poll-total-${poll.id}">👥 ${totalVotes} ${pluralizeVotes(totalVotes)}</span>
+                ${editBtn}
+            </div>
+            <div class="poll-question-wrap">
+                <div class="poll-question-accent"></div>
+                <div class="poll-question">${escapeHtml(poll.question)}</div>
+            </div>
+            <div class="poll-options-list">
+                ${optionsHtml}
+            </div>
+        </div>
+    `;
+}
+
+async function voteInPoll(pollId, optionId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите, чтобы участвовать в голосовании', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    try {
+        const res = await fetch('/api/polls/vote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ poll_id: pollId, option_id: optionId })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка при голосовании');
+        }
+        const updatedPoll = await res.json();
+        updatePollDOM(updatedPoll);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function updatePollDOM(poll) {
+    if (!poll) return;
+    const cards = document.querySelectorAll(`.poll-card[data-poll-id="${poll.id}"]`);
+    cards.forEach(card => {
+        const temp = document.createElement('div');
+        temp.innerHTML = renderPollWidget(poll);
+        const newCard = temp.firstElementChild;
+        if (newCard) {
+            card.parentNode.replaceChild(newCard, card);
+        }
+    });
+}
+
+async function openEditPollModal(pollId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const modal = document.getElementById('editPollModal');
+    const idInput = document.getElementById('modalEditPollId');
+    const qInput = document.getElementById('modalEditPollQuestion');
+    const container = document.getElementById('modalEditPollOptionsContainer');
+    if (!modal || !idInput || !qInput || !container) return;
+
+    idInput.value = pollId;
+    qInput.value = '';
+    container.innerHTML = '<div class="chat-empty-hint">Загрузка опроса...</div>';
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch(`/api/polls/${pollId}`);
+        if (!res.ok) throw new Error('Не удалось загрузить данные опроса');
+        const poll = await res.json();
+        qInput.value = poll.question || '';
+        container.innerHTML = '';
+        (poll.options || []).forEach(opt => {
+            addModalEditPollOptionRow(opt.text || '');
+        });
+        if (!poll.options || poll.options.length < 2) {
+            addModalEditPollOptionRow('');
+            addModalEditPollOptionRow('');
+        }
+    } catch (err) {
+        // Запасной вариант: извлекаем текущее состояние из карточки в DOM
+        const card = document.getElementById(`poll-card-${pollId}`);
+        if (card) {
+            const qEl = card.querySelector('.poll-question');
+            if (qEl) qInput.value = qEl.textContent.trim();
+            container.innerHTML = '';
+            card.querySelectorAll('.poll-option-text').forEach(tEl => {
+                addModalEditPollOptionRow(tEl.textContent.trim());
+            });
+        } else {
+            showToast(err.message, 'error');
+        }
+    }
+}
+
+function closeEditPollModal() {
+    const modal = document.getElementById('editPollModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function addModalEditPollOptionRow(initialText = '') {
+    const container = document.getElementById('modalEditPollOptionsContainer');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'modal-poll-option-row';
+    row.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+    row.innerHTML = `
+        <input type="text" class="form-control modal-poll-opt-input" placeholder="Вариант ответа..." value="${escapeHtml(initialText)}" style="flex: 1; padding: 8px 12px; border-radius: var(--radius-sm); background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: var(--text-pure);">
+        <button type="button" class="btn btn-outline btn-xs" onclick="this.closest('.modal-poll-option-row').remove()" title="Удалить вариант" style="color: #f43f5e; border-color: rgba(244,63,94,0.3); padding: 4px 8px;">✕</button>
+    `;
+    container.appendChild(row);
+}
+
+async function saveEditedPoll() {
+    const idInput = document.getElementById('modalEditPollId');
+    const qInput = document.getElementById('modalEditPollQuestion');
+    const container = document.getElementById('modalEditPollOptionsContainer');
+    const saveBtn = document.getElementById('btnSaveEditedPoll');
+    if (!idInput || !idInput.value) return;
+
+    const pollId = parseInt(idInput.value);
+    const question = qInput ? qInput.value.trim() : '';
+    if (!question) {
+        showToast('Введите вопрос опроса', 'warning');
+        return;
+    }
+    const optInputs = container.querySelectorAll('.modal-poll-opt-input');
+    const options = [];
+    optInputs.forEach(inp => {
+        const val = inp.value.trim();
+        if (val) options.push(val);
+    });
+    if (options.length < 2) {
+        showToast('Опрос должен содержать минимум 2 варианта ответа', 'warning');
+        return;
+    }
+
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+        const res = await fetch(`/api/polls/${pollId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, options })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка при сохранении опроса');
+        }
+        const updatedPoll = await res.json();
+        updatePollDOM(updatedPoll);
+        closeEditPollModal();
+        showToast('Опрос успешно обновлен! 📊', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
+    }
+}
+
+function addPollOptionField(containerId, callback) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const count = container.querySelectorAll('.poll-opt-input').length + 1;
+    if (count > 10) {
+        showToast('Максимум 10 вариантов ответа', 'warning');
+        return;
+    }
+    const row = document.createElement('div');
+    row.className = 'poll-opt-input-row';
+    row.innerHTML = `
+        <input type="text" class="poll-opt-input" placeholder="Вариант ${count}">
+        <button type="button" class="btn btn-secondary btn-xs" style="padding: 2px 8px;">✕</button>
+    `;
+    const btn = row.querySelector('button');
+    btn.onclick = () => {
+        row.remove();
+        if (typeof callback === 'function') callback();
+    };
+    const input = row.querySelector('input');
+    if (typeof callback === 'function') {
+        input.oninput = callback;
+    }
+    container.appendChild(row);
+    input.focus();
+}
+
+function collectPollData(qId, optsContainerId, isMultipleId, isAnonId) {
+    const qEl = document.getElementById(qId);
+    const question = qEl ? qEl.value.trim() : '';
+    const container = document.getElementById(optsContainerId);
+    if (!container) return null;
+    const inputs = container.querySelectorAll('.poll-opt-input');
+    const options = [];
+    inputs.forEach(inp => {
+        const val = inp.value.trim();
+        if (val) options.push(val);
+    });
+    if (!question && options.length === 0) return null;
+    const isMultiple = document.getElementById(isMultipleId)?.checked || false;
+    const isAnonymous = document.getElementById(isAnonId)?.checked || false;
+    return { question, options, is_multiple: isMultiple, is_anonymous: isAnonymous };
+}
+
+// Feed Composer Poll Controls
+function toggleComposerPollBox() {
+    const box = document.getElementById('composerPollBox');
+    if (!box) return;
+    const drawer = document.getElementById('composerDrawer');
+    if (drawer && drawer.style.display === 'none') drawer.style.display = 'block';
+    box.style.display = (box.style.display === 'none' ? 'block' : 'none');
+}
+function clearComposerPoll() {
+    const qEl = document.getElementById('composerPollQuestion');
+    if (qEl) qEl.value = '';
+    const cEl = document.getElementById('composerPollOptionsInputs');
+    if (cEl) {
+        cEl.innerHTML = `
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 1" oninput="updateComposerPollState()"></div>
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 2" oninput="updateComposerPollState()"></div>
+        `;
+    }
+    const multEl = document.getElementById('composerPollIsMultiple');
+    if (multEl) multEl.checked = false;
+    const anonEl = document.getElementById('composerPollIsAnonymous');
+    if (anonEl) anonEl.checked = false;
+    const prev = document.getElementById('composerPollPreview');
+    if (prev) prev.style.display = 'none';
+    const box = document.getElementById('composerPollBox');
+    if (box) box.style.display = 'none';
+}
+function updateComposerPollState() {
+    const data = collectPollData('composerPollQuestion', 'composerPollOptionsInputs', 'composerPollIsMultiple', 'composerPollIsAnonymous');
+    const prev = document.getElementById('composerPollPreview');
+    const qPrev = document.getElementById('composerPollPreviewQuestion');
+    const oPrev = document.getElementById('composerPollPreviewOpts');
+    if (!data || (!data.question && data.options.length === 0)) {
+        if (prev) prev.style.display = 'none';
+        return;
+    }
+    if (prev) prev.style.display = 'block';
+    if (qPrev) qPrev.textContent = data.question || 'Новый опрос';
+    if (oPrev) oPrev.textContent = `${data.options.length} варианта(-ов)`;
+}
+
+// Profile Composer Poll Controls
+function toggleProfPollBox() {
+    const box = document.getElementById('profPollBox');
+    if (!box) return;
+    box.style.display = (box.style.display === 'none' ? 'block' : 'none');
+}
+function clearProfComposerPoll() {
+    const qEl = document.getElementById('profPollQuestion');
+    if (qEl) qEl.value = '';
+    const cEl = document.getElementById('profPollOptionsInputs');
+    if (cEl) {
+        cEl.innerHTML = `
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 1" oninput="updateProfPollState()"></div>
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 2" oninput="updateProfPollState()"></div>
+        `;
+    }
+    const multEl = document.getElementById('profPollIsMultiple');
+    if (multEl) multEl.checked = false;
+    const anonEl = document.getElementById('profPollIsAnonymous');
+    if (anonEl) anonEl.checked = false;
+    const prev = document.getElementById('profPollPreview');
+    if (prev) prev.style.display = 'none';
+    const box = document.getElementById('profPollBox');
+    if (box) box.style.display = 'none';
+}
+function updateProfPollState() {
+    const data = collectPollData('profPollQuestion', 'profPollOptionsInputs', 'profPollIsMultiple', 'profPollIsAnonymous');
+    const prev = document.getElementById('profPollPreview');
+    const qPrev = document.getElementById('profPollPreviewQuestion');
+    const oPrev = document.getElementById('profPollPreviewOpts');
+    if (!data || (!data.question && data.options.length === 0)) {
+        if (prev) prev.style.display = 'none';
+        return;
+    }
+    if (prev) prev.style.display = 'block';
+    if (qPrev) qPrev.textContent = data.question || 'Новый опрос';
+    if (oPrev) oPrev.textContent = `${data.options.length} варианта(-ов)`;
+}
+
+// Chat Poll Modal Controls
+function openChatPollModal() {
+    if (!activeChatUserId) {
+        showToast('Выберите диалог для отправки опроса', 'warning');
+        return;
+    }
+    const modal = document.getElementById('chatPollModal');
+    if (modal) modal.style.display = 'flex';
+}
+function closeChatPollModal() {
+    const modal = document.getElementById('chatPollModal');
+    if (modal) modal.style.display = 'none';
+}
+async function handleSendChatPollSubmit(e) {
+    if (e) e.preventDefault();
+    const data = collectPollData('chatPollQuestion', 'chatPollModalOptionsInputs', 'chatPollIsMultiple', 'chatPollIsAnonymous');
+    if (!data || !data.question) {
+        showToast('Введите вопрос опроса', 'warning');
+        return;
+    }
+    if (data.options.length < 2) {
+        showToast('Добавьте минимум 2 варианта ответа', 'warning');
+        return;
+    }
+    try {
+        const res = await fetch('/api/polls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка при создании опроса');
+        }
+        const createdPoll = await res.json();
+        closeChatPollModal();
+
+        if (activeChatUserId) {
+            const sendRes = await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    receiver_id: activeChatUserId,
+                    content: '',
+                    poll_id: createdPoll.id
+                })
+            });
+            if (sendRes.ok) {
+                const msg = await sendRes.json();
+                appendChatMessageElement(msg);
+                scrollChatToBottom();
+                showToast('Опрос успешно отправлен в диалог 📊', 'success');
+            }
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// --- CHANNELS SYSTEM CORE ---
+let currentChannelId = null;
+let currentChannelData = null;
+let channelsListCache = [];
+let activeChannelsTab = 'subscribed';
+
+let channelComposerImage = '';
+let channelComposerAudioUrl = '';
+let channelComposerAudioTitle = '';
+let channelComposerAudioArtist = '';
+
+let currentChannelAudioUrl = '';
+let currentChannelAudioTitle = '';
+let currentChannelAudioArtist = '';
+
+let currentActiveInboxSubscriberId = null;
+
+function pluralizeMembers(n) {
+    n = Math.abs(n) % 100;
+    const n1 = n % 10;
+    if (n > 10 && n < 20) return 'участников';
+    if (n1 > 1 && n1 < 5) return 'участника';
+    if (n1 === 1) return 'участник';
+    return 'участников';
+}
+
+async function loadChannels(filter = activeChannelsTab) {
+    const grid = document.getElementById('channelsCardsGrid');
+    if (!grid) return;
+    grid.innerHTML = '<div class="channels-loading">Загрузка каталога каналов...</div>';
+
+    try {
+        const res = await fetch(`/api/channels?filter=${filter}`);
+        if (!res.ok) throw new Error('Ошибка загрузки каналов');
+        const channels = await res.json();
+        channelsListCache = channels || [];
+        renderChannelsGrid(channelsListCache);
+    } catch (err) {
+        grid.innerHTML = `<div class="channels-loading" style="color: #f43f5e;">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function switchChannelsTab(tab) {
+    activeChannelsTab = tab;
+    ['tabChannelsSubscribed', 'tabChannelsMy'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.remove('active');
+    });
+    if (tab === 'subscribed') document.getElementById('tabChannelsSubscribed')?.classList.add('active');
+    else if (tab === 'my') document.getElementById('tabChannelsMy')?.classList.add('active');
+    loadChannels(tab);
+}
+
+async function handleChannelsSearch(e) {
+    const q = (e.target.value || '').trim();
+    if (!q) {
+        renderChannelsGrid(channelsListCache);
+        return;
+    }
+    const grid = document.getElementById('channelsCardsGrid');
+    if (grid) grid.innerHTML = '<div class="channels-loading">🔍 Поиск каналов...</div>';
+    try {
+        const res = await fetch(`/api/channels?q=${encodeURIComponent(q)}`);
+        if (!res.ok) throw new Error('Ошибка поиска каналов');
+        const channels = await res.json();
+        renderChannelsGrid(channels || []);
+    } catch (_) {
+        const filtered = channelsListCache.filter(ch =>
+            (ch.name || '').toLowerCase().includes(q.toLowerCase()) ||
+            (ch.handle || '').toLowerCase().includes(q.toLowerCase()) ||
+            (ch.description || '').toLowerCase().includes(q.toLowerCase())
+        );
+        renderChannelsGrid(filtered);
+    }
+}
+
+function renderChannelsGrid(channels) {
+    const grid = document.getElementById('channelsCardsGrid');
+    if (!grid) return;
+    if (!channels || channels.length === 0) {
+        grid.innerHTML = `
+            <div class="channels-loading" style="grid-column: 1 / -1;">
+                <span style="font-size: 2rem; display: block; margin-bottom: 8px;">📢</span>
+                Пока нет каналов в этом разделе.<br>
+                <button class="btn btn-outline btn-xs" style="margin-top: 10px;" onclick="openCreateChannelModal()">Создать первый канал</button>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = channels.map(ch => {
+        const bannerStyle = ch.banner_url ? `style="background-image: url('${escapeHtml(ch.banner_url)}');"` : '';
+        const isSub = !!ch.is_subscribed;
+        const subBtnText = isSub ? '✓ Подписан' : '+ Подписаться';
+        const subBtnClass = isSub ? 'btn-secondary' : 'btn-primary';
+
+        return `
+            <div class="channel-grid-card" onclick="openChannelDetail(${ch.id})">
+                <div class="channel-card-banner" ${bannerStyle}>
+                    <div class="channel-card-avatar-wrap">
+                        <img src="${escapeHtml(ch.avatar_url || '/static/avatars/default_channel.svg')}" alt="Канал" class="channel-card-avatar">
+                    </div>
+                </div>
+                <div class="channel-card-body">
+                    <div class="channel-card-name-row">
+                        <span class="channel-card-name" title="${escapeHtml(ch.name)}">${escapeHtml(ch.name)}</span>
+                        <span class="channel-badge">📢</span>
+                    </div>
+                    <span class="channel-card-handle">${escapeHtml(ch.handle)}</span>
+                    <span class="channel-card-subscribers">👥 ${ch.subscribers_count || 0} ${pluralizeMembers(ch.subscribers_count || 0)}</span>
+                    <p class="channel-card-desc">${escapeHtml(ch.description || 'Нет описания канала')}</p>
+                    <div class="channel-card-footer" onclick="event.stopPropagation()">
+                        <button class="btn ${subBtnClass} btn-xs" onclick="quickToggleChannelSub(${ch.id}, this, event)">
+                            ${subBtnText}
+                        </button>
+                        <button class="btn btn-outline btn-xs" onclick="openChannelDetail(${ch.id})">
+                            Открыть →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function quickToggleChannelSub(channelId, btn, event) {
+    if (event) event.stopPropagation();
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите для подписки на канал', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    const isSub = btn.textContent.includes('✓');
+    const endpoint = isSub ? `/api/channels/${channelId}/unsubscribe` : `/api/channels/${channelId}/subscribe`;
+    try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        if (res.ok) {
+            const data = await res.json();
+            btn.textContent = data.is_subscribed ? '✓ Подписан' : '+ Подписаться';
+            btn.className = data.is_subscribed ? 'btn btn-secondary btn-xs' : 'btn btn-primary btn-xs';
+            showToast(data.is_subscribed ? 'Подписка оформлена' : 'Подписка отменена', 'success');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function openChannelDetail(channelIdOrHandle) {
+    navigateTo('channels');
+    const catalogSec = document.getElementById('channelsCatalogSection');
+    const detailSec = document.getElementById('channelDetailSection');
+    if (catalogSec) catalogSec.style.display = 'none';
+    if (detailSec) detailSec.style.display = 'block';
+
+    try {
+        const res = await fetch(`/api/channels/${channelIdOrHandle}`);
+        if (!res.ok) throw new Error('Канал не найден');
+        const ch = await res.json();
+        currentChannelId = ch.id;
+        currentChannelData = ch;
+        renderChannelDetailPage(ch);
+        loadChannelPosts(ch.id);
+    } catch (err) {
+        showToast(err.message, 'error');
+        closeChannelDetail();
+    }
+}
+
+function closeChannelDetail() {
+    const catalogSec = document.getElementById('channelsCatalogSection');
+    const detailSec = document.getElementById('channelDetailSection');
+    if (catalogSec) catalogSec.style.display = 'block';
+    if (detailSec) detailSec.style.display = 'none';
+    currentChannelId = null;
+    currentChannelData = null;
+    loadChannels();
+}
+
+function renderChannelDetailPage(ch) {
+    document.getElementById('channelHeroName').textContent = ch.name;
+    document.getElementById('channelHeroHandle').textContent = ch.handle;
+    document.getElementById('channelHeroSubscribers').textContent = `👥 ${ch.subscribers_count || 0} ${pluralizeMembers(ch.subscribers_count || 0)}`;
+    document.getElementById('channelHeroDesc').textContent = ch.description || 'У канала пока нет описания';
+
+    const avatarImg = document.getElementById('channelHeroAvatar');
+    if (avatarImg) avatarImg.src = ch.avatar_url || '/static/avatars/default_channel.svg';
+
+    const bannerEl = document.getElementById('channelHeroBanner');
+    if (bannerEl) {
+        if (ch.banner_url) bannerEl.style.backgroundImage = `url('${ch.banner_url}')`;
+        else bannerEl.style.backgroundImage = '';
+    }
+
+    const subBtn = document.getElementById('btnChannelSubscribe');
+    if (subBtn) {
+        if (ch.is_subscribed) {
+            subBtn.textContent = '✓ Вы подписаны';
+            subBtn.className = 'btn btn-secondary btn-sm';
+        } else {
+            subBtn.textContent = '+ Подписаться';
+            subBtn.className = 'btn btn-primary btn-sm';
+        }
+    }
+
+    const isManager = (ch.is_creator || ch.role === 'creator' || ch.role === 'admin');
+    const composerCard = document.getElementById('channelPostComposerCard');
+    if (composerCard) composerCard.style.display = isManager ? 'block' : 'none';
+
+    // Настройка пунктов 3 точек в шапке канала
+    const itemEdit = document.getElementById('channelDropdownItemEdit');
+    const itemChats = document.getElementById('channelDropdownItemChats');
+    const itemDivider = document.getElementById('channelDropdownDivider');
+    if (itemEdit) itemEdit.style.display = isManager ? 'flex' : 'none';
+    if (itemChats) itemChats.style.display = isManager ? 'flex' : 'none';
+    if (itemDivider) itemDivider.style.display = isManager ? 'block' : 'none';
+
+    // Прячем старые широкие кнопки (они теперь внутри меню 3 точек)
+    const editBtn = document.getElementById('btnChannelEdit');
+    const manageChatsBtn = document.getElementById('btnChannelManageChats');
+    if (editBtn) editBtn.style.display = 'none';
+    if (manageChatsBtn) manageChatsBtn.style.display = 'none';
+
+    // Кнопка "Написать каналу" для подписчиков
+    const msgBtn = document.getElementById('btnChannelMessage');
+    if (msgBtn) msgBtn.style.display = isManager ? 'none' : 'inline-flex';
+
+    const compAvatar = document.getElementById('channelComposerAvatar');
+    if (compAvatar) compAvatar.src = ch.avatar_url || '/static/avatars/default_channel.svg';
+}
+
+async function toggleChannelSubscription() {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите, чтобы подписаться на канал', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    if (!currentChannelId) return;
+    const isSub = currentChannelData && currentChannelData.is_subscribed;
+    const endpoint = isSub ? `/api/channels/${currentChannelId}/unsubscribe` : `/api/channels/${currentChannelId}/subscribe`;
+
+    try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        if (!res.ok) throw new Error('Ошибка обновления подписки');
+        const data = await res.json();
+        currentChannelData.is_subscribed = data.is_subscribed;
+        currentChannelData.subscribers_count = data.subscribers_count;
+        renderChannelDetailPage(currentChannelData);
+        showToast(data.is_subscribed ? 'Вы успешно подписались на канал! 📢' : 'Вы отписались от канала', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Channel Posts Loading
+async function loadChannelPosts(channelId) {
+    const stream = document.getElementById('channelPostsStream');
+    if (!stream) return;
+    stream.innerHTML = '<div class="channels-loading">Загрузка постов канала...</div>';
+
+    try {
+        const res = await fetch(`/api/channels/${channelId}/posts`);
+        if (!res.ok) throw new Error('Ошибка загрузки постов канала');
+        const posts = await res.json();
+
+        stream.innerHTML = '';
+        if (!posts || posts.length === 0) {
+            stream.innerHTML = `
+                <div class="cyber-empty-card" style="margin-top: 1rem;">
+                    <h3>В канале пока нет постов</h3>
+                    <p>Новые публикации автора появятся здесь.</p>
+                </div>
+            `;
+            return;
+        }
+
+        posts.forEach(p => {
+            const postEl = createPostElement(p);
+            stream.appendChild(postEl);
+        });
+    } catch (err) {
+        stream.innerHTML = `<div class="channels-loading" style="color: #f43f5e;">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+// Channel Composer Actions
+function expandChannelComposer() {
+    const drawer = document.getElementById('channelComposerDrawer');
+    if (drawer) drawer.style.display = 'block';
+}
+function toggleChannelComposerMusicBox() {
+    const box = document.getElementById('channelComposerMusicBox');
+    if (box) box.style.display = (box.style.display === 'none' ? 'block' : 'none');
+}
+function toggleChannelComposerPollBox() {
+    const box = document.getElementById('channelComposerPollBox');
+    if (box) box.style.display = (box.style.display === 'none' ? 'block' : 'none');
+}
+function updateChannelComposerPollState() {
+    const data = collectPollData('channelPollQuestion', 'channelPollOptionsInputs', 'channelPollIsMultiple', 'channelPollIsAnonymous');
+    const prev = document.getElementById('channelComposerPollPreview');
+    const qPrev = document.getElementById('channelComposerPollPreviewQuestion');
+    const oPrev = document.getElementById('channelComposerPollPreviewOpts');
+    if (!data || (!data.question && data.options.length === 0)) {
+        if (prev) prev.style.display = 'none';
+        return;
+    }
+    if (prev) prev.style.display = 'block';
+    if (qPrev) qPrev.textContent = data.question || 'Новый опрос';
+    if (oPrev) oPrev.textContent = `${data.options.length} варианта(-ов)`;
+}
+function clearChannelComposerPoll() {
+    const qEl = document.getElementById('channelPollQuestion');
+    if (qEl) qEl.value = '';
+    const cEl = document.getElementById('channelPollOptionsInputs');
+    if (cEl) {
+        cEl.innerHTML = `
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 1" oninput="updateChannelComposerPollState()"></div>
+            <div class="poll-opt-input-row"><input type="text" class="poll-opt-input" placeholder="Вариант 2" oninput="updateChannelComposerPollState()"></div>
+        `;
+    }
+    const multEl = document.getElementById('channelPollIsMultiple');
+    if (multEl) multEl.checked = false;
+    const anonEl = document.getElementById('channelPollIsAnonymous');
+    if (anonEl) anonEl.checked = false;
+    const prev = document.getElementById('channelComposerPollPreview');
+    if (prev) prev.style.display = 'none';
+    const box = document.getElementById('channelPollBox');
+    if (box) box.style.display = 'none';
+}
+function clearChannelComposerFile() {
+    channelComposerImage = '';
+    const prev = document.getElementById('channelComposerUploadPreview');
+    if (prev) prev.style.display = 'none';
+}
+function clearChannelComposerMusic() {
+    channelComposerAudioUrl = '';
+    channelComposerAudioTitle = '';
+    channelComposerAudioArtist = '';
+    const prev = document.getElementById('channelComposerMusicPreview');
+    if (prev) prev.style.display = 'none';
+}
+
+async function handleChannelComposerFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Ошибка загрузки файла');
+        const data = await res.json();
+        channelComposerImage = data.url;
+        const prev = document.getElementById('channelComposerUploadPreview');
+        const img = document.getElementById('channelComposerPreviewImg');
+        const name = document.getElementById('channelComposerPreviewName');
+        if (img) img.src = data.url;
+        if (name) name.textContent = file.name;
+        if (prev) prev.style.display = 'block';
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function handleChannelComposerAudioUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Ошибка загрузки аудио');
+        const data = await res.json();
+        channelComposerAudioUrl = data.url;
+        channelComposerAudioTitle = file.name.replace(/\.[^/.]+$/, "");
+        channelComposerAudioArtist = currentChannelData ? currentChannelData.name : 'Канал';
+
+        const prev = document.getElementById('channelComposerMusicPreview');
+        const t = document.getElementById('channelComposerPreviewTitle');
+        const a = document.getElementById('channelComposerPreviewArtist');
+        if (t) t.textContent = channelComposerAudioTitle;
+        if (a) a.textContent = channelComposerAudioArtist;
+        if (prev) prev.style.display = 'block';
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function submitChannelPost() {
+    if (!currentChannelId) return;
+    const textarea = document.getElementById('channelPostContent');
+    let content = textarea ? textarea.value.trim() : '';
+
+    // Авто-детекция картинок и аудио из текста поста
+    const imagePattern = /^https?:\/\/[^\s]+\.(jpeg|jpg|gif|png|webp)(\?[^\s]*)?$/i;
+    if (!channelComposerImage && imagePattern.test(content)) {
+        channelComposerImage = content;
+        content = '';
+    }
+    const audioPattern = /^https?:\/\/[^\s]+\.(mp3|wav|ogg|m4a)(\?[^\s]*)?$/i;
+    if (!channelComposerAudioUrl && audioPattern.test(content)) {
+        channelComposerAudioUrl = content;
+        channelComposerAudioTitle = 'Аудиозапись';
+        channelComposerAudioArtist = currentChannelData ? currentChannelData.name : 'Канал';
+        content = '';
+    }
+
+    // Опрос
+    let pollData = collectPollData('channelPollQuestion', 'channelPollOptionsInputs', 'channelPollIsMultiple', 'channelPollIsAnonymous');
+    let pollId = null;
+    if (pollData && (pollData.question || pollData.options.length > 0)) {
+        if (!pollData.question || pollData.options.length < 2) {
+            showToast('Для создания опроса в канале введите вопрос и минимум 2 варианта ответа', 'warning');
+            return;
+        }
+        try {
+            const pRes = await fetch('/api/polls', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pollData)
+            });
+            if (!pRes.ok) {
+                const errObj = await pRes.json();
+                throw new Error(errObj.error || 'Ошибка при создании опроса');
+            }
+            const pollObj = await pRes.json();
+            pollId = pollObj.id;
+        } catch (e) {
+            showToast(e.message, 'error');
+            return;
+        }
+    }
+
+    const musicUrlInp = document.getElementById('channelComposerMusicUrl');
+    const musicTitleInp = document.getElementById('channelComposerMusicTitle');
+    const musicArtistInp = document.getElementById('channelComposerMusicArtist');
+    const audioUrl = channelComposerAudioUrl || (musicUrlInp ? musicUrlInp.value.trim() : '');
+    const audioTitle = channelComposerAudioTitle || (musicTitleInp ? musicTitleInp.value.trim() : '') || (audioUrl ? 'Аудиозапись' : '');
+    const audioArtist = channelComposerAudioArtist || (musicArtistInp ? musicArtistInp.value.trim() : '') || (audioUrl ? (currentChannelData ? currentChannelData.name : 'Канал') : '');
+
+    if (!content && !channelComposerImage && !audioUrl && !pollId) {
+        showToast('Введите текст публикации, прикрепите фото, музыку или опрос', 'warning');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}/posts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: content,
+                image_url: channelComposerImage,
+                music_url: audioUrl,
+                music_title: audioTitle,
+                music_artist: audioArtist,
+                poll_id: pollId
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка публикации поста');
+        }
+        if (textarea) textarea.value = '';
+        clearChannelComposerFile();
+        clearChannelComposerMusic();
+        clearChannelComposerPoll();
+        showToast('Пост успешно опубликован в канале! 📢', 'success');
+        loadChannelPosts(currentChannelId);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Channel CRUD Modals
+function openCreateChannelModal() {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите, чтобы создать канал', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    const modal = document.getElementById('createChannelModal');
+    if (modal) modal.style.display = 'flex';
+}
+function closeCreateChannelModal() {
+    const modal = document.getElementById('createChannelModal');
+    if (modal) modal.style.display = 'none';
+}
+function selectChannelAvatarPreset(el, url, mode) {
+    const parent = el.parentElement;
+    parent.querySelectorAll('.preset-avatar-thumb').forEach(t => t.classList.remove('selected'));
+    el.classList.add('selected');
+    if (mode === 'create') {
+        const inp = document.getElementById('createChannelAvatarUrl');
+        if (inp) inp.value = url;
+    } else {
+        const inp = document.getElementById('editChannelAvatarUrl');
+        if (inp) inp.value = url;
+    }
+}
+async function handleUploadChannelAvatar(e, mode) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Ошибка загрузки аватарки');
+        const data = await res.json();
+        if (mode === 'create') {
+            document.getElementById('createChannelAvatarUrl').value = data.url;
+            showToast('Аватарка загружена', 'success');
+        } else {
+            document.getElementById('editChannelAvatarUrl').value = data.url;
+            const prev = document.getElementById('editChannelAvatarPreview');
+            if (prev) prev.src = data.url;
+            showToast('Аватарка загружена', 'success');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+async function handleUploadChannelBanner(e, mode) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Ошибка загрузки баннера');
+        const data = await res.json();
+        if (mode === 'create') {
+            document.getElementById('createChannelBannerUrl').value = data.url;
+            showToast('Баннер загружен', 'success');
+        } else {
+            document.getElementById('editChannelBannerUrl').value = data.url;
+            showToast('Баннер загружен', 'success');
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function handleCreateChannelSubmit(e) {
+    if (e) e.preventDefault();
+    const name = document.getElementById('createChannelName')?.value.trim();
+    let handle = document.getElementById('createChannelHandle')?.value.trim();
+    const desc = document.getElementById('createChannelDesc')?.value.trim();
+    const avatar = document.getElementById('createChannelAvatarUrl')?.value.trim() || '/static/avatars/default_channel.svg';
+    const banner = document.getElementById('createChannelBannerUrl')?.value.trim();
+
+    if (!name || !handle) {
+        showToast('Заполните название и юзернейм канала', 'warning');
+        return;
+    }
+    if (!handle.startsWith('@')) handle = '@' + handle;
+
+    try {
+        const res = await fetch('/api/channels', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                handle: handle,
+                description: desc,
+                avatar_url: avatar,
+                banner_url: banner
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка при создании канала');
+        }
+        const created = await res.json();
+        closeCreateChannelModal();
+        showToast(`Канал ${created.name} успешно создан! 📢`, 'success');
+        openChannelDetail(created.id);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Edit Channel Modal
+function openEditChannelModal() {
+    if (!currentChannelData) return;
+    const modal = document.getElementById('editChannelModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    document.getElementById('editChannelId').value = currentChannelData.id;
+    document.getElementById('editChannelName').value = currentChannelData.name;
+    document.getElementById('editChannelDesc').value = currentChannelData.description || '';
+    document.getElementById('editChannelAvatarUrl').value = currentChannelData.avatar_url || '';
+    document.getElementById('editChannelBannerUrl').value = currentChannelData.banner_url || '';
+
+    const prev = document.getElementById('editChannelAvatarPreview');
+    if (prev) prev.src = currentChannelData.avatar_url || '/static/avatars/default_channel.svg';
+}
+
+function closeEditChannelModal() {
+    const modal = document.getElementById('editChannelModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleEditChannelSubmit(e) {
+    if (e) e.preventDefault();
+    if (!currentChannelId) return;
+
+    const name = document.getElementById('editChannelName')?.value.trim();
+    const desc = document.getElementById('editChannelDesc')?.value.trim();
+    const avatar = document.getElementById('editChannelAvatarUrl')?.value.trim();
+    const banner = document.getElementById('editChannelBannerUrl')?.value.trim();
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                description: desc,
+                avatar_url: avatar,
+                banner_url: banner
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка сохранения канала');
+        }
+        const updated = await res.json();
+        currentChannelData = updated;
+        renderChannelDetailPage(updated);
+        closeEditChannelModal();
+        showToast('Оформление канала сохранено! ✨', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function deleteCurrentChannel() {
+    if (!currentChannelId) return;
+    if (!confirm('Вы уверены, что хотите удалить этот канал со всеми постами?')) return;
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Ошибка при удалении канала');
+        closeEditChannelModal();
+        showToast('Канал удален', 'success');
+        closeChannelDetail();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// =========================================================
+// DEDICATED CHANNEL MESSAGES VIEW & WORKSPACE SUITE
+// =========================================================
+
+let currentChannelMessagesChannelId = null;
+let currentChannelMessagesChannelData = null;
+let currentChannelChatAudioUrl = '';
+let currentChannelChatAudioTitle = '';
+let currentChannelChatAudioArtist = '';
+let currentChannelChatPollId = null;
+let currentChatScope = 'direct';
+
+function openChannelMessagesView(channelId) {
+    if (!channelId) channelId = currentChannelId;
+    if (!channelId) return;
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите, чтобы просматривать сообщения канала', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    currentChannelMessagesChannelId = channelId;
+    navigateTo('channel-messages', channelId);
+}
+
+function openChannelChatView() {
+    if (!currentChannelId) return;
+    openChannelMessagesView(currentChannelId);
+}
+
+function backFromChannelMessages() {
+    if (currentChannelMessagesChannelId) {
+        navigateTo('channels');
+        openChannelDetail(currentChannelMessagesChannelId);
+    } else {
+        navigateTo('channels');
+    }
+}
+
+async function initChannelMessagesView(channelId) {
+    currentChannelMessagesChannelId = channelId;
+    currentActiveInboxSubscriberId = null;
+
+    try {
+        const res = await fetch(`/api/channels/${channelId}`);
+        if (!res.ok) throw new Error('Канал не найден');
+        const ch = await res.json();
+        currentChannelMessagesChannelData = ch;
+
+        // Заполнение шапки страницы сообщений канала
+        const av = document.getElementById('channelMessagesHeaderAvatar');
+        if (av) av.src = ch.avatar_url || '/static/avatars/default_channel.svg';
+        const nameEl = document.getElementById('channelMessagesHeaderName');
+        if (nameEl) nameEl.textContent = ch.name;
+        const backLbl = document.getElementById('channelMessagesBackLabel');
+        if (backLbl) backLbl.textContent = `Назад к "${ch.name}"`;
+
+        const isManager = (ch.role === 'creator' || ch.role === 'admin' || ch.creator_id === window.CURRENT_USER_ID);
+        const sidebar = document.getElementById('channelChatSidebar');
+        const placeholder = document.getElementById('channelChatPlaceholder');
+        const activePane = document.getElementById('channelChatActivePane');
+        const subTitle = document.getElementById('channelMessagesHeaderSubtitle');
+        const dHeader = document.getElementById('channelDialogHeader');
+
+        if (isManager) {
+            // Режим создателя/администратора канала
+            if (sidebar) sidebar.style.display = 'flex';
+            if (subTitle) subTitle.textContent = '📬 Входящие сообщения подписчиков канала';
+            if (placeholder) placeholder.style.display = 'flex';
+            if (activePane) activePane.style.display = 'none';
+            if (dHeader) dHeader.style.display = 'flex';
+
+            loadChannelSubscriberConversations(channelId);
+        } else {
+            // Режим подписчика канала
+            if (sidebar) sidebar.style.display = 'none';
+            if (subTitle) subTitle.textContent = '📢 Официальный анонимный диалог с администрацией канала';
+            if (placeholder) placeholder.style.display = 'none';
+            if (activePane) activePane.style.display = 'flex';
+            if (dHeader) dHeader.style.display = 'none';
+
+            const dAvatar = document.getElementById('channelDialogUserAvatar');
+            if (dAvatar) dAvatar.src = ch.avatar_url || '/static/avatars/default_channel.svg';
+            const dName = document.getElementById('channelDialogUserName');
+            if (dName) dName.textContent = ch.name;
+            const dBadge = document.getElementById('channelDialogUserBadge');
+            if (dBadge) dBadge.textContent = '📢 Официальный анонимный диалог с каналом';
+
+            const input = document.getElementById('channelChatMessageInput');
+            if (input) input.placeholder = `Напишите анонимное сообщение каналу "${ch.name}"...`;
+            const btnLabel = document.getElementById('channelSendBtnLabel');
+            if (btnLabel) btnLabel.textContent = 'Отправить';
+
+            loadSubscriberChannelChatMessages(channelId);
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+        backFromChannelMessages();
+    }
+}
+
+async function loadChannelSubscriberConversations(channelId) {
+    const listEl = document.getElementById('channelSubscribersList');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="chat-empty-hint">Загрузка диалогов...</div>';
+
+    try {
+        const res = await fetch(`/api/channels/${channelId}/conversations`);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
+        const convs = await res.json();
+
+        if (!convs || convs.length === 0) {
+            listEl.innerHTML = '<div class="chat-empty-hint">Пока нет входящих сообщений от подписчиков</div>';
+            return;
+        }
+
+        listEl.innerHTML = convs.map(c => {
+            const sub = c.subscriber || c.user || {};
+            const subId = c.user_id || sub.id;
+            const subName = sub.display_name || sub.username || 'Подписчик';
+            const subAvatar = sub.avatar_url || '/static/avatars/default_avatar.svg';
+            const lastText = c.last_text || (c.last_message ? (c.last_message.content || 'Вложение') : 'Вложение');
+            const isActive = (currentActiveInboxSubscriberId === subId);
+
+            return `
+                <div class="channel-subscriber-item ${isActive ? 'active' : ''}" onclick="selectChannelSubscriberChat(${subId}, '${escapeHtml(subName)}', '${escapeHtml(subAvatar)}')">
+                    <img src="${escapeHtml(subAvatar)}" alt="Аватар" class="channel-subscriber-avatar">
+                    <div class="channel-subscriber-meta">
+                        <div class="channel-subscriber-name">${escapeHtml(subName)}</div>
+                        <div class="channel-subscriber-lastmsg">${escapeHtml(lastText)}</div>
+                    </div>
+                    ${c.unread_count > 0 ? `<span class="channel-subscriber-badge">${c.unread_count}</span>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        // Авто-выбор первого диалога
+        if (convs.length > 0 && !currentActiveInboxSubscriberId) {
+            const first = convs[0];
+            const firstSub = first.subscriber || first.user || {};
+            const firstId = first.user_id || firstSub.id;
+            const firstName = firstSub.display_name || firstSub.username || 'Подписчик';
+            const firstAvatar = firstSub.avatar_url || '/static/avatars/default_avatar.svg';
+            selectChannelSubscriberChat(firstId, firstName, firstAvatar);
+        }
+    } catch (err) {
+        listEl.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function filterChannelSubscribers() {
+    const q = (document.getElementById('channelSubscribersSearch')?.value || '').toLowerCase().trim();
+    document.querySelectorAll('.channel-subscriber-item').forEach(item => {
+        const name = (item.querySelector('.channel-subscriber-name')?.textContent || '').toLowerCase();
+        const msg = (item.querySelector('.channel-subscriber-lastmsg')?.textContent || '').toLowerCase();
+        item.style.display = (!q || name.includes(q) || msg.includes(q)) ? 'flex' : 'none';
+    });
+}
+
+async function selectChannelSubscriberChat(subscriberId, name, avatar) {
+    if (!subscriberId) return;
+    currentActiveInboxSubscriberId = subscriberId;
+
+    const placeholder = document.getElementById('channelChatPlaceholder');
+    const activePane = document.getElementById('channelChatActivePane');
+    const dHeader = document.getElementById('channelDialogHeader');
+    if (placeholder) placeholder.style.display = 'none';
+    if (activePane) activePane.style.display = 'flex';
+    if (dHeader) dHeader.style.display = 'flex';
+
+    const dAvatar = document.getElementById('channelDialogUserAvatar');
+    if (dAvatar && avatar) dAvatar.src = avatar;
+    const dName = document.getElementById('channelDialogUserName');
+    if (dName && name) dName.textContent = name;
+    const dBadge = document.getElementById('channelDialogUserBadge');
+    if (dBadge) dBadge.textContent = `👤 Подписчик канала • ID: #${subscriberId}`;
+
+    const input = document.getElementById('channelChatMessageInput');
+    if (input) input.placeholder = `Ответить ${name} от имени канала...`;
+    const btnLabel = document.getElementById('channelSendBtnLabel');
+    if (btnLabel) btnLabel.textContent = `📢 Ответить от имени ${currentChannelMessagesChannelData?.name || 'канала'}`;
+
+    // Подсветка в сайдбаре
+    document.querySelectorAll('.channel-subscriber-item').forEach(el => el.classList.remove('active'));
+    const activeSubItem = document.querySelector(`.channel-subscriber-item[onclick*="selectChannelSubscriberChat(${subscriberId},"]`);
+    if (activeSubItem) {
+        activeSubItem.classList.add('active');
+        const badgeEl = activeSubItem.querySelector('.channel-subscriber-badge');
+        if (badgeEl) badgeEl.remove();
+    }
+
+    loadChannelMessagesForSubscriber(currentChannelMessagesChannelId, subscriberId);
+}
+
+async function loadChannelMessagesForSubscriber(channelId, subscriberId) {
+    const stream = document.getElementById('channelMessagesStream');
+    if (!stream || !channelId) return;
+    stream.innerHTML = '<div class="chat-empty-hint">Загрузка переписки...</div>';
+
+    try {
+        const res = await fetch(`/api/channels/${channelId}/messages?subscriber_id=${subscriberId}`);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
+        let msgs = await res.json();
+        if (!Array.isArray(msgs)) msgs = [];
+        renderChannelStreamMessages(msgs, true);
+        if (typeof updateUnreadMessagesCountBadge === 'function') {
+            updateUnreadMessagesCountBadge();
+        }
+    } catch (err) {
+        stream.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+async function loadSubscriberChannelChatMessages(channelId) {
+    const stream = document.getElementById('channelMessagesStream');
+    if (!stream || !channelId) return;
+    stream.innerHTML = '<div class="chat-empty-hint">Загрузка диалога с каналом...</div>';
+
+    try {
+        const res = await fetch(`/api/channels/${channelId}/messages`);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
+        let msgs = await res.json();
+        if (!Array.isArray(msgs)) msgs = [];
+        renderChannelStreamMessages(msgs, false);
+        if (typeof updateUnreadMessagesCountBadge === 'function') {
+            updateUnreadMessagesCountBadge();
+        }
+    } catch (err) {
+        stream.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function renderChannelStreamMessages(messages, isManagerView) {
+    const stream = document.getElementById('channelMessagesStream');
+    if (!stream) return;
+
+    if (!messages || messages.length === 0) {
+        stream.innerHTML = `
+            <div class="chat-empty-hint">
+                ${isManagerView ? 'Нет сообщений в этом диалоге с подписчиком' : '🔒 Здесь вы можете написать каналу анонимно.<br>Создатель канала получит ваше сообщение и сможет ответить.'}
+            </div>
+        `;
+        return;
+    }
+
+    const channelName = currentChannelMessagesChannelData ? currentChannelMessagesChannelData.name : 'Канал';
+
+    stream.innerHTML = messages.map(m => {
+        let isOut = false;
+        let authorLabel = '';
+
+        if (isManagerView) {
+            // Для создателя канала:
+            // исходящие — это ответы от имени канала (is_from_channel = true)
+            isOut = !!m.is_from_channel;
+            authorLabel = isOut ? `📢 ${channelName} (Вы)` : (m.sender ? m.sender.display_name : 'Подписчик');
+        } else {
+            // Для подписчика:
+            // исходящие — это его собственные сообщения (sender_id = currentUser && !is_from_channel)
+            isOut = (m.sender_id === window.CURRENT_USER_ID && !m.is_from_channel);
+            authorLabel = m.is_from_channel ? `📢 ${channelName}` : (m.sender ? m.sender.display_name : 'Вы');
+        }
+
+        let audioHtml = '';
+        if (m.audio_url) {
+            audioHtml = `
+                <div class="chat-audio-bubble" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 8px; margin-bottom: 4px;">
+                    <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(m.audio_url)}', title: '${escapeHtml(m.audio_title || 'Аудио')}', artist: '${escapeHtml(m.audio_artist || '')}'}, event)" title="Слушать">▶️</button>
+                    <div><strong>${escapeHtml(m.audio_title || 'Аудио')}</strong><div style="font-size: 0.72rem; color: var(--text-dim);">${escapeHtml(m.audio_artist || '')}</div></div>
+                </div>
+            `;
+        }
+        let pollHtml = m.poll ? renderPollWidget(m.poll) : '';
+
+        return `
+            <div class="chat-bubble-row ${isOut ? 'out' : 'in'}">
+                <div class="chat-bubble ${isOut ? 'out' : 'in'}">
+                    <div style="font-size: 0.72rem; color: #00f0ff; margin-bottom: 3px; font-weight: 700;">${escapeHtml(authorLabel)}</div>
+                    ${audioHtml}
+                    ${m.content ? `<div class="chat-bubble-content">${escapeHtml(m.content)}</div>` : ''}
+                    ${pollHtml}
+                    <div class="chat-bubble-footer">
+                        <time class="chat-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</time>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    stream.scrollTop = stream.scrollHeight;
+}
+
+function handleChannelChatKeydown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendChannelChatMessage();
+    }
+}
+
+async function sendChannelChatMessage() {
+    if (!currentChannelMessagesChannelId) return;
+    const input = document.getElementById('channelChatMessageInput');
+    const content = input ? input.value.trim() : '';
+
+    if (!content && !currentChannelChatAudioUrl && !currentChannelChatPollId) {
+        showToast('Введите сообщение или прикрепите аудио/опрос', 'warning');
+        return;
+    }
+
+    const isManager = (currentChannelMessagesChannelData &&
+        (currentChannelMessagesChannelData.role === 'creator' ||
+         currentChannelMessagesChannelData.role === 'admin' ||
+         currentChannelMessagesChannelData.creator_id === window.CURRENT_USER_ID));
+
+    let receiverId = 0;
+    if (isManager) {
+        if (!currentActiveInboxSubscriberId) {
+            showToast('Выберите подписчика для ответа', 'warning');
+            return;
+        }
+        receiverId = currentActiveInboxSubscriberId;
+    } else {
+        receiverId = currentChannelMessagesChannelData ? currentChannelMessagesChannelData.creator_id : 0;
+    }
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelMessagesChannelId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                receiver_id: receiverId,
+                content: content,
+                audio_url: currentChannelChatAudioUrl || '',
+                audio_title: currentChannelChatAudioTitle || '',
+                audio_artist: currentChannelChatAudioArtist || '',
+                poll_id: currentChannelChatPollId
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка отправки сообщения');
+        }
+
+        if (input) input.value = '';
+        clearChannelChatAudio();
+        clearChannelChatPoll();
+
+        if (isManager) {
+            loadChannelMessagesForSubscriber(currentChannelMessagesChannelId, currentActiveInboxSubscriberId);
+            loadChannelSubscriberConversations(currentChannelMessagesChannelId);
+        } else {
+            loadSubscriberChannelChatMessages(currentChannelMessagesChannelId);
+        }
+
+        if (typeof playChatSoundFx === 'function') playChatSoundFx('send');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function openChannelChatAudioPrompt() {
+    const url = prompt('Введите прямой URL аудиофайла (.mp3, .wav):');
+    if (!url) return;
+    currentChannelChatAudioUrl = url.trim();
+    currentChannelChatAudioTitle = prompt('Название трека:') || 'Аудиозапись';
+    currentChannelChatAudioArtist = currentChannelMessagesChannelData ? currentChannelMessagesChannelData.name : 'Канал';
+
+    const prev = document.getElementById('channelChatAudioPreview');
+    const t = document.getElementById('channelChatAudioPreviewTitle');
+    const a = document.getElementById('channelChatAudioPreviewArtist');
+    if (t) t.textContent = currentChannelChatAudioTitle;
+    if (a) a.textContent = currentChannelChatAudioArtist;
+    if (prev) prev.style.display = 'block';
+}
+
+function clearChannelChatAudio() {
+    currentChannelChatAudioUrl = '';
+    currentChannelChatAudioTitle = '';
+    currentChannelChatAudioArtist = '';
+    const prev = document.getElementById('channelChatAudioPreview');
+    if (prev) prev.style.display = 'none';
+}
+
+function openChannelChatPollModal() {
+    openChatPollModal();
+}
+
+function clearChannelChatPoll() {
+    currentChannelChatPollId = null;
+    const prev = document.getElementById('channelChatPollPreview');
+    if (prev) prev.style.display = 'none';
+}
+
+// =========================================================
+// CHAT SCOPE TOGGLE IN MAIN MESSAGES VIEW (ЛИЧНЫЕ / КАНАЛЫ)
+// =========================================================
+
+function switchChatScope(scope) {
+    currentChatScope = scope;
+    const dBtn = document.getElementById('chatScopeDirect');
+    const cBtn = document.getElementById('chatScopeChannels');
+    if (dBtn) dBtn.classList.toggle('active', scope === 'direct');
+    if (cBtn) cBtn.classList.toggle('active', scope === 'channels');
+
+    if (scope === 'direct') {
+        loadConversations();
+    } else {
+        loadUserChannelConversations();
+    }
+}
+
+async function loadUserChannelConversations() {
+    const listEl = document.getElementById('conversationsList');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="chat-empty-hint">Загрузка диалогов каналов...</div>';
+
+    try {
+        const res = await fetch('/api/user/channel-conversations');
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений каналов');
+        const convs = await res.json();
+
+        if (!convs || convs.length === 0) {
+            listEl.innerHTML = `
+                <div class="chat-empty-hint">
+                    📢 Пока нет сообщений с каналами.<br>
+                    <small>Вы можете написать любому каналу или отвечать своим подписчикам.</small>
+                </div>
+            `;
+            return;
+        }
+
+        listEl.innerHTML = convs.map(c => {
+            const ch = c.channel || {};
+            const sub = c.subscriber || c.user || {};
+            const isCreator = !!c.is_creator;
+            const title = isCreator ? `${ch.name} (От: ${sub.display_name || sub.username})` : ch.name;
+            const subtitle = isCreator ? `Подписчик: @${sub.username}` : `Канал ${ch.handle || ''}`;
+            const avatar = isCreator ? (sub.avatar_url || '/static/avatars/default_avatar.svg') : (ch.avatar_url || '/static/avatars/default_channel.svg');
+            const lastText = c.last_text || (c.last_message ? (c.last_message.content || 'Вложение') : 'Вложение');
+            const timeText = c.last_message ? formatTime(c.last_message.created_at) : '';
+
+            return `
+                <div class="conversation-item" onclick="openChannelMessagesView(${ch.id})">
+                    <div class="conv-avatar-wrap">
+                        <img src="${escapeHtml(avatar)}" alt="Avatar" class="conv-avatar">
+                    </div>
+                    <div class="conv-info">
+                        <div class="conv-top-line">
+                            <span class="conv-name" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+                            <span class="conv-time">${timeText}</span>
+                        </div>
+                        <div class="conv-bottom-line">
+                            <span class="conv-preview">${escapeHtml(lastText)}</span>
+                            ${c.unread_count > 0 ? `<span class="conv-unread-badge">${c.unread_count}</span>` : ''}
+                        </div>
+                        <div style="font-size: 0.72rem; color: #38bdf8; margin-top: 2px;">${escapeHtml(subtitle)}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        listEl.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
     }
 }
