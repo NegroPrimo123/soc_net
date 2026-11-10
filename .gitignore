@@ -12,6 +12,7 @@ internal/handlers/web/
 
 # Тестовые скрипты
 scratch/
+edge_tmp_profile*/
 
 # Логи
 *.log

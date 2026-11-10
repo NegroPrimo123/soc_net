@@ -78,6 +78,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/channels/{id}/posts", h.GetChannelPosts)
 	mux.HandleFunc("POST /api/channels/{id}/posts", h.CreateChannelPost)
 	mux.HandleFunc("GET /api/channels/{id}/conversations", h.GetChannelConversations)
+	mux.HandleFunc("GET /api/user/channel-conversations", h.GetUserChannelConversations)
 	mux.HandleFunc("GET /api/channels/{id}/messages", h.GetChannelMessages)
 	mux.HandleFunc("POST /api/channels/{id}/messages", h.SendChannelMessage)
 

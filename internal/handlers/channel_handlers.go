@@ -9,7 +9,7 @@ import (
 	"social-network/internal/models"
 )
 
-// ListChannels возвращает список каналов по фильтру (all, my, subscribed)
+// ListChannels возвращает список каналов по фильтру (subscribed, my) или поисковому запросу q
 func (h *Handler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		respondJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "метод не поддерживается"})
@@ -17,22 +17,56 @@ func (h *Handler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := r.URL.Query().Get("filter")
-	if filter == "" {
-		filter = "all"
-	}
+	searchQuery := r.URL.Query().Get("q")
 
 	currentUserID := 0
 	if authUser := h.getUserFromRequest(r); authUser != nil {
 		currentUserID = authUser.ID
 	}
 
-	channels, err := h.channelRepo.ListChannels(currentUserID, filter)
+	if filter == "" && searchQuery == "" {
+		if currentUserID > 0 {
+			filter = "subscribed"
+		} else {
+			filter = "all"
+		}
+	}
+
+	channels, err := h.channelRepo.ListChannels(currentUserID, filter, searchQuery)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	if channels == nil {
+		channels = []models.Channel{}
+	}
 
 	respondJSON(w, http.StatusOK, channels)
+}
+
+// GetUserChannelConversations возвращает все диалоги пользователя с каналами
+func (h *Handler) GetUserChannelConversations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "метод не поддерживается"})
+		return
+	}
+
+	authUser := h.getUserFromRequest(r)
+	if authUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "необходима авторизация"})
+		return
+	}
+
+	convs, err := h.channelRepo.GetUserChannelConversations(authUser.ID)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if convs == nil {
+		convs = []models.ChannelConversation{}
+	}
+
+	respondJSON(w, http.StatusOK, convs)
 }
 
 // CreateChannel создает новый канал

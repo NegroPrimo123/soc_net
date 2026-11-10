@@ -423,6 +423,7 @@ type ChannelConversation struct {
 	LastMessage *Message `json:"last_message,omitempty"`
 	LastText    string   `json:"last_text,omitempty"`
 	UnreadCount int      `json:"unread_count"`
+	IsCreator   bool     `json:"is_creator"`
 }
 
 // ==========================================

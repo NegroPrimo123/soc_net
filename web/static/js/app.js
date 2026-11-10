@@ -147,7 +147,8 @@ async function fillAndLogin(username, password) {
 }
 
 async function quickLoginAs(username) {
-    await fillAndLogin(username, 'password123');
+    const pwd = (username === 'itakwa') ? '123123' : 'password123';
+    await fillAndLogin(username, pwd);
 }
 
 async function handleLogin(e) {
@@ -444,19 +445,26 @@ async function createPost() {
 
     let pollData = collectPollData('composerPollQuestion', 'composerPollOptionsInputs', 'composerPollIsMultiple', 'composerPollIsAnonymous');
     let pollId = null;
-    if (pollData && pollData.question && pollData.options.length >= 2) {
+    if (pollData && (pollData.question || pollData.options.length > 0)) {
+        if (!pollData.question || pollData.options.length < 2) {
+            showToast('Для создания опроса заполните вопрос и минимум 2 варианта ответа', 'warning');
+            return;
+        }
         try {
             const pRes = await fetch('/api/polls', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(pollData)
             });
-            if (pRes.ok) {
-                const pollObj = await pRes.json();
-                pollId = pollObj.id;
+            if (!pRes.ok) {
+                const pErr = await pRes.json();
+                throw new Error(pErr.error || 'Ошибка создания опроса');
             }
+            const pollObj = await pRes.json();
+            pollId = pollObj.id;
         } catch (e) {
-            console.error('Failed to create poll:', e);
+            showToast(e.message, 'error');
+            return;
         }
     }
 
@@ -2034,6 +2042,8 @@ function executeSearch() {
 function clearSearch() {
     const input = document.getElementById('searchInput');
     if (input) input.value = '';
+    const b = document.getElementById('feedSearchChannelsBlock');
+    if (b) b.style.display = 'none';
     reloadFeedAsync({ q: '', tag: '' });
 }
 
@@ -2098,6 +2108,46 @@ async function reloadFeedAsync(params = {}) {
         if (url.searchParams.get('q')) fetchParams.set('q', url.searchParams.get('q'));
         if (url.searchParams.get('tag')) fetchParams.set('tag', url.searchParams.get('tag'));
         if (window.CURRENT_USER_ID) fetchParams.set('user_id', window.CURRENT_USER_ID);
+
+        // Глобальный поиск каналов по запросу q
+        const searchQuery = url.searchParams.get('q');
+        const searchChBlock = document.getElementById('feedSearchChannelsBlock');
+        const searchChGrid = document.getElementById('feedSearchChannelsGrid');
+        const searchChCount = document.getElementById('feedSearchChannelsCount');
+        if (searchQuery && searchChBlock && searchChGrid) {
+            try {
+                const cRes = await fetch(`/api/channels?q=${encodeURIComponent(searchQuery)}`);
+                if (cRes.ok) {
+                    const matchedChannels = await cRes.json();
+                    if (matchedChannels && matchedChannels.length > 0) {
+                        searchChBlock.style.display = 'block';
+                        if (searchChCount) searchChCount.textContent = `${matchedChannels.length}`;
+                        searchChGrid.innerHTML = matchedChannels.map(ch => `
+                            <div class="feed-channel-card" onclick="openChannelDetail(${ch.id})">
+                                <img src="${escapeHtml(ch.avatar_url || '/static/avatars/default_channel.svg')}" class="feed-channel-avatar" alt="Avatar">
+                                <div class="feed-channel-info">
+                                    <div class="feed-channel-name-row">
+                                        <span class="feed-channel-name">${escapeHtml(ch.name)}</span>
+                                        <span class="channel-badge">📢</span>
+                                    </div>
+                                    <span class="feed-channel-handle">${escapeHtml(ch.handle)}</span>
+                                    <span class="feed-channel-subscribers">👥 ${ch.subscribers_count || 0} ${pluralizeMembers(ch.subscribers_count || 0)}</span>
+                                </div>
+                                <button type="button" class="btn btn-primary btn-xs" onclick="event.stopPropagation(); openChannelDetail(${ch.id})">
+                                    Перейти →
+                                </button>
+                            </div>
+                        `).join('');
+                    } else {
+                        searchChBlock.style.display = 'none';
+                    }
+                }
+            } catch (_) {
+                if (searchChBlock) searchChBlock.style.display = 'none';
+            }
+        } else if (searchChBlock) {
+            searchChBlock.style.display = 'none';
+        }
 
         const res = await fetch(`/api/feed?${fetchParams.toString()}`);
         if (!res.ok) throw new Error('Ошибка загрузки ленты');
@@ -2218,7 +2268,7 @@ let currentProfileUserId = null;
 let currentProfileUserData = null;
 
 function navigateTo(view, userId = null) {
-    ['feed', 'profile', 'showcase', 'messages', 'channels'].forEach(v => {
+    ['feed', 'profile', 'showcase', 'messages', 'channels', 'channelMessages'].forEach(v => {
         const el = document.getElementById(`${v}View`);
         if (el) el.style.display = 'none';
     });
@@ -2254,6 +2304,14 @@ function navigateTo(view, userId = null) {
         const btn = document.getElementById('tabNavChannels');
         if (btn) btn.classList.add('active');
         loadChannels();
+    } else if (view === 'channel-messages') {
+        const el = document.getElementById('channelMessagesView');
+        if (el) el.style.display = 'block';
+        const btn = document.getElementById('tabNavChannels');
+        if (btn) btn.classList.add('active');
+        if (userId) {
+            initChannelMessagesView(userId);
+        }
     }
 
     if (view === 'profile') {
@@ -3954,8 +4012,34 @@ async function createProfilePost() {
         content = '';
     }
 
-    if (!content && !imageUrl && !musicUrl) {
-        showToast('Введите текст публикации, прикрепите фото или аудиозапись', 'error');
+    // Опрос в посте профиля
+    let pollData = collectPollData('profPollQuestion', 'profPollOptionsInputs', 'profPollIsMultiple', 'profPollIsAnonymous');
+    let pollId = null;
+    if (pollData && (pollData.question || pollData.options.length > 0)) {
+        if (!pollData.question || pollData.options.length < 2) {
+            showToast('Для создания опроса заполните вопрос и минимум 2 варианта ответа', 'warning');
+            return;
+        }
+        try {
+            const pRes = await fetch('/api/polls', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pollData)
+            });
+            if (!pRes.ok) {
+                const pErr = await pRes.json();
+                throw new Error(pErr.error || 'Ошибка создания опроса');
+            }
+            const pollObj = await pRes.json();
+            pollId = pollObj.id;
+        } catch (e) {
+            showToast(e.message, 'error');
+            return;
+        }
+    }
+
+    if (!content && !imageUrl && !musicUrl && !pollId) {
+        showToast('Введите текст публикации, прикрепите фото, музыку или опрос', 'error');
         return;
     }
 
@@ -3980,6 +4064,9 @@ async function createProfilePost() {
         if (textarea) textarea.value = '';
         clearProfComposerFile();
         clearProfComposerMusic();
+        clearProfComposerPoll();
+        const pPollBox = document.getElementById('profPollBox');
+        if (pPollBox) pPollBox.style.display = 'none';
         const pBox = document.getElementById('profMusicBox');
         if (pBox) pBox.style.display = 'none';
         const imgBox = document.getElementById('profImageBox');
@@ -6486,16 +6573,39 @@ class GlobalMusicPlayer {
 
     init() {
         const playerHeader = document.getElementById('headerMusicPlayer');
+        const topBar = document.querySelector('.top-sensor-bar');
+        const searchInput = document.getElementById('searchInput');
         if (playerHeader) {
             playerHeader.style.display = 'none';
             playerHeader.classList.remove('is-active', 'is-playing');
         }
+        if (topBar) {
+            topBar.classList.remove('player-active');
+        }
+        if (searchInput) {
+            searchInput.placeholder = 'Поиск записей, каналов, авторов, #тегов...';
+        }
 
         this.audio.addEventListener('timeupdate', () => {
-            if (this.audio.duration) {
+            if (this.audio.duration && !isNaN(this.audio.duration)) {
                 const percent = (this.audio.currentTime / this.audio.duration) * 100;
                 const bar = document.getElementById('headerMusicProgressBar');
                 if (bar) bar.style.width = `${percent}%`;
+            }
+            const curTimeEl = document.getElementById('headerMusicCurrentTime');
+            const durTimeEl = document.getElementById('headerMusicDuration');
+            if (curTimeEl) {
+                curTimeEl.textContent = this.formatTime(this.audio.currentTime);
+            }
+            if (durTimeEl && this.audio.duration && !isNaN(this.audio.duration)) {
+                durTimeEl.textContent = this.formatTime(this.audio.duration);
+            }
+        });
+
+        this.audio.addEventListener('loadedmetadata', () => {
+            const durTimeEl = document.getElementById('headerMusicDuration');
+            if (durTimeEl && this.audio.duration && !isNaN(this.audio.duration)) {
+                durTimeEl.textContent = this.formatTime(this.audio.duration);
             }
         });
 
@@ -6518,6 +6628,25 @@ class GlobalMusicPlayer {
             this.isPlaying = false;
             this.updateUIState();
         });
+    }
+
+    formatTime(sec) {
+        if (!sec || isNaN(sec) || !isFinite(sec) || sec < 0) return '0:00';
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    toggleMute() {
+        this.audio.muted = !this.audio.muted;
+        const btn = document.getElementById('headerVolBtn');
+        const icon = document.getElementById('headerVolIcon');
+        if (btn) btn.classList.toggle('is-muted', this.audio.muted);
+        if (icon) {
+            icon.innerHTML = this.audio.muted
+                ? '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" fill="currentColor"/>'
+                : '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" fill="currentColor"/>';
+        }
     }
 
     collectPageTracks() {
@@ -6586,9 +6715,17 @@ class GlobalMusicPlayer {
         
         // Показываем плеер в верхней панели, когда пользователь запустил музыку
         const playerHeader = document.getElementById('headerMusicPlayer');
+        const topBar = document.querySelector('.top-sensor-bar');
+        const searchInput = document.getElementById('searchInput');
         if (playerHeader) {
             playerHeader.style.display = 'flex';
             playerHeader.classList.add('is-active');
+        }
+        if (topBar) {
+            topBar.classList.add('player-active');
+        }
+        if (searchInput) {
+            searchInput.placeholder = 'Поиск...';
         }
 
         const playPromise = this.audio.play();
@@ -6612,9 +6749,17 @@ class GlobalMusicPlayer {
         this.isPlaying = false;
         this.currentTrack = null;
         const playerHeader = document.getElementById('headerMusicPlayer');
+        const topBar = document.querySelector('.top-sensor-bar');
+        const searchInput = document.getElementById('searchInput');
         if (playerHeader) {
             playerHeader.style.display = 'none';
             playerHeader.classList.remove('is-active', 'is-playing');
+        }
+        if (topBar) {
+            topBar.classList.remove('player-active');
+        }
+        if (searchInput) {
+            searchInput.placeholder = 'Поиск записей, каналов, авторов, #тегов...';
         }
         const vinyl = document.getElementById('headerMusicVinyl');
         if (vinyl) {
@@ -6673,12 +6818,26 @@ class GlobalMusicPlayer {
     updateHeaderTrackInfo(track) {
         const titleEl = document.getElementById('headerMusicTitle');
         const artistEl = document.getElementById('headerMusicArtist');
-        if (titleEl) titleEl.textContent = track.title || 'Аудиозапись';
-        if (artistEl) artistEl.textContent = track.artist || 'GoSocial Player';
+        const curTimeEl = document.getElementById('headerMusicCurrentTime');
+        const durTimeEl = document.getElementById('headerMusicDuration');
+        const titleText = track.title || 'Аудиозапись';
+        const artistText = track.artist || 'GoSocial Player';
+
+        if (titleEl) {
+            titleEl.textContent = titleText;
+            titleEl.title = `${titleText} — ${artistText}`;
+        }
+        if (artistEl) {
+            artistEl.textContent = artistText;
+            artistEl.title = artistText;
+        }
+        if (curTimeEl) curTimeEl.textContent = '0:00';
+        if (durTimeEl) durTimeEl.textContent = '0:00';
     }
 
     updateUIState() {
         const playerHeader = document.getElementById('headerMusicPlayer');
+        const topBar = document.querySelector('.top-sensor-bar');
         const playIcon = document.getElementById('headerPlayIcon');
 
         if (playerHeader) {
@@ -6686,9 +6845,11 @@ class GlobalMusicPlayer {
             if (this.currentTrack) {
                 playerHeader.style.display = 'flex';
                 playerHeader.classList.add('is-active');
+                if (topBar) topBar.classList.add('player-active');
             } else {
                 playerHeader.style.display = 'none';
                 playerHeader.classList.remove('is-active');
+                if (topBar) topBar.classList.remove('player-active');
             }
         }
         if (playIcon) {
@@ -7563,24 +7724,38 @@ function renderPollWidget(poll) {
     if (!poll) return '';
     const totalVotes = poll.total_votes || 0;
     const isMultiple = !!poll.is_multiple;
+    const isAnonymous = !!poll.is_anonymous;
 
     let optionsHtml = (poll.options || []).map(opt => {
         const percent = Math.round(opt.percentage || 0);
         const isSelected = !!opt.is_voted;
-        const checkIcon = isMultiple ? (isSelected ? '☑' : '☐') : (isSelected ? '●' : '○');
         const selectedClass = isSelected ? ' selected' : '';
+
+        // Высокотехнологичные SVG индикаторы вместо архаичных unicode символов
+        const radioSvg = isSelected 
+            ? `<span class="poll-custom-indicator poll-radio active" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="#00f0ff" stroke-width="2.2"/><circle cx="10" cy="10" r="4.5" fill="#00f0ff"/></svg></span>`
+            : `<span class="poll-custom-indicator poll-radio" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/></svg></span>`;
+
+        const checkSvg = isSelected
+            ? `<span class="poll-custom-indicator poll-checkbox active" aria-hidden="true"><svg viewBox="0 0 20 20"><rect x="1.5" y="1.5" width="17" height="17" rx="4.5" fill="rgba(0, 240, 255, 0.22)" stroke="#00f0ff" stroke-width="2.2"/><path d="M5 10l3.5 3.5L15 6.5" fill="none" stroke="#00f0ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
+            : `<span class="poll-custom-indicator poll-checkbox" aria-hidden="true"><svg viewBox="0 0 20 20"><rect x="1.5" y="1.5" width="17" height="17" rx="4.5" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/></svg></span>`;
+
+        const indicator = isMultiple ? checkSvg : radioSvg;
 
         return `
             <div class="poll-option-row${selectedClass}" 
                  onclick="voteInPoll(${poll.id}, ${opt.id}, event)" 
-                 title="Нажмите, чтобы проголосовать"
+                 title="${isSelected ? 'Вы проголосовали за этот вариант (нажмите для отмены)' : 'Нажмите, чтобы проголосовать'}"
                  data-poll-id="${poll.id}" 
                  data-option-id="${opt.id}">
                 <div class="poll-bar-fill" style="width: ${percent}%;"></div>
                 <div class="poll-option-inner">
-                    <span class="poll-option-radio">${checkIcon}</span>
-                    <span class="poll-option-text">${escapeHtml(opt.text)}</span>
+                    <div class="poll-option-left">
+                        ${indicator}
+                        <span class="poll-option-text">${escapeHtml(opt.text)}</span>
+                    </div>
                     <div class="poll-option-meta">
+                        ${isSelected ? '<span class="poll-selected-pill">✓ ВЫБРАНО</span>' : ''}
                         <span class="poll-option-percent">${percent}%</span>
                         <span class="poll-option-count">(${opt.votes_count || 0})</span>
                     </div>
@@ -7593,10 +7768,14 @@ function renderPollWidget(poll) {
         <div class="poll-card" id="poll-card-${poll.id}" data-poll-id="${poll.id}">
             <div class="poll-header">
                 <span class="poll-type-badge">📊 ОПРОС</span>
-                ${isMultiple ? '<span class="poll-type-subbadge">Множественный выбор</span>' : ''}
+                ${isMultiple ? '<span class="poll-type-subbadge">⚡ Несколько вариантов</span>' : '<span class="poll-type-subbadge-single">🎯 Один вариант</span>'}
+                ${isAnonymous ? '<span class="poll-type-subbadge-anon">🔒 Анонимно</span>' : ''}
                 <span class="poll-total-votes" id="poll-total-${poll.id}">👥 ${totalVotes} ${pluralizeVotes(totalVotes)}</span>
             </div>
-            <div class="poll-question">${escapeHtml(poll.question)}</div>
+            <div class="poll-question-wrap">
+                <div class="poll-question-accent"></div>
+                <div class="poll-question">${escapeHtml(poll.question)}</div>
+            </div>
             <div class="poll-options-list">
                 ${optionsHtml}
             </div>
@@ -7820,7 +7999,7 @@ async function handleSendChatPollSubmit(e) {
 let currentChannelId = null;
 let currentChannelData = null;
 let channelsListCache = [];
-let activeChannelsTab = 'all';
+let activeChannelsTab = 'subscribed';
 
 let channelComposerImage = '';
 let channelComposerAudioUrl = '';
@@ -7860,28 +8039,36 @@ async function loadChannels(filter = activeChannelsTab) {
 
 function switchChannelsTab(tab) {
     activeChannelsTab = tab;
-    ['tabChannelsAll', 'tabChannelsSubscribed', 'tabChannelsMy'].forEach(id => {
+    ['tabChannelsSubscribed', 'tabChannelsMy'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.classList.remove('active');
     });
-    if (tab === 'all') document.getElementById('tabChannelsAll')?.classList.add('active');
-    else if (tab === 'subscribed') document.getElementById('tabChannelsSubscribed')?.classList.add('active');
+    if (tab === 'subscribed') document.getElementById('tabChannelsSubscribed')?.classList.add('active');
     else if (tab === 'my') document.getElementById('tabChannelsMy')?.classList.add('active');
     loadChannels(tab);
 }
 
-function handleChannelsSearch(e) {
-    const q = (e.target.value || '').toLowerCase().trim();
+async function handleChannelsSearch(e) {
+    const q = (e.target.value || '').trim();
     if (!q) {
         renderChannelsGrid(channelsListCache);
         return;
     }
-    const filtered = channelsListCache.filter(ch =>
-        (ch.name || '').toLowerCase().includes(q) ||
-        (ch.handle || '').toLowerCase().includes(q) ||
-        (ch.description || '').toLowerCase().includes(q)
-    );
-    renderChannelsGrid(filtered);
+    const grid = document.getElementById('channelsCardsGrid');
+    if (grid) grid.innerHTML = '<div class="channels-loading">🔍 Поиск каналов...</div>';
+    try {
+        const res = await fetch(`/api/channels?q=${encodeURIComponent(q)}`);
+        if (!res.ok) throw new Error('Ошибка поиска каналов');
+        const channels = await res.json();
+        renderChannelsGrid(channels || []);
+    } catch (_) {
+        const filtered = channelsListCache.filter(ch =>
+            (ch.name || '').toLowerCase().includes(q.toLowerCase()) ||
+            (ch.handle || '').toLowerCase().includes(q.toLowerCase()) ||
+            (ch.description || '').toLowerCase().includes(q.toLowerCase())
+        );
+        renderChannelsGrid(filtered);
+    }
 }
 
 function renderChannelsGrid(channels) {
@@ -8179,28 +8366,56 @@ async function handleChannelComposerAudioUpload(e) {
 async function submitChannelPost() {
     if (!currentChannelId) return;
     const textarea = document.getElementById('channelPostContent');
-    const content = textarea ? textarea.value.trim() : '';
+    let content = textarea ? textarea.value.trim() : '';
+
+    // Авто-детекция картинок и аудио из текста поста
+    const imagePattern = /^https?:\/\/[^\s]+\.(jpeg|jpg|gif|png|webp)(\?[^\s]*)?$/i;
+    if (!channelComposerImage && imagePattern.test(content)) {
+        channelComposerImage = content;
+        content = '';
+    }
+    const audioPattern = /^https?:\/\/[^\s]+\.(mp3|wav|ogg|m4a)(\?[^\s]*)?$/i;
+    if (!channelComposerAudioUrl && audioPattern.test(content)) {
+        channelComposerAudioUrl = content;
+        channelComposerAudioTitle = 'Аудиозапись';
+        channelComposerAudioArtist = currentChannelData ? currentChannelData.name : 'Канал';
+        content = '';
+    }
 
     // Опрос
     let pollData = collectPollData('channelPollQuestion', 'channelPollOptionsInputs', 'channelPollIsMultiple', 'channelPollIsAnonymous');
     let pollId = null;
-    if (pollData && pollData.question && pollData.options.length >= 2) {
+    if (pollData && (pollData.question || pollData.options.length > 0)) {
+        if (!pollData.question || pollData.options.length < 2) {
+            showToast('Для создания опроса в канале введите вопрос и минимум 2 варианта ответа', 'warning');
+            return;
+        }
         try {
             const pRes = await fetch('/api/polls', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(pollData)
             });
-            if (pRes.ok) {
-                const pollObj = await pRes.json();
-                pollId = pollObj.id;
+            if (!pRes.ok) {
+                const errObj = await pRes.json();
+                throw new Error(errObj.error || 'Ошибка при создании опроса');
             }
+            const pollObj = await pRes.json();
+            pollId = pollObj.id;
         } catch (e) {
-            console.error('Failed to create channel poll:', e);
+            showToast(e.message, 'error');
+            return;
         }
     }
 
-    if (!content && !channelComposerImage && !channelComposerAudioUrl && !pollId) {
+    const musicUrlInp = document.getElementById('channelComposerMusicUrl');
+    const musicTitleInp = document.getElementById('channelComposerMusicTitle');
+    const musicArtistInp = document.getElementById('channelComposerMusicArtist');
+    const audioUrl = channelComposerAudioUrl || (musicUrlInp ? musicUrlInp.value.trim() : '');
+    const audioTitle = channelComposerAudioTitle || (musicTitleInp ? musicTitleInp.value.trim() : '') || (audioUrl ? 'Аудиозапись' : '');
+    const audioArtist = channelComposerAudioArtist || (musicArtistInp ? musicArtistInp.value.trim() : '') || (audioUrl ? (currentChannelData ? currentChannelData.name : 'Канал') : '');
+
+    if (!content && !channelComposerImage && !audioUrl && !pollId) {
         showToast('Введите текст публикации, прикрепите фото, музыку или опрос', 'warning');
         return;
     }
@@ -8212,9 +8427,9 @@ async function submitChannelPost() {
             body: JSON.stringify({
                 content: content,
                 image_url: channelComposerImage,
-                music_url: channelComposerAudioUrl,
-                music_title: channelComposerAudioTitle,
-                music_artist: channelComposerAudioArtist,
+                music_url: audioUrl,
+                music_title: audioTitle,
+                music_artist: audioArtist,
                 poll_id: pollId
             })
         });
@@ -8412,160 +8627,111 @@ async function deleteCurrentChannel() {
     }
 }
 
-// Anonymous Channel Chat Modal (Subscriber Perspective)
-async function openChannelChatModal() {
+// =========================================================
+// DEDICATED CHANNEL MESSAGES VIEW & WORKSPACE SUITE
+// =========================================================
+
+let currentChannelMessagesChannelId = null;
+let currentChannelMessagesChannelData = null;
+let currentChannelChatAudioUrl = '';
+let currentChannelChatAudioTitle = '';
+let currentChannelChatAudioArtist = '';
+let currentChannelChatPollId = null;
+let currentChatScope = 'direct';
+
+function openChannelMessagesView(channelId) {
+    if (!channelId) channelId = currentChannelId;
+    if (!channelId) return;
     if (!window.IS_AUTHENTICATED) {
-        showToast('Войдите, чтобы написать каналу', 'warning');
+        showToast('Войдите, чтобы просматривать сообщения канала', 'warning');
         openAuthModal('login');
         return;
     }
-    if (!currentChannelId || !currentChannelData) return;
-    const modal = document.getElementById('channelChatModal');
-    if (!modal) return;
-    modal.style.display = 'flex';
-
-    document.getElementById('channelChatModalTitle').textContent = `Чат с каналом ${currentChannelData.name}`;
-    const av = document.getElementById('channelChatModalAvatar');
-    if (av) av.src = currentChannelData.avatar_url || '/static/avatars/default_channel.svg';
-
-    loadChannelChatMessages();
+    currentChannelMessagesChannelId = channelId;
+    navigateTo('channel-messages', channelId);
 }
 
-function closeChannelChatModal() {
-    const modal = document.getElementById('channelChatModal');
-    if (modal) modal.style.display = 'none';
+function openChannelChatView() {
+    if (!currentChannelId) return;
+    openChannelMessagesView(currentChannelId);
 }
 
-async function loadChannelChatMessages() {
-    const container = document.getElementById('channelChatMessagesContainer');
-    if (!container || !currentChannelId) return;
-    container.innerHTML = '<div class="chat-empty-hint">Загрузка диалога с каналом...</div>';
-
-    try {
-        const res = await fetch(`/api/channels/${currentChannelId}/messages`);
-        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
-        const msgs = await res.json();
-        renderChannelChatMessages(msgs);
-    } catch (err) {
-        container.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+function backFromChannelMessages() {
+    if (currentChannelMessagesChannelId) {
+        navigateTo('channels');
+        openChannelDetail(currentChannelMessagesChannelId);
+    } else {
+        navigateTo('channels');
     }
 }
 
-function renderChannelChatMessages(messages) {
-    const container = document.getElementById('channelChatMessagesContainer');
-    if (!container) return;
-    if (!messages || messages.length === 0) {
-        container.innerHTML = `
-            <div class="chat-empty-hint">
-                🔒 Здесь вы можете написать каналу анонимно.<br>
-                Создатель канала получит ваше сообщение и сможет ответить от имени канала.
-            </div>
-        `;
-        return;
-    }
-
-    container.innerHTML = messages.map(m => {
-        const isOut = (m.sender_id === window.CURRENT_USER_ID && !m.is_from_channel);
-        let audioHtml = '';
-        if (m.audio_url) {
-            audioHtml = `
-                <div class="chat-audio-bubble" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 8px; margin-bottom: 4px;">
-                    <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(m.audio_url)}', title: '${escapeHtml(m.audio_title || 'Аудио')}', artist: '${escapeHtml(m.audio_artist || '')}'}, event)" title="Слушать">▶️</button>
-                    <div><strong>${escapeHtml(m.audio_title || 'Аудио')}</strong><div style="font-size: 0.72rem; color: var(--text-dim);">${escapeHtml(m.audio_artist || '')}</div></div>
-                </div>
-            `;
-        }
-        let pollHtml = m.poll ? renderPollWidget(m.poll) : '';
-        const authorName = m.is_from_channel ? (m.channel ? m.channel.name : 'Канал') : (m.sender ? m.sender.display_name : 'Вы');
-        const authorBadge = m.is_from_channel ? ' <span class="channel-badge" style="font-size: 0.65rem;">📢 КАНАЛ</span>' : '';
-
-        return `
-            <div class="chat-bubble-row ${isOut ? 'out' : 'in'}">
-                <div class="chat-bubble ${isOut ? 'out' : 'in'}">
-                    <div style="font-size: 0.72rem; color: #00f0ff; margin-bottom: 2px; font-weight: 700;">${escapeHtml(authorName)}${authorBadge}</div>
-                    ${audioHtml}
-                    ${m.content ? `<div class="chat-bubble-content">${escapeHtml(m.content)}</div>` : ''}
-                    ${pollHtml}
-                    <div class="chat-bubble-footer">
-                        <time class="chat-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</time>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-    container.scrollTop = container.scrollHeight;
-}
-
-async function handleChannelChatAudioUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
-        if (!res.ok) throw new Error('Ошибка загрузки аудио');
-        const data = await res.json();
-        currentChannelAudioUrl = data.url;
-        currentChannelAudioTitle = file.name.replace(/\.[^/.]+$/, "");
-        showToast('Аудиозапись прикреплена к сообщению 🎵', 'success');
-    } catch (err) {
-        showToast(err.message, 'error');
-    }
-}
-
-async function handleSendChannelChatMessage(e) {
-    if (e) e.preventDefault();
-    const input = document.getElementById('channelChatMessageInput');
-    const content = input ? input.value.trim() : '';
-    if (!content && !currentChannelAudioUrl) return;
-
-    try {
-        const res = await fetch(`/api/channels/${currentChannelId}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                content: content,
-                audio_url: currentChannelAudioUrl || '',
-                audio_title: currentChannelAudioTitle || '',
-                audio_artist: currentChannelAudioArtist || ''
-            })
-        });
-        if (!res.ok) throw new Error('Ошибка отправки сообщения');
-        if (input) input.value = '';
-        currentChannelAudioUrl = '';
-        currentChannelAudioTitle = '';
-        loadChannelChatMessages();
-        if (typeof playChatSoundFx === 'function') playChatSoundFx('send');
-    } catch (err) {
-        showToast(err.message, 'error');
-    }
-}
-
-// Channel Creator Inbox Modal (Manager Perspective)
-async function openChannelConversationsModal() {
-    if (!currentChannelId || !currentChannelData) return;
-    const modal = document.getElementById('channelConversationsModal');
-    if (!modal) return;
-    modal.style.display = 'flex';
-
-    document.getElementById('channelInboxModalTitle').textContent = `Сообщения канала ${currentChannelData.name}`;
-    loadChannelInbox();
-}
-
-function closeChannelConversationsModal() {
-    const modal = document.getElementById('channelConversationsModal');
-    if (modal) modal.style.display = 'none';
+async function initChannelMessagesView(channelId) {
+    currentChannelMessagesChannelId = channelId;
     currentActiveInboxSubscriberId = null;
+
+    try {
+        const res = await fetch(`/api/channels/${channelId}`);
+        if (!res.ok) throw new Error('Канал не найден');
+        const ch = await res.json();
+        currentChannelMessagesChannelData = ch;
+
+        // Заполнение шапки страницы сообщений канала
+        const av = document.getElementById('channelMessagesHeaderAvatar');
+        if (av) av.src = ch.avatar_url || '/static/avatars/default_channel.svg';
+        const nameEl = document.getElementById('channelMessagesHeaderName');
+        if (nameEl) nameEl.textContent = ch.name;
+        const backLbl = document.getElementById('channelMessagesBackLabel');
+        if (backLbl) backLbl.textContent = `Назад к "${ch.name}"`;
+
+        const isManager = (ch.role === 'creator' || ch.role === 'admin' || ch.creator_id === window.CURRENT_USER_ID);
+        const sidebar = document.getElementById('channelChatSidebar');
+        const placeholder = document.getElementById('channelChatPlaceholder');
+        const activePane = document.getElementById('channelChatActivePane');
+        const subTitle = document.getElementById('channelMessagesHeaderSubtitle');
+
+        if (isManager) {
+            // Режим создателя/администратора канала
+            if (sidebar) sidebar.style.display = 'flex';
+            if (subTitle) subTitle.textContent = '📬 Входящие сообщения подписчиков канала';
+            if (placeholder) placeholder.style.display = 'flex';
+            if (activePane) activePane.style.display = 'none';
+
+            loadChannelSubscriberConversations(channelId);
+        } else {
+            // Режим подписчика канала
+            if (sidebar) sidebar.style.display = 'none';
+            if (subTitle) subTitle.textContent = '💬 Анонимный диалог с администрацией канала';
+            if (placeholder) placeholder.style.display = 'none';
+            if (activePane) activePane.style.display = 'flex';
+
+            const dAvatar = document.getElementById('channelDialogUserAvatar');
+            if (dAvatar) dAvatar.src = ch.avatar_url || '/static/avatars/default_channel.svg';
+            const dName = document.getElementById('channelDialogUserName');
+            if (dName) dName.textContent = ch.name;
+            const dBadge = document.getElementById('channelDialogUserBadge');
+            if (dBadge) dBadge.textContent = '📢 Официальный анонимный диалог с каналом';
+
+            const input = document.getElementById('channelChatMessageInput');
+            if (input) input.placeholder = `Напишите анонимное сообщение каналу "${ch.name}"...`;
+            const btnLabel = document.getElementById('channelSendBtnLabel');
+            if (btnLabel) btnLabel.textContent = 'Отправить';
+
+            loadSubscriberChannelChatMessages(channelId);
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+        backFromChannelMessages();
+    }
 }
 
-async function loadChannelInbox() {
-    const listEl = document.getElementById('channelInboxSubscribersList');
-    if (!listEl || !currentChannelId) return;
+async function loadChannelSubscriberConversations(channelId) {
+    const listEl = document.getElementById('channelSubscribersList');
+    if (!listEl) return;
     listEl.innerHTML = '<div class="chat-empty-hint">Загрузка диалогов...</div>';
 
     try {
-        const res = await fetch(`/api/channels/${currentChannelId}/conversations`);
-        if (!res.ok) throw new Error('Ошибка загрузки входящих');
+        const res = await fetch(`/api/channels/${channelId}/conversations`);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
         const convs = await res.json();
 
         if (!convs || convs.length === 0) {
@@ -8582,104 +8748,328 @@ async function loadChannelInbox() {
             const isActive = (currentActiveInboxSubscriberId === subId);
 
             return `
-                <div class="channel-inbox-user-item ${isActive ? 'active' : ''}" onclick="selectChannelInboxSubscriber(${subId}, '${escapeHtml(subName)}', '${escapeHtml(subAvatar)}')">
-                    <img src="${escapeHtml(subAvatar)}" alt="Аватар" class="channel-inbox-user-avatar">
-                    <div class="channel-inbox-user-info">
-                        <div class="channel-inbox-user-name">${escapeHtml(subName)}</div>
-                        <div class="channel-inbox-user-msg">${escapeHtml(lastText)}</div>
+                <div class="channel-subscriber-item ${isActive ? 'active' : ''}" onclick="selectChannelSubscriberChat(${subId}, '${escapeHtml(subName)}', '${escapeHtml(subAvatar)}')">
+                    <img src="${escapeHtml(subAvatar)}" alt="Аватар" class="channel-subscriber-avatar">
+                    <div class="channel-subscriber-meta">
+                        <div class="channel-subscriber-name">${escapeHtml(subName)}</div>
+                        <div class="channel-subscriber-lastmsg">${escapeHtml(lastText)}</div>
                     </div>
-                    ${c.unread_count > 0 ? `<span class="badge-accent">${c.unread_count}</span>` : ''}
+                    ${c.unread_count > 0 ? `<span class="channel-subscriber-badge">${c.unread_count}</span>` : ''}
                 </div>
             `;
         }).join('');
 
-        if (convs.length > 0) {
+        // Авто-выбор первого диалога
+        if (convs.length > 0 && !currentActiveInboxSubscriberId) {
             const first = convs[0];
             const firstSub = first.subscriber || first.user || {};
             const firstId = first.user_id || firstSub.id;
             const firstName = firstSub.display_name || firstSub.username || 'Подписчик';
             const firstAvatar = firstSub.avatar_url || '/static/avatars/default_avatar.svg';
-            if (!currentActiveInboxSubscriberId || currentActiveInboxSubscriberId === firstId) {
-                selectChannelInboxSubscriber(firstId, firstName, firstAvatar);
-            }
+            selectChannelSubscriberChat(firstId, firstName, firstAvatar);
         }
     } catch (err) {
         listEl.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
     }
 }
 
-async function selectChannelInboxSubscriber(userId, name, avatar) {
-    if (!userId) return;
-    currentActiveInboxSubscriberId = userId;
-    const header = document.getElementById('channelInboxChatHeader');
-    if (header && name) {
-        header.innerHTML = `Диалог с: <strong>${escapeHtml(name)}</strong> (вы отвечаете от лица канала)`;
-    }
-    const form = document.getElementById('channelInboxReplyForm');
-    if (form) form.style.display = 'flex';
+function filterChannelSubscribers() {
+    const q = (document.getElementById('channelSubscribersSearch')?.value || '').toLowerCase().trim();
+    document.querySelectorAll('.channel-subscriber-item').forEach(item => {
+        const name = (item.querySelector('.channel-subscriber-name')?.textContent || '').toLowerCase();
+        const msg = (item.querySelector('.channel-subscriber-lastmsg')?.textContent || '').toLowerCase();
+        item.style.display = (!q || name.includes(q) || msg.includes(q)) ? 'flex' : 'none';
+    });
+}
 
-    // Подсветка активного пользователя
-    document.querySelectorAll('.channel-inbox-user-item').forEach(el => el.classList.remove('active'));
+async function selectChannelSubscriberChat(subscriberId, name, avatar) {
+    if (!subscriberId) return;
+    currentActiveInboxSubscriberId = subscriberId;
 
-    // Загрузка сообщений этого диалога
-    const stream = document.getElementById('channelInboxMessagesStream');
-    if (!stream) return;
-    stream.innerHTML = '<div class="chat-empty-hint">Загрузка сообщений...</div>';
+    const placeholder = document.getElementById('channelChatPlaceholder');
+    const activePane = document.getElementById('channelChatActivePane');
+    if (placeholder) placeholder.style.display = 'none';
+    if (activePane) activePane.style.display = 'flex';
+
+    const dAvatar = document.getElementById('channelDialogUserAvatar');
+    if (dAvatar && avatar) dAvatar.src = avatar;
+    const dName = document.getElementById('channelDialogUserName');
+    if (dName && name) dName.textContent = name;
+    const dBadge = document.getElementById('channelDialogUserBadge');
+    if (dBadge) dBadge.textContent = `👤 Подписчик канала • ID: #${subscriberId}`;
+
+    const input = document.getElementById('channelChatMessageInput');
+    if (input) input.placeholder = `Ответить ${name} от имени канала...`;
+    const btnLabel = document.getElementById('channelSendBtnLabel');
+    if (btnLabel) btnLabel.textContent = `📢 Ответить от имени ${currentChannelMessagesChannelData?.name || 'канала'}`;
+
+    // Подсветка в сайдбаре
+    document.querySelectorAll('.channel-subscriber-item').forEach(el => el.classList.remove('active'));
+
+    loadChannelMessagesForSubscriber(currentChannelMessagesChannelId, subscriberId);
+}
+
+async function loadChannelMessagesForSubscriber(channelId, subscriberId) {
+    const stream = document.getElementById('channelMessagesStream');
+    if (!stream || !channelId) return;
+    stream.innerHTML = '<div class="chat-empty-hint">Загрузка переписки...</div>';
 
     try {
-        const res = await fetch(`/api/channels/${currentChannelId}/messages?subscriber_id=${userId}`);
-        if (!res.ok) throw new Error('Ошибка загрузки переписки');
+        const res = await fetch(`/api/channels/${channelId}/messages?subscriber_id=${subscriberId}`);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
         let msgs = await res.json();
         if (!Array.isArray(msgs)) msgs = [];
-
-        if (msgs.length === 0) {
-            stream.innerHTML = '<div class="chat-empty-hint">Нет сообщений в этом диалоге</div>';
-            return;
-        }
-
-        stream.innerHTML = msgs.map(m => {
-            const isFromChannel = m.is_from_channel;
-            const senderLabel = isFromChannel ? `📢 ${currentChannelData.name} (Вы)` : (m.sender ? m.sender.display_name : 'Подписчик');
-            return `
-                <div class="chat-bubble-row ${isFromChannel ? 'out' : 'in'}">
-                    <div class="chat-bubble ${isFromChannel ? 'out' : 'in'}">
-                        <div style="font-size: 0.72rem; color: #00f0ff; margin-bottom: 2px; font-weight: 700;">${escapeHtml(senderLabel)}</div>
-                        ${m.content ? `<div class="chat-bubble-content">${escapeHtml(m.content)}</div>` : ''}
-                        ${m.poll ? renderPollWidget(m.poll) : ''}
-                        <div class="chat-bubble-footer">
-                            <time class="chat-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</time>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        stream.scrollTop = stream.scrollHeight;
+        renderChannelStreamMessages(msgs, true);
     } catch (err) {
         stream.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
     }
 }
 
-async function handleSendChannelInboxReply(e) {
-    if (e) e.preventDefault();
-    if (!currentChannelId || !currentActiveInboxSubscriberId) return;
-    const input = document.getElementById('channelInboxReplyInput');
-    const content = input ? input.value.trim() : '';
-    if (!content) return;
+async function loadSubscriberChannelChatMessages(channelId) {
+    const stream = document.getElementById('channelMessagesStream');
+    if (!stream || !channelId) return;
+    stream.innerHTML = '<div class="chat-empty-hint">Загрузка диалога с каналом...</div>';
 
     try {
-        const res = await fetch(`/api/channels/${currentChannelId}/messages`, {
+        const res = await fetch(`/api/channels/${channelId}/messages`);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
+        let msgs = await res.json();
+        if (!Array.isArray(msgs)) msgs = [];
+        renderChannelStreamMessages(msgs, false);
+    } catch (err) {
+        stream.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function renderChannelStreamMessages(messages, isManagerView) {
+    const stream = document.getElementById('channelMessagesStream');
+    if (!stream) return;
+
+    if (!messages || messages.length === 0) {
+        stream.innerHTML = `
+            <div class="chat-empty-hint">
+                ${isManagerView ? 'Нет сообщений в этом диалоге с подписчиком' : '🔒 Здесь вы можете написать каналу анонимно.<br>Создатель канала получит ваше сообщение и сможет ответить.'}
+            </div>
+        `;
+        return;
+    }
+
+    const channelName = currentChannelMessagesChannelData ? currentChannelMessagesChannelData.name : 'Канал';
+
+    stream.innerHTML = messages.map(m => {
+        let isOut = false;
+        let authorLabel = '';
+
+        if (isManagerView) {
+            // Для создателя канала:
+            // исходящие — это ответы от имени канала (is_from_channel = true)
+            isOut = !!m.is_from_channel;
+            authorLabel = isOut ? `📢 ${channelName} (Вы)` : (m.sender ? m.sender.display_name : 'Подписчик');
+        } else {
+            // Для подписчика:
+            // исходящие — это его собственные сообщения (sender_id = currentUser && !is_from_channel)
+            isOut = (m.sender_id === window.CURRENT_USER_ID && !m.is_from_channel);
+            authorLabel = m.is_from_channel ? `📢 ${channelName}` : (m.sender ? m.sender.display_name : 'Вы');
+        }
+
+        let audioHtml = '';
+        if (m.audio_url) {
+            audioHtml = `
+                <div class="chat-audio-bubble" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 8px; margin-bottom: 4px;">
+                    <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(m.audio_url)}', title: '${escapeHtml(m.audio_title || 'Аудио')}', artist: '${escapeHtml(m.audio_artist || '')}'}, event)" title="Слушать">▶️</button>
+                    <div><strong>${escapeHtml(m.audio_title || 'Аудио')}</strong><div style="font-size: 0.72rem; color: var(--text-dim);">${escapeHtml(m.audio_artist || '')}</div></div>
+                </div>
+            `;
+        }
+        let pollHtml = m.poll ? renderPollWidget(m.poll) : '';
+
+        return `
+            <div class="chat-bubble-row ${isOut ? 'out' : 'in'}">
+                <div class="chat-bubble ${isOut ? 'out' : 'in'}">
+                    <div style="font-size: 0.72rem; color: #00f0ff; margin-bottom: 3px; font-weight: 700;">${escapeHtml(authorLabel)}</div>
+                    ${audioHtml}
+                    ${m.content ? `<div class="chat-bubble-content">${escapeHtml(m.content)}</div>` : ''}
+                    ${pollHtml}
+                    <div class="chat-bubble-footer">
+                        <time class="chat-bubble-time">${m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</time>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    stream.scrollTop = stream.scrollHeight;
+}
+
+function handleChannelChatKeydown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendChannelChatMessage();
+    }
+}
+
+async function sendChannelChatMessage() {
+    if (!currentChannelMessagesChannelId) return;
+    const input = document.getElementById('channelChatMessageInput');
+    const content = input ? input.value.trim() : '';
+
+    if (!content && !currentChannelChatAudioUrl && !currentChannelChatPollId) {
+        showToast('Введите сообщение или прикрепите аудио/опрос', 'warning');
+        return;
+    }
+
+    const isManager = (currentChannelMessagesChannelData &&
+        (currentChannelMessagesChannelData.role === 'creator' ||
+         currentChannelMessagesChannelData.role === 'admin' ||
+         currentChannelMessagesChannelData.creator_id === window.CURRENT_USER_ID));
+
+    let receiverId = 0;
+    if (isManager) {
+        if (!currentActiveInboxSubscriberId) {
+            showToast('Выберите подписчика для ответа', 'warning');
+            return;
+        }
+        receiverId = currentActiveInboxSubscriberId;
+    } else {
+        receiverId = currentChannelMessagesChannelData ? currentChannelMessagesChannelData.creator_id : 0;
+    }
+
+    try {
+        const res = await fetch(`/api/channels/${currentChannelMessagesChannelId}/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                receiver_id: currentActiveInboxSubscriberId,
-                content: content
+                receiver_id: receiverId,
+                content: content,
+                audio_url: currentChannelChatAudioUrl || '',
+                audio_title: currentChannelChatAudioTitle || '',
+                audio_artist: currentChannelChatAudioArtist || '',
+                poll_id: currentChannelChatPollId
             })
         });
-        if (!res.ok) throw new Error('Ошибка отправки ответа');
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка отправки сообщения');
+        }
+
         if (input) input.value = '';
-        selectChannelInboxSubscriber(currentActiveInboxSubscriberId, '', '');
+        clearChannelChatAudio();
+        clearChannelChatPoll();
+
+        if (isManager) {
+            loadChannelMessagesForSubscriber(currentChannelMessagesChannelId, currentActiveInboxSubscriberId);
+            loadChannelSubscriberConversations(currentChannelMessagesChannelId);
+        } else {
+            loadSubscriberChannelChatMessages(currentChannelMessagesChannelId);
+        }
+
         if (typeof playChatSoundFx === 'function') playChatSoundFx('send');
     } catch (err) {
         showToast(err.message, 'error');
+    }
+}
+
+function openChannelChatAudioPrompt() {
+    const url = prompt('Введите прямой URL аудиофайла (.mp3, .wav):');
+    if (!url) return;
+    currentChannelChatAudioUrl = url.trim();
+    currentChannelChatAudioTitle = prompt('Название трека:') || 'Аудиозапись';
+    currentChannelChatAudioArtist = currentChannelMessagesChannelData ? currentChannelMessagesChannelData.name : 'Канал';
+
+    const prev = document.getElementById('channelChatAudioPreview');
+    const t = document.getElementById('channelChatAudioPreviewTitle');
+    const a = document.getElementById('channelChatAudioPreviewArtist');
+    if (t) t.textContent = currentChannelChatAudioTitle;
+    if (a) a.textContent = currentChannelChatAudioArtist;
+    if (prev) prev.style.display = 'block';
+}
+
+function clearChannelChatAudio() {
+    currentChannelChatAudioUrl = '';
+    currentChannelChatAudioTitle = '';
+    currentChannelChatAudioArtist = '';
+    const prev = document.getElementById('channelChatAudioPreview');
+    if (prev) prev.style.display = 'none';
+}
+
+function openChannelChatPollModal() {
+    openChatPollModal();
+}
+
+function clearChannelChatPoll() {
+    currentChannelChatPollId = null;
+    const prev = document.getElementById('channelChatPollPreview');
+    if (prev) prev.style.display = 'none';
+}
+
+// =========================================================
+// CHAT SCOPE TOGGLE IN MAIN MESSAGES VIEW (ЛИЧНЫЕ / КАНАЛЫ)
+// =========================================================
+
+function switchChatScope(scope) {
+    currentChatScope = scope;
+    const dBtn = document.getElementById('chatScopeDirect');
+    const cBtn = document.getElementById('chatScopeChannels');
+    if (dBtn) dBtn.classList.toggle('active', scope === 'direct');
+    if (cBtn) cBtn.classList.toggle('active', scope === 'channels');
+
+    if (scope === 'direct') {
+        loadConversations();
+    } else {
+        loadUserChannelConversations();
+    }
+}
+
+async function loadUserChannelConversations() {
+    const listEl = document.getElementById('conversationsList');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="chat-empty-hint">Загрузка диалогов каналов...</div>';
+
+    try {
+        const res = await fetch('/api/user/channel-conversations');
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений каналов');
+        const convs = await res.json();
+
+        if (!convs || convs.length === 0) {
+            listEl.innerHTML = `
+                <div class="chat-empty-hint">
+                    📢 Пока нет сообщений с каналами.<br>
+                    <small>Вы можете написать любому каналу или отвечать своим подписчикам.</small>
+                </div>
+            `;
+            return;
+        }
+
+        listEl.innerHTML = convs.map(c => {
+            const ch = c.channel || {};
+            const sub = c.subscriber || c.user || {};
+            const isCreator = !!c.is_creator;
+            const title = isCreator ? `${ch.name} (От: ${sub.display_name || sub.username})` : ch.name;
+            const subtitle = isCreator ? `Подписчик: @${sub.username}` : `Канал ${ch.handle || ''}`;
+            const avatar = isCreator ? (sub.avatar_url || '/static/avatars/default_avatar.svg') : (ch.avatar_url || '/static/avatars/default_channel.svg');
+            const lastText = c.last_text || (c.last_message ? (c.last_message.content || 'Вложение') : 'Вложение');
+            const timeText = c.last_message ? formatTime(c.last_message.created_at) : '';
+
+            return `
+                <div class="conversation-item" onclick="openChannelMessagesView(${ch.id})">
+                    <div class="conv-avatar-wrap">
+                        <img src="${escapeHtml(avatar)}" alt="Avatar" class="conv-avatar">
+                    </div>
+                    <div class="conv-info">
+                        <div class="conv-top-line">
+                            <span class="conv-name" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+                            <span class="conv-time">${timeText}</span>
+                        </div>
+                        <div class="conv-bottom-line">
+                            <span class="conv-preview">${escapeHtml(lastText)}</span>
+                            ${c.unread_count > 0 ? `<span class="conv-unread-badge">${c.unread_count}</span>` : ''}
+                        </div>
+                        <div style="font-size: 0.72rem; color: #38bdf8; margin-top: 2px;">${escapeHtml(subtitle)}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        listEl.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
     }
 }

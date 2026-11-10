@@ -113,7 +113,7 @@ func (r *ChannelRepository) GetChannelByHandle(handle string, currentUserID int)
 	return r.GetChannelByID(channelID, currentUserID)
 }
 
-func (r *ChannelRepository) ListChannels(currentUserID int, filter string) ([]models.Channel, error) {
+func (r *ChannelRepository) ListChannels(currentUserID int, filter string, searchQuery string) ([]models.Channel, error) {
 	baseQuery := `
 		SELECT c.id, c.creator_id, c.name, c.handle, c.description, c.avatar_url, c.banner_url,
 		       c.subscribers_count, c.created_at,
@@ -123,20 +123,31 @@ func (r *ChannelRepository) ListChannels(currentUserID int, filter string) ([]mo
 		JOIN users u ON c.creator_id = u.id
 	`
 
-	var rows *sql.Rows
-	var err error
+	var conditions []string
+	var args []interface{}
+	args = append(args, currentUserID) // $1
 
 	if filter == "my" && currentUserID > 0 {
-		query := baseQuery + ` WHERE c.creator_id = $1 ORDER BY c.created_at DESC`
-		rows, err = r.db.Query(query, currentUserID)
+		conditions = append(conditions, "c.creator_id = $1")
 	} else if filter == "subscribed" && currentUserID > 0 {
-		query := baseQuery + ` WHERE EXISTS(SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = $1) ORDER BY c.subscribers_count DESC, c.created_at DESC`
-		rows, err = r.db.Query(query, currentUserID)
-	} else {
-		query := baseQuery + ` ORDER BY c.subscribers_count DESC, c.created_at DESC LIMIT 100`
-		rows, err = r.db.Query(query, currentUserID)
+		conditions = append(conditions, "EXISTS(SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = $1)")
 	}
 
+	searchQuery = strings.TrimSpace(searchQuery)
+	if searchQuery != "" {
+		cleanQ := strings.TrimPrefix(searchQuery, "@")
+		args = append(args, "%"+cleanQ+"%")
+		paramIdx := len(args)
+		conditions = append(conditions, fmt.Sprintf("(c.name ILIKE $%d OR c.handle ILIKE $%d OR c.description ILIKE $%d)", paramIdx, paramIdx, paramIdx))
+	}
+
+	query := baseQuery
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += " ORDER BY c.subscribers_count DESC, c.created_at DESC LIMIT 100"
+
+	rows, err := r.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list channels: %w", err)
 	}
@@ -328,6 +339,78 @@ func (r *ChannelRepository) GetChannelConversations(channelID, userID int) ([]mo
 			LastMessage: &m,
 			LastText:    m.Content,
 			UnreadCount: unread,
+			IsCreator:   true,
+		})
+	}
+
+	return convs, nil
+}
+
+// GetUserChannelConversations возвращает все диалоги с каналами для пользователя (как для создателя, так и для подписчика)
+func (r *ChannelRepository) GetUserChannelConversations(userID int) ([]models.ChannelConversation, error) {
+	query := `
+		SELECT 
+			c.id, c.creator_id, c.name, c.handle, c.description, COALESCE(c.avatar_url, ''), COALESCE(c.banner_url, ''), c.subscribers_count, c.created_at,
+			u.id, u.username, u.display_name, COALESCE(u.avatar_url, ''),
+			m.id, m.sender_id, m.receiver_id, COALESCE(m.content, ''), COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), m.created_at, m.is_read, COALESCE(m.is_from_channel, FALSE),
+			(
+				SELECT count(1)
+				FROM messages unread
+				WHERE unread.channel_id = c.id
+				  AND unread.receiver_id = $1
+				  AND unread.is_read = FALSE
+			) AS unread_count,
+			(c.creator_id = $1) AS is_creator
+		FROM (
+			SELECT DISTINCT ON (channel_id, other_party_id)
+				channel_id,
+				CASE WHEN sender_id = $1 THEN receiver_id ELSE sender_id END AS other_party_id,
+				id, sender_id, receiver_id, content, audio_url, audio_title, created_at, is_read, is_from_channel
+			FROM messages
+			WHERE channel_id IS NOT NULL
+			  AND (sender_id = $1 OR receiver_id = $1)
+			ORDER BY channel_id, other_party_id, created_at DESC
+		) m
+		JOIN channels c ON c.id = m.channel_id
+		JOIN users u ON u.id = m.other_party_id
+		ORDER BY m.created_at DESC
+	`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("user channel convs: %w", err)
+	}
+	defer rows.Close()
+
+	var convs []models.ChannelConversation
+	for rows.Next() {
+		var ch models.Channel
+		var u models.User
+		var m models.Message
+		var unread int
+		var isCreator bool
+
+		err := rows.Scan(
+			&ch.ID, &ch.CreatorID, &ch.Name, &ch.Handle, &ch.Description, &ch.AvatarURL, &ch.BannerURL, &ch.SubscribersCount, &ch.CreatedAt,
+			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL,
+			&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.AudioURL, &m.AudioTitle, &m.CreatedAt, &m.IsRead, &m.IsFromChannel,
+			&unread,
+			&isCreator,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		ch.IsCreator = isCreator
+		convs = append(convs, models.ChannelConversation{
+			Channel:     ch,
+			Subscriber:  u,
+			User:        &u,
+			UserID:      u.ID,
+			LastMessage: &m,
+			LastText:    m.Content,
+			UnreadCount: unread,
+			IsCreator:   isCreator,
 		})
 	}
 

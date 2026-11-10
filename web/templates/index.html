@@ -1088,32 +1088,43 @@
         <header class="top-sensor-bar">
             <div class="sensor-search-wrapper">
                 <span class="search-symbol" onclick="executeSearch()" style="cursor: pointer;" title="Искать">🔍</span>
-                <input type="text" id="searchInput" placeholder="Поиск записей, #тегов, авторов..." value="{{if .TagQuery}}{{.TagQuery}}{{else}}{{.SearchQuery}}{{end}}" onkeydown="if(event.key==='Enter') executeSearch()" autocomplete="off">
+                <input type="text" id="searchInput" placeholder="Поиск записей, каналов, авторов, #тегов..." value="{{if .TagQuery}}{{.TagQuery}}{{else}}{{.SearchQuery}}{{end}}" onkeydown="if(event.key==='Enter') executeSearch()" autocomplete="off">
                 {{if or .SearchQuery .TagQuery}}
                 <button class="search-clear-btn" onclick="clearSearch()" title="Сбросить">✕</button>
                 {{end}}
             </div>
 
-            <!-- ГЛОБАЛЬНЫЙ МУЗЫКАЛЬНЫЙ ПЛЕЕР В ШАПКЕ (стильный киберпанк плеер, активируется при воспроизведении трека) -->
+            <!-- ГЛОБАЛЬНЫЙ МУЗЫКАЛЬНЫЙ ПЛЕЕР В ШАПКЕ (стильный киберпанк HUD плеер) -->
             <div class="header-music-player" id="headerMusicPlayer" style="display: none;">
-                <!-- Стильная виниловая пластинка с неоновой втулкой и плавным вращением -->
+                <!-- Стильная виниловая пластинка с бороздками, неоновым бликом и плавным вращением -->
                 <div class="header-music-vinyl-wrap" onclick="window.musicPlayer.togglePlay()" title="Воспроизведение / Пауза">
                     <div class="header-music-vinyl" id="headerMusicVinyl">
-                        <div class="header-vinyl-ring"></div>
-                        <div class="header-vinyl-spindle"></div>
+                        <div class="header-vinyl-grooves"></div>
                         <div class="header-vinyl-sheen"></div>
+                        <div class="header-vinyl-center">
+                            <div class="header-vinyl-spindle"></div>
+                        </div>
                     </div>
+                    <div class="header-vinyl-glow"></div>
                 </div>
 
-                <!-- Метаданные трека: название и автор -->
+                <!-- Метаданные трека: название, исполнитель, хронометраж и неоновый спектр -->
                 <div class="header-music-meta" id="headerMusicMeta" onclick="window.musicPlayer.togglePlay()" title="Воспроизведение / Пауза">
                     <div class="header-track-title-wrap">
                         <span class="header-track-title" id="headerMusicTitle">Аудиозапись</span>
                     </div>
                     <div class="header-track-subrow">
-                        <span class="header-track-artist" id="headerMusicArtist">GoSocial</span>
-                        <div class="header-eq-bars" id="headerEqBars">
-                            <span></span><span></span><span></span><span></span>
+                        <span class="header-track-artist" id="headerMusicArtist">GoSocial Player</span>
+                        <span class="header-track-divider">•</span>
+                        <span class="header-track-time" id="headerMusicTime">
+                            <span id="headerMusicCurrentTime">0:00</span> / <span id="headerMusicDuration">0:00</span>
+                        </span>
+                        <div class="header-eq-bars" id="headerEqBars" title="Аудиовизуализатор">
+                            <span class="eq-bar eq-bar-1"></span>
+                            <span class="eq-bar eq-bar-2"></span>
+                            <span class="eq-bar eq-bar-3"></span>
+                            <span class="eq-bar eq-bar-4"></span>
+                            <span class="eq-bar eq-bar-5"></span>
                         </div>
                     </div>
                 </div>
@@ -1131,14 +1142,21 @@
                     <button type="button" class="header-music-btn header-music-step-btn" id="headerNextBtn" onclick="window.musicPlayer.nextTrack()" title="Следующий трек">
                         <svg viewBox="0 0 24 24" class="header-ctrl-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" fill="currentColor"/></svg>
                     </button>
+                    <button type="button" class="header-music-btn header-music-vol-btn" id="headerVolBtn" onclick="window.musicPlayer.toggleMute()" title="Громкость / Без звука">
+                        <svg viewBox="0 0 24 24" class="header-ctrl-icon" id="headerVolIcon">
+                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" fill="currentColor"/>
+                        </svg>
+                    </button>
                     <button type="button" class="header-music-btn header-music-close-btn" onclick="window.musicPlayer.closePlayer(event)" title="Закрыть плеер">
                         <svg viewBox="0 0 24 24" class="header-ctrl-icon"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>
                     </button>
                 </div>
 
-                <!-- Неоновый прогресс-бар трека -->
+                <!-- Неоновый интерактивный прогресс-бар трека -->
                 <div class="header-music-progress-container" id="headerMusicProgressContainer" onclick="window.musicPlayer.handleProgressClick(event)" title="Перемотать трек">
-                    <div class="header-music-progress-bar" id="headerMusicProgressBar"></div>
+                    <div class="header-music-progress-bar" id="headerMusicProgressBar">
+                        <span class="header-music-progress-thumb"></span>
+                    </div>
                 </div>
             </div>
 
@@ -1340,6 +1358,15 @@
                             </button>
                         </div>
                         
+                    </div>
+
+                    <!-- Блок найденных каналов в глобальном поиске -->
+                    <div id="feedSearchChannelsBlock" class="feed-channels-search-block" style="display: none;">
+                        <div class="feed-channels-search-header">
+                            <span class="feed-channels-search-title">📢 Найденные каналы</span>
+                            <span class="feed-channels-search-count" id="feedSearchChannelsCount">0</span>
+                        </div>
+                        <div class="feed-channels-search-grid" id="feedSearchChannelsGrid"></div>
                     </div>
 
                     <!-- Контейнер постов ленты -->
@@ -1831,6 +1858,17 @@
                 <div class="chat-layout-card">
                     <!-- Левая колонка: список собеседников -->
                     <div class="chat-sidebar">
+                        <!-- Переключатель категорий диалогов: Личные / Каналы -->
+                        <div class="chat-scope-tabs">
+                            <button type="button" class="chat-scope-tab active" id="chatScopeDirect" onclick="switchChatScope('direct')">
+                                <span>💬 Личные</span>
+                            </button>
+                            <button type="button" class="chat-scope-tab" id="chatScopeChannels" onclick="switchChatScope('channels')">
+                                <span>📢 Каналы</span>
+                                <span class="chat-scope-badge" id="chatScopeChannelsBadge" style="display: none;">0</span>
+                            </button>
+                        </div>
+
                         <div class="chat-search-bar" style="display: flex; gap: 0.5rem; align-items: center; padding: 0.75rem;">
                             <input type="text" id="chatSearchInput" placeholder="Поиск по диалогам..." oninput="filterConversations()" style="flex: 1;">
                             <button type="button" class="btn btn-primary btn-sm" onclick="openNewChatModal()" title="Начать новый диалог" style="white-space: nowrap; padding: 6px 12px; font-size: 0.8rem; font-weight: 700;">
@@ -1990,10 +2028,7 @@
 
                     <!-- Табы фильтрации каналов -->
                     <div class="channels-tabs-bar">
-                        <button class="channels-tab-btn active" id="tabChannelsAll" onclick="switchChannelsTab('all')">
-                            <span>Все каналы</span>
-                        </button>
-                        <button class="channels-tab-btn" id="tabChannelsSubscribed" onclick="switchChannelsTab('subscribed')">
+                        <button class="channels-tab-btn active" id="tabChannelsSubscribed" onclick="switchChannelsTab('subscribed')">
                             <span>Мои подписки</span>
                         </button>
                         <button class="channels-tab-btn" id="tabChannelsMy" onclick="switchChannelsTab('my')">
@@ -2050,13 +2085,13 @@
                                 <button type="button" class="btn btn-primary btn-sm" id="btnChannelSubscribe" onclick="toggleChannelSubscription()">
                                     Подписаться
                                 </button>
-                                <button type="button" class="btn btn-outline btn-sm" id="btnChannelMessage" onclick="openChannelChatModal()" title="Написать каналу анонимно">
+                                <button type="button" class="btn btn-outline btn-sm" id="btnChannelMessage" onclick="openChannelChatView()" title="Написать каналу анонимно">
                                     💬 Написать каналу
                                 </button>
                                 <button type="button" class="btn btn-secondary btn-sm" id="btnChannelEdit" style="display: none;" onclick="openEditChannelModal()">
                                     ⚙ Оформить канал
                                 </button>
-                                <button type="button" class="btn btn-secondary btn-sm" id="btnChannelManageChats" style="display: none;" onclick="openChannelConversationsModal()">
+                                <button type="button" class="btn btn-secondary btn-sm" id="btnChannelManageChats" style="display: none;" onclick="openChannelMessagesView(currentChannelId)">
                                     📬 Сообщения канала <span id="channelChatsUnreadBadge" class="channel-chat-badge" style="display: none;">0</span>
                                 </button>
                             </div>
@@ -2178,6 +2213,107 @@
                     <!-- Лента постов канала -->
                     <div class="channel-posts-stream" id="channelPostsStream">
                         <!-- Посты канала рендерятся тут -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==========================================
+                 VIEW 6: ДИАЛОГИ И СООБЩЕНИЯ КАНАЛА (DEDICATED FULL TRANSITION VIEW)
+            ========================================== -->
+            <div id="channelMessagesView" class="view-panel" style="display: none;">
+                <div class="channel-messages-layout-card">
+                    <!-- Верхняя панель навигации -->
+                    <div class="channel-messages-header">
+                        <button type="button" class="btn btn-secondary btn-sm channel-back-btn" onclick="backFromChannelMessages()">
+                            <span>←</span> <span id="channelMessagesBackLabel">Назад к каналу</span>
+                        </button>
+                        <div class="channel-messages-title-wrap">
+                            <img id="channelMessagesHeaderAvatar" src="/static/avatars/default_channel.svg" class="channel-msg-header-avatar" alt="Avatar">
+                            <div class="channel-messages-header-info">
+                                <div class="channel-msg-title-row">
+                                    <h2 id="channelMessagesHeaderName" class="channel-msg-header-name">Название канала</h2>
+                                    <span class="channel-official-badge">📢 КАНАЛ</span>
+                                </div>
+                                <div class="channel-msg-subtitle" id="channelMessagesHeaderSubtitle">Сообщения и обратная связь канала</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Рабочая область чата -->
+                    <div class="channel-chat-workspace" id="channelChatWorkspace">
+                        <!-- Левая колонка: список подписчиков (для владельца канала) -->
+                        <div class="channel-chat-sidebar" id="channelChatSidebar">
+                            <div class="channel-chat-search">
+                                <input type="text" id="channelSubscribersSearch" placeholder="Поиск диалогов..." oninput="filterChannelSubscribers()">
+                            </div>
+                            <div class="channel-subscribers-list" id="channelSubscribersList">
+                                <div class="chat-empty-hint">Загрузка диалогов...</div>
+                            </div>
+                        </div>
+
+                        <!-- Правая колонка: активная переписка -->
+                        <div class="channel-chat-main" id="channelChatMain">
+                            <!-- Заглушка, если подписчик не выбран (для владельца) -->
+                            <div class="channel-chat-placeholder" id="channelChatPlaceholder" style="display: none;">
+                                <div class="chat-placeholder-icon">📬</div>
+                                <h3>Выберите диалог</h3>
+                                <p>Выберите подписчика из списка слева, чтобы ответить на его сообщение от имени канала.</p>
+                            </div>
+
+                            <div class="channel-chat-active-pane" id="channelChatActivePane">
+                                <div class="channel-dialog-header" id="channelDialogHeader">
+                                    <div class="channel-dialog-user-info">
+                                        <img id="channelDialogUserAvatar" src="/static/avatars/default.svg" class="channel-dialog-avatar" alt="avatar">
+                                        <div>
+                                            <div class="channel-dialog-user-name" id="channelDialogUserName">Подписчик</div>
+                                            <div class="channel-dialog-user-badge" id="channelDialogUserBadge">💬 Анонимный диалог с каналом</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Поток сообщений -->
+                                <div class="channel-messages-stream" id="channelMessagesStream">
+                                    <!-- Сообщения рендерятся тут -->
+                                </div>
+
+                                <!-- Композер ответа/сообщения -->
+                                <div class="channel-chat-composer" id="channelChatComposer">
+                                    <!-- Превью вложений (аудио/опрос) -->
+                                    <div id="channelChatAudioPreview" class="composer-music-preview" style="display: none;">
+                                        <div class="composer-music-preview-card">
+                                            <span class="preview-music-icon">🎵</span>
+                                            <div class="preview-music-info">
+                                                <span id="channelChatAudioPreviewTitle" class="preview-music-title">Трек</span>
+                                                <span id="channelChatAudioPreviewArtist" class="preview-music-artist">Исполнитель</span>
+                                            </div>
+                                            <button type="button" class="upload-remove-btn" onclick="clearChannelChatAudio()">✕</button>
+                                        </div>
+                                    </div>
+
+                                    <div id="channelChatPollPreview" class="composer-poll-preview" style="display: none;">
+                                        <div class="composer-poll-preview-card">
+                                            <span class="preview-poll-icon">📊</span>
+                                            <div class="preview-poll-info">
+                                                <strong id="channelChatPollPreviewQuestion" class="preview-poll-question">Опрос</strong>
+                                                <span id="channelChatPollPreviewOpts" class="preview-poll-opts">0 вариантов</span>
+                                            </div>
+                                            <button type="button" class="upload-remove-btn" onclick="clearChannelChatPoll()">✕</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="channel-chat-composer-row">
+                                        <textarea id="channelChatMessageInput" placeholder="Напишите ответ от имени канала..." rows="2" onkeydown="handleChannelChatKeydown(event)"></textarea>
+                                        <div class="channel-chat-composer-actions">
+                                            <button type="button" class="btn btn-outline btn-sm channel-attach-btn" onclick="openChannelChatAudioPrompt()" title="Прикрепить аудио">🎵</button>
+                                            <button type="button" class="btn btn-outline btn-sm channel-attach-btn" onclick="openChannelChatPollModal()" title="Прикрепить опрос">📊</button>
+                                            <button type="button" class="btn btn-primary btn-sm channel-send-btn" id="btnSendChannelMessage" onclick="sendChannelChatMessage()">
+                                                <span id="channelSendBtnLabel">Отправить</span> <span>➤</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
