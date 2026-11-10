@@ -2153,6 +2153,29 @@
                                 <button type="button" class="btn btn-secondary btn-sm" id="btnChannelManageChats" style="display: none;" onclick="openChannelMessagesView(currentChannelId)">
                                     📬 Сообщения канала <span id="channelChatsUnreadBadge" class="channel-chat-badge" style="display: none;">0</span>
                                 </button>
+
+                                <!-- Выпадающее меню опций канала (3 точки) -->
+                                <div class="channel-options-dropdown-wrap" id="channelOptionsDropdownWrap">
+                                    <button type="button" class="btn btn-secondary btn-icon-only profile-dots-btn" id="btnChannelOptionsDots" onclick="toggleChannelOptionsMenu(event)" title="Опции канала">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <circle cx="12" cy="5" r="2.2"></circle>
+                                            <circle cx="12" cy="12" r="2.2"></circle>
+                                            <circle cx="12" cy="19" r="2.2"></circle>
+                                        </svg>
+                                    </button>
+                                    <div class="profile-options-dropdown-menu" id="channelOptionsMenu" style="display: none;">
+                                        <button type="button" class="profile-dropdown-item" id="channelDropdownItemEdit" onclick="openEditChannelModal(); closeChannelOptionsMenu();">
+                                            <span>⚙️ Оформить канал</span>
+                                        </button>
+                                        <button type="button" class="profile-dropdown-item" id="channelDropdownItemChats" onclick="openChannelMessagesView(currentChannelId); closeChannelOptionsMenu();">
+                                            <span>📬 Сообщения канала</span>
+                                        </button>
+                                        <div class="profile-dropdown-divider" id="channelDropdownDivider"></div>
+                                        <button type="button" class="profile-dropdown-item" onclick="copyChannelLink(); closeChannelOptionsMenu();">
+                                            <span>📋 Скопировать ссылку</span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

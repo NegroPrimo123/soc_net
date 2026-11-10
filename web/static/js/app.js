@@ -2467,7 +2467,8 @@ function navigateTo(view, userId = null) {
             showToast('Войдите в аккаунт для доступа к личным сообщениям', 'error');
             return;
         }
-        loadConversations();
+        // Синхронизируем вкладку "Личные" и загрузку диалогов
+        switchChatScope('direct');
         window.history.pushState({}, '', '/?view=messages');
     } else {
         window.history.pushState({}, '', '/');
@@ -2674,15 +2675,27 @@ function renderUserProfile(data) {
             if (compAvatar && user.avatar_url) compAvatar.src = user.avatar_url;
         }
         actionsBox.innerHTML = `
-            <button class="btn btn-primary btn-sm" onclick="openEditProfileModal()">
-                <span>🎨 Оформление профиля</span>
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="openEditProfileModal()">
-                <span>✏️ Редактировать</span>
-            </button>
-            <button class="btn btn-outline btn-sm btn-logout-action" onclick="handleLogout()" style="border-color: rgba(244, 63, 94, 0.45); color: #f43f5e;" title="Выйти из аккаунта">
-                <span>🚪 Выйти</span>
-            </button>
+            <div class="profile-options-dropdown-wrap">
+                <button type="button" class="btn btn-secondary btn-icon-only profile-dots-btn" id="btnProfileOptionsDots" onclick="toggleProfileOptionsMenu(event)" title="Опции профиля">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="2.2"></circle>
+                        <circle cx="12" cy="12" r="2.2"></circle>
+                        <circle cx="12" cy="19" r="2.2"></circle>
+                    </svg>
+                </button>
+                <div class="profile-options-dropdown-menu" id="profileOptionsMenu" style="display: none;">
+                    <button type="button" class="profile-dropdown-item" onclick="openProfileCustomization(); closeProfileOptionsMenu();">
+                        <span>🎨 Оформление профиля</span>
+                    </button>
+                    <button type="button" class="profile-dropdown-item" onclick="openProfileEdit(); closeProfileOptionsMenu();">
+                        <span>✏️ Редактировать</span>
+                    </button>
+                    <div class="profile-dropdown-divider"></div>
+                    <button type="button" class="profile-dropdown-item text-danger" onclick="handleLogout(); closeProfileOptionsMenu();">
+                        <span>🚪 Выйти</span>
+                    </button>
+                </div>
+            </div>
         `;
     } else {
         if (profComposer) profComposer.style.display = 'none';
@@ -2699,6 +2712,20 @@ function renderUserProfile(data) {
             <button class="btn ${followClass} btn-sm" onclick="toggleProfileFollow(${user.id})">
                 <span>${followText}</span>
             </button>
+            <div class="profile-options-dropdown-wrap">
+                <button type="button" class="btn btn-secondary btn-icon-only profile-dots-btn" onclick="toggleProfileOptionsMenu(event)" title="Опции профиля">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="2.2"></circle>
+                        <circle cx="12" cy="12" r="2.2"></circle>
+                        <circle cx="12" cy="19" r="2.2"></circle>
+                    </svg>
+                </button>
+                <div class="profile-options-dropdown-menu" id="profileOptionsMenu" style="display: none;">
+                    <button type="button" class="profile-dropdown-item" onclick="copyProfileLink(${user.id}); closeProfileOptionsMenu();">
+                        <span>📋 Скопировать ссылку</span>
+                    </button>
+                </div>
+            </div>
         `;
     }
 
@@ -2721,6 +2748,104 @@ async function toggleProfileFollow(userId) {
     await toggleFollow(userId);
     loadUserProfile(userId);
 }
+
+// ==========================================
+// PROFILE & CHANNEL 3-DOTS OPTIONS DROPDOWNS
+// ==========================================
+function toggleProfileOptionsMenu(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const menu = document.getElementById('profileOptionsMenu');
+    if (!menu) return;
+    const isVisible = (menu.style.display === 'flex');
+    closeAllOptionsMenus();
+    menu.style.display = isVisible ? 'none' : 'flex';
+}
+
+function closeProfileOptionsMenu() {
+    const menu = document.getElementById('profileOptionsMenu');
+    if (menu) menu.style.display = 'none';
+}
+
+function openProfileCustomization() {
+    openEditProfileModal();
+    if (typeof switchCustomTab === 'function') {
+        switchCustomTab('theme');
+    }
+}
+
+function openProfileEdit() {
+    openEditProfileModal();
+    if (typeof switchCustomTab === 'function') {
+        switchCustomTab('profile');
+    }
+}
+
+function copyProfileLink(userId) {
+    const url = `${window.location.origin}/?view=profile&user=${userId || window.CURRENT_USER_ID}`;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка на профиль скопирована в буфер обмена 📋', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать ссылку', 'error');
+    });
+}
+
+function toggleChannelOptionsMenu(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const menu = document.getElementById('channelOptionsMenu');
+    if (!menu) return;
+    const isVisible = (menu.style.display === 'flex');
+    closeAllOptionsMenus();
+    menu.style.display = isVisible ? 'none' : 'flex';
+}
+
+function closeChannelOptionsMenu() {
+    const menu = document.getElementById('channelOptionsMenu');
+    if (menu) menu.style.display = 'none';
+}
+
+function closeAllOptionsMenus() {
+    closeProfileOptionsMenu();
+    closeChannelOptionsMenu();
+}
+
+function copyChannelLink() {
+    if (!currentChannelData) return;
+    const url = `${window.location.origin}/?view=channel&id=${currentChannelData.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Ссылка на канал скопирована в буфер обмена 📢', 'success');
+    }).catch(() => {
+        showToast('Не удалось скопировать ссылку', 'error');
+    });
+}
+
+function refreshCurrentChatConversations() {
+    if (typeof currentChatScope !== 'undefined' && currentChatScope === 'channels') {
+        loadUserChannelConversations();
+    } else {
+        loadConversations();
+    }
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.profile-options-dropdown-wrap')) {
+        closeProfileOptionsMenu();
+    }
+    if (!e.target.closest('.channel-options-dropdown-wrap')) {
+        closeChannelOptionsMenu();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeAllOptionsMenus();
+    }
+});
 
 function switchProfileTab(tabName) {
     ['Posts', 'Gifts', 'Network', 'IdentityV'].forEach(t => {
@@ -5781,7 +5906,7 @@ function handleIncomingSSEMessage(msg) {
         showToast(`Новое сообщение от ${senderName}: ${msg.content.substring(0, 40)}`, 'success');
     }
 
-    loadConversations();
+    refreshCurrentChatConversations();
     updateUnreadMessagesCountBadge();
 }
 
@@ -8456,13 +8581,26 @@ function renderChannelDetailPage(ch) {
     }
 
     const isManager = (ch.is_creator || ch.role === 'creator' || ch.role === 'admin');
+    const composerCard = document.getElementById('channelPostComposerCard');
+    if (composerCard) composerCard.style.display = isManager ? 'block' : 'none';
+
+    // Настройка пунктов 3 точек в шапке канала
+    const itemEdit = document.getElementById('channelDropdownItemEdit');
+    const itemChats = document.getElementById('channelDropdownItemChats');
+    const itemDivider = document.getElementById('channelDropdownDivider');
+    if (itemEdit) itemEdit.style.display = isManager ? 'flex' : 'none';
+    if (itemChats) itemChats.style.display = isManager ? 'flex' : 'none';
+    if (itemDivider) itemDivider.style.display = isManager ? 'block' : 'none';
+
+    // Прячем старые широкие кнопки (они теперь внутри меню 3 точек)
     const editBtn = document.getElementById('btnChannelEdit');
     const manageChatsBtn = document.getElementById('btnChannelManageChats');
-    const composerCard = document.getElementById('channelPostComposerCard');
+    if (editBtn) editBtn.style.display = 'none';
+    if (manageChatsBtn) manageChatsBtn.style.display = 'none';
 
-    if (editBtn) editBtn.style.display = isManager ? 'inline-flex' : 'none';
-    if (manageChatsBtn) manageChatsBtn.style.display = isManager ? 'inline-flex' : 'none';
-    if (composerCard) composerCard.style.display = isManager ? 'block' : 'none';
+    // Кнопка "Написать каналу" для подписчиков
+    const msgBtn = document.getElementById('btnChannelMessage');
+    if (msgBtn) msgBtn.style.display = isManager ? 'none' : 'inline-flex';
 
     const compAvatar = document.getElementById('channelComposerAvatar');
     if (compAvatar) compAvatar.src = ch.avatar_url || '/static/avatars/default_channel.svg';
