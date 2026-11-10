@@ -2401,6 +2401,11 @@ function navigateTo(view, userId = null) {
         } else {
             vp.classList.remove('viewport-workspace-mode');
         }
+        if (view === 'channels') {
+            vp.classList.add('viewport-channels-mode');
+        } else {
+            vp.classList.remove('viewport-channels-mode');
+        }
     }
 
     if (view === 'feed') {
@@ -8945,6 +8950,7 @@ async function initChannelMessagesView(channelId) {
         const placeholder = document.getElementById('channelChatPlaceholder');
         const activePane = document.getElementById('channelChatActivePane');
         const subTitle = document.getElementById('channelMessagesHeaderSubtitle');
+        const dHeader = document.getElementById('channelDialogHeader');
 
         if (isManager) {
             // Режим создателя/администратора канала
@@ -8952,14 +8958,16 @@ async function initChannelMessagesView(channelId) {
             if (subTitle) subTitle.textContent = '📬 Входящие сообщения подписчиков канала';
             if (placeholder) placeholder.style.display = 'flex';
             if (activePane) activePane.style.display = 'none';
+            if (dHeader) dHeader.style.display = 'flex';
 
             loadChannelSubscriberConversations(channelId);
         } else {
             // Режим подписчика канала
             if (sidebar) sidebar.style.display = 'none';
-            if (subTitle) subTitle.textContent = '💬 Анонимный диалог с администрацией канала';
+            if (subTitle) subTitle.textContent = '📢 Официальный анонимный диалог с администрацией канала';
             if (placeholder) placeholder.style.display = 'none';
             if (activePane) activePane.style.display = 'flex';
+            if (dHeader) dHeader.style.display = 'none';
 
             const dAvatar = document.getElementById('channelDialogUserAvatar');
             if (dAvatar) dAvatar.src = ch.avatar_url || '/static/avatars/default_channel.svg';
@@ -9045,8 +9053,10 @@ async function selectChannelSubscriberChat(subscriberId, name, avatar) {
 
     const placeholder = document.getElementById('channelChatPlaceholder');
     const activePane = document.getElementById('channelChatActivePane');
+    const dHeader = document.getElementById('channelDialogHeader');
     if (placeholder) placeholder.style.display = 'none';
     if (activePane) activePane.style.display = 'flex';
+    if (dHeader) dHeader.style.display = 'flex';
 
     const dAvatar = document.getElementById('channelDialogUserAvatar');
     if (dAvatar && avatar) dAvatar.src = avatar;

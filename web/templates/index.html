@@ -1396,10 +1396,6 @@
                                         <span>📊 Опрос</span>
                                     </button>
                                     <input type="file" id="composerAudioFileInput" style="display: none;" accept="audio/*,.mp3,.wav,.ogg,.m4a" onchange="handleComposerAudioUpload(event)">
-
-                                    <button type="button" class="chip-tag" onclick="insertTag('#мысли')">#мысли</button>
-                                    <button type="button" class="chip-tag" onclick="insertTag('#go')">#go</button>
-                                    <button type="button" class="chip-tag" onclick="insertTag('#дизайн')">#дизайн</button>
                                 </div>
 
                                 <div class="composer-right-actions">
@@ -2037,9 +2033,6 @@
                                     </button>
                                 </div>
                             </div>
-
-                            </div>
-
                             
                             <!-- Превью аудио перед отправкой в чате -->
                             <div id="chatAudioPreview" class="chat-audio-attach-preview" style="display: none;">
@@ -2327,57 +2320,61 @@
                             </div>
 
                             <div class="channel-chat-active-pane" id="channelChatActivePane">
-                                <div class="channel-dialog-header" id="channelDialogHeader">
-                                    <div class="channel-dialog-user-info">
-                                        <img id="channelDialogUserAvatar" src="/static/avatars/default.svg" class="channel-dialog-avatar" alt="avatar">
-                                        <div>
-                                            <div class="channel-dialog-user-name" id="channelDialogUserName">Подписчик</div>
-                                            <div class="channel-dialog-user-badge" id="channelDialogUserBadge">💬 Анонимный диалог с каналом</div>
+                                <div class="chat-header channel-dialog-header" id="channelDialogHeader">
+                                    <div class="chat-interlocutor-info channel-dialog-user-info">
+                                        <div class="chat-avatar-wrap">
+                                            <img id="channelDialogUserAvatar" src="/static/avatars/default.svg" class="chat-user-avatar channel-dialog-avatar" alt="avatar">
+                                            <span class="chat-online-dot"></span>
+                                        </div>
+                                        <div class="chat-name-details">
+                                            <div class="chat-user-display" id="channelDialogUserName">Подписчик</div>
+                                            <div class="chat-name-sub">
+                                                <span class="chat-channel-badge" id="channelDialogUserBadge"><span class="pulse-dot"></span> Анонимный диалог с каналом</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- Поток сообщений -->
-                                <div class="channel-messages-stream" id="channelMessagesStream">
+                                <div class="chat-messages-container channel-messages-stream" id="channelMessagesStream">
                                     <!-- Сообщения рендерятся тут -->
                                 </div>
 
-                                <!-- Композер ответа/сообщения -->
-                                <div class="channel-chat-composer" id="channelChatComposer">
-                                    <!-- Превью вложений (аудио/опрос) -->
-                                    <div id="channelChatAudioPreview" class="composer-music-preview" style="display: none;">
-                                        <div class="composer-music-preview-card">
-                                            <span class="preview-music-icon">🎵</span>
-                                            <div class="preview-music-info">
-                                                <span id="channelChatAudioPreviewTitle" class="preview-music-title">Трек</span>
-                                                <span id="channelChatAudioPreviewArtist" class="preview-music-artist">Исполнитель</span>
-                                            </div>
-                                            <button type="button" class="upload-remove-btn" onclick="clearChannelChatAudio()">✕</button>
+                                <!-- Превью вложений (аудио/опрос) -->
+                                <div id="channelChatAudioPreview" class="chat-audio-attach-preview" style="display: none;">
+                                    <div class="chat-audio-preview-content">
+                                        <span class="preview-music-icon">🎵</span>
+                                        <div class="chat-audio-preview-text">
+                                            <strong id="channelChatAudioPreviewTitle">Трек</strong>
+                                            <span id="channelChatAudioPreviewArtist">🎵 Аудиофайл</span>
                                         </div>
-                                    </div>
-
-                                    <div id="channelChatPollPreview" class="composer-poll-preview" style="display: none;">
-                                        <div class="composer-poll-preview-card">
-                                            <span class="preview-poll-icon">📊</span>
-                                            <div class="preview-poll-info">
-                                                <strong id="channelChatPollPreviewQuestion" class="preview-poll-question">Опрос</strong>
-                                                <span id="channelChatPollPreviewOpts" class="preview-poll-opts">0 вариантов</span>
-                                            </div>
-                                            <button type="button" class="upload-remove-btn" onclick="clearChannelChatPoll()">✕</button>
-                                        </div>
-                                    </div>
-
-                                    <div class="channel-chat-composer-row">
-                                        <textarea id="channelChatMessageInput" placeholder="Напишите ответ от имени канала..." rows="2" onkeydown="handleChannelChatKeydown(event)"></textarea>
-                                        <div class="channel-chat-composer-actions">
-                                            <button type="button" class="btn btn-outline btn-sm channel-attach-btn" onclick="openChannelChatAudioPrompt()" title="Прикрепить аудио">🎵</button>
-                                            <button type="button" class="btn btn-outline btn-sm channel-attach-btn" onclick="openChannelChatPollModal()" title="Прикрепить опрос">📊</button>
-                                            <button type="button" class="btn btn-primary btn-sm channel-send-btn" id="btnSendChannelMessage" onclick="sendChannelChatMessage()">
-                                                <span id="channelSendBtnLabel">Отправить</span> <span>➤</span>
-                                            </button>
-                                        </div>
+                                        <button type="button" class="upload-remove-btn" onclick="clearChannelChatAudio()" title="Отменить аудио">✕</button>
                                     </div>
                                 </div>
+
+                                <div id="channelChatPollPreview" class="composer-poll-preview" style="display: none; padding: 6px 14px; background: rgba(0, 240, 255, 0.08); border-top: 1px solid var(--border-subtle);">
+                                    <div class="composer-poll-preview-card" style="display: flex; align-items: center; justify-content: space-between;">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span class="preview-poll-icon">📊</span>
+                                            <div>
+                                                <strong id="channelChatPollPreviewQuestion" style="font-size: 0.85rem; color: #00f0ff;">Опрос</strong>
+                                                <span id="channelChatPollPreviewOpts" style="font-size: 0.75rem; color: var(--text-dim); margin-left: 6px;">0 вариантов</span>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="upload-remove-btn" onclick="clearChannelChatPoll()" title="Отменить опрос">✕</button>
+                                    </div>
+                                </div>
+
+                                <!-- Композер ответа/сообщения (оформлен идентично вкладке «Сообщения») -->
+                                <form class="chat-input-bar channel-chat-composer" id="channelChatComposer" onsubmit="event.preventDefault(); sendChannelChatMessage();">
+                                    <button type="button" class="chat-attach-btn" onclick="openChannelChatAudioPrompt()" title="Прикрепить аудио">🎵</button>
+                                    <button type="button" class="chat-attach-btn" onclick="openChatPollModal()" title="Прикрепить опрос">📊</button>
+                                    <input type="text" id="channelChatMessageInput" class="chat-text-input" placeholder="Напишите ответ от имени канала... (Enter для отправки)" autocomplete="off">
+                                    <button type="submit" class="btn btn-primary btn-chat-send" id="btnSendChannelMessage">
+                                        <span id="channelSendBtnLabel">Отправить</span>
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>
