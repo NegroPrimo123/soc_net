@@ -33,7 +33,9 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
 		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
-		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following,
+		COALESCE(u.experience_points, 0) as experience_points,
+		COALESCE(u.account_level, 1) as account_level
 	FROM users u
 	ORDER BY u.id ASC
 	LIMIT 50
@@ -54,9 +56,11 @@ func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
+			&u.ExperiencePoints, &u.AccountLevel,
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
+		u.LevelTitle = models.CalculateLevel(u.ExperiencePoints).Title
 		users = append(users, u)
 	}
 	return users, nil
@@ -75,7 +79,9 @@ func (r *UserRepository) Search(currentUserID int, search string) ([]models.User
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
 		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
-		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following,
+		COALESCE(u.experience_points, 0) as experience_points,
+		COALESCE(u.account_level, 1) as account_level
 	FROM users u
 	WHERE LOWER(u.username) LIKE LOWER($2) OR LOWER(u.display_name) LIKE LOWER($2)
 	ORDER BY u.id ASC
@@ -97,9 +103,11 @@ func (r *UserRepository) Search(currentUserID int, search string) ([]models.User
 			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
+			&u.ExperiencePoints, &u.AccountLevel,
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
+		u.LevelTitle = models.CalculateLevel(u.ExperiencePoints).Title
 		users = append(users, u)
 	}
 	return users, nil
@@ -118,7 +126,9 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
 		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
-		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following,
+		COALESCE(u.experience_points, 0) as experience_points,
+		COALESCE(u.account_level, 1) as account_level
 	FROM users u
 	WHERE u.id = $2
 	`
@@ -130,6 +140,7 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 		&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 		&u.CreatedAt,
 		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
+		&u.ExperiencePoints, &u.AccountLevel,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -137,6 +148,7 @@ func (r *UserRepository) GetByID(id int, currentUserID int) (*models.User, error
 	if err != nil {
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
+	u.LevelTitle = models.CalculateLevel(u.ExperiencePoints).Title
 	return &u, nil
 }
 
@@ -187,7 +199,9 @@ func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
 		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
-		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following,
+		COALESCE(u.experience_points, 0) as experience_points,
+		COALESCE(u.account_level, 1) as account_level
 	FROM follows f
 	JOIN users u ON u.id = f.follower_id
 	WHERE f.following_id = $2
@@ -209,9 +223,11 @@ func (r *UserRepository) GetFollowers(userID, currentUserID int) ([]models.User,
 			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
+			&u.ExperiencePoints, &u.AccountLevel,
 		); err != nil {
 			return nil, err
 		}
+		u.LevelTitle = models.CalculateLevel(u.ExperiencePoints).Title
 		users = append(users, u)
 	}
 	return users, nil
@@ -230,7 +246,9 @@ func (r *UserRepository) GetFollowing(userID, currentUserID int) ([]models.User,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
 		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
-		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) as is_following,
+		COALESCE(u.experience_points, 0) as experience_points,
+		COALESCE(u.account_level, 1) as account_level
 	FROM follows f
 	JOIN users u ON u.id = f.following_id
 	WHERE f.follower_id = $2
@@ -252,9 +270,11 @@ func (r *UserRepository) GetFollowing(userID, currentUserID int) ([]models.User,
 			&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 			&u.CreatedAt,
 			&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount, &u.IsFollowing,
+			&u.ExperiencePoints, &u.AccountLevel,
 		); err != nil {
 			return nil, err
 		}
+		u.LevelTitle = models.CalculateLevel(u.ExperiencePoints).Title
 		users = append(users, u)
 	}
 	return users, nil
@@ -373,7 +393,9 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 		(SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count,
 		(SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
 		(SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
-		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count
+		(SELECT COUNT(*) FROM gifts WHERE receiver_id = u.id) as gifts_count,
+		COALESCE(u.experience_points, 0) as experience_points,
+		COALESCE(u.account_level, 1) as account_level
 	FROM sessions s
 	JOIN users u ON u.id = s.user_id
 	WHERE s.token = $1 AND s.expires_at > NOW()
@@ -386,6 +408,7 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 		&u.SkillsTags, &u.SocialLinks, &u.PinnedGiftID, &u.MusicURL, &u.MusicTitle, &u.MusicArtist,
 		&u.CreatedAt,
 		&u.PostsCount, &u.Followers, &u.Following, &u.GiftsCount,
+		&u.ExperiencePoints, &u.AccountLevel,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -393,6 +416,7 @@ func (r *UserRepository) GetUserBySession(token string) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
+	u.LevelTitle = models.CalculateLevel(u.ExperiencePoints).Title
 	return &u, nil
 }
 

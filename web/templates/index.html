@@ -1107,6 +1107,11 @@
                 <span class="hud-nav-icon">📢</span>
                 <span class="hud-nav-label">Каналы</span>
             </button>
+            <button class="hud-nav-item" id="tabNavAchievements" onclick="navigateTo('achievements')">
+                <span class="hud-nav-icon">🏆</span>
+                <span class="hud-nav-label">Достижения</span>
+                <span class="hud-nav-badge achieve-lvl-badge" id="hudNavLevelBadge" style="display: none;">1 ур.</span>
+            </button>
             <button class="hud-nav-item" id="tabNavGifts" onclick="navigateTo('showcase')">
                 <span class="hud-nav-icon">🎁</span>
                 <span class="hud-nav-label">Подарки</span>
@@ -1130,7 +1135,10 @@
             <div class="hud-user-pill" onclick="navigateTo('my-profile')" title="Мой профиль">
                 <img src="{{.CurrentUser.AvatarURL}}" alt="avatar" class="hud-user-avatar">
                 <div class="hud-user-details">
-                    <span class="hud-user-name">{{.CurrentUser.DisplayName}}</span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span class="hud-user-name">{{.CurrentUser.DisplayName}}</span>
+                        <span class="hud-level-pill" id="sidebarUserLvlBadge">{{if .CurrentUser.AccountLevel}}{{.CurrentUser.AccountLevel}}{{else}}1{{end}} ур.</span>
+                    </div>
                     <span class="hud-user-handle">@{{.CurrentUser.Username}}</span>
                 </div>
                 <button class="hud-logout-btn" onclick="event.stopPropagation(); handleLogout();" title="Выйти из аккаунта">
@@ -1615,6 +1623,7 @@
                                 <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.2rem;">
                                     <h2 class="hero-display-name" id="heroDisplayName" style="margin: 0;">Имя Фамилия</h2>
                                     <span class="hero-rank-badge" id="heroRankBadge" style="display: none;">Ранг</span>
+                                    <span class="hero-level-badge" id="heroLevelBadge" style="display: none;" onclick="navigateTo('achievements')" title="Нажмите, чтобы открыть достижения">⚡ Ур. 1 · Новичок</span>
                                 </div>
                                 <span class="hero-username" id="heroUsername">@username</span>
 
@@ -1683,6 +1692,10 @@
                                 <div class="stat-pill" onclick="switchProfileTab('network')">
                                     <span class="stat-num" id="heroStatFollowing">0</span>
                                     <span class="stat-label">подписок</span>
+                                </div>
+                                <div class="stat-pill" id="statCardAchievements" onclick="navigateTo('achievements')" title="Открыть достижения">
+                                    <span class="stat-num text-neon" id="heroStatLevel">🏆 1 ур.</span>
+                                    <span class="stat-label" id="heroStatXP">0 XP</span>
                                 </div>
                             </div>
                         </div>
@@ -2399,6 +2412,91 @@
                                     </button>
                                 </form>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==========================================
+                 VIEW 7: ДОСТИЖЕНИЯ И ГЕЙМИФИКАЦИЯ (ACHIEVEMENTS VIEW)
+            ========================================== -->
+            <div id="achievementsView" class="view-panel" style="display: none;">
+                <div class="achievements-page-container">
+                    <!-- Заголовок и карточка уровня пользователя (Level Hero HUD) -->
+                    <div class="achieve-hero-card">
+                        <div class="achieve-hero-top">
+                            <div class="achieve-user-profile-badge">
+                                <div class="achieve-level-hex" id="achieveHeroLevelHex">
+                                    <span class="achieve-hex-num" id="achieveHeroLevelNum">1</span>
+                                    <span class="achieve-hex-label">LVL</span>
+                                </div>
+                                <div class="achieve-user-titles">
+                                    <div class="achieve-tier-title-row">
+                                        <h2 class="achieve-level-title" id="achieveHeroLevelTitle">Новичок</h2>
+                                        <span class="achieve-rank-pill" id="achieveHeroRankPill">Уровень 1</span>
+                                    </div>
+                                    <div class="achieve-xp-counter" id="achieveHeroXpCounter">
+                                        <span class="achieve-xp-num" id="achieveHeroCurrentXp">0</span> / <span id="achieveHeroNextXp">50</span> XP до следующего ранга
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="achieve-summary-metrics">
+                                <div class="achieve-metric-box">
+                                    <span class="metric-val" id="metricUnlockedCount">0 / 19</span>
+                                    <span class="metric-lbl">Ачивок открыто</span>
+                                </div>
+                                <div class="achieve-metric-box">
+                                    <span class="metric-val text-neon" id="metricTotalPoints">0 XP</span>
+                                    <span class="metric-lbl">Очков набрано</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Прогресс-бар текущего уровня -->
+                        <div class="achieve-level-progress-block">
+                            <div class="achieve-progress-header">
+                                <span class="achieve-prog-label">Прогресс текущего ранга</span>
+                                <span class="achieve-prog-percent" id="achieveHeroPercent">0%</span>
+                            </div>
+                            <div class="achieve-progress-track">
+                                <div class="achieve-progress-fill" id="achieveHeroProgressFill" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Панель фильтров и категорий достижений -->
+                    <div class="achieve-filters-bar">
+                        <div class="achieve-filter-pills">
+                            <button type="button" class="achieve-filter-btn active" data-filter="all" onclick="filterAchievements('all')">
+                                <span>Все</span>
+                                <span class="filter-count" id="countFilterAll">19</span>
+                            </button>
+                            <button type="button" class="achieve-filter-btn" data-filter="common" onclick="filterAchievements('common')">
+                                <span class="rarity-dot rarity-dot-common"></span>
+                                <span>Обычные</span>
+                                <span class="filter-count" id="countFilterCommon">10</span>
+                            </button>
+                            <button type="button" class="achieve-filter-btn" data-filter="rare" onclick="filterAchievements('rare')">
+                                <span class="rarity-dot rarity-dot-rare"></span>
+                                <span>Редкие и Легендарные</span>
+                                <span class="filter-count" id="countFilterRare">9</span>
+                            </button>
+                            <button type="button" class="achieve-filter-btn" data-filter="unlocked" onclick="filterAchievements('unlocked')">
+                                <span>✅ Выполненные</span>
+                                <span class="filter-count" id="countFilterUnlocked">0</span>
+                            </button>
+                            <button type="button" class="achieve-filter-btn" data-filter="in_progress" onclick="filterAchievements('in_progress')">
+                                <span>⏳ В процессе</span>
+                                <span class="filter-count" id="countFilterInProgress">0</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Сетка карточек достижений -->
+                    <div class="achieve-cards-grid" id="achieveCardsGrid">
+                        <div class="achieve-loading-state">
+                            <span class="pulse-dot"></span> Синхронизация данных нейросети и достижений...
                         </div>
                     </div>
                 </div>

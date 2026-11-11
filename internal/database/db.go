@@ -332,6 +332,64 @@ func migrate(db *sql.DB) error {
 
 	CREATE INDEX IF NOT EXISTS idx_posts_search_vector ON posts USING gin(search_vector);
 	CREATE INDEX IF NOT EXISTS idx_posts_content_trgm ON posts USING gin(content gin_trgm_ops);
+
+	-- =========================================================
+	-- ДОСТИЖЕНИЯ И ГЕЙМИФИКАЦИЯ (ACHIEVEMENTS & GAMIFICATION)
+	-- =========================================================
+	CREATE TABLE IF NOT EXISTS achievements (
+		id VARCHAR(50) PRIMARY KEY,
+		title VARCHAR(100) NOT NULL,
+		description TEXT NOT NULL,
+		category VARCHAR(50) NOT NULL,
+		rarity VARCHAR(20) NOT NULL DEFAULT 'common',
+		icon VARCHAR(50) NOT NULL,
+		points INT NOT NULL DEFAULT 10,
+		target_count INT NOT NULL DEFAULT 1,
+		sort_order INT NOT NULL DEFAULT 0
+	);
+
+	CREATE TABLE IF NOT EXISTS user_achievements (
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		achievement_id VARCHAR(50) NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+		progress INT NOT NULL DEFAULT 0,
+		is_unlocked BOOLEAN NOT NULL DEFAULT FALSE,
+		unlocked_at TIMESTAMP WITH TIME ZONE,
+		PRIMARY KEY (user_id, achievement_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id, is_unlocked);
+
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS experience_points INT NOT NULL DEFAULT 0;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS account_level INT NOT NULL DEFAULT 1;
+
+	INSERT INTO achievements (id, title, description, category, rarity, icon, points, target_count, sort_order) VALUES
+		('first_post', 'Первый шаг в Найт-Сити', 'Опубликуйте свою первую запись в ленте', 'content', 'common', '📝', 15, 1, 1),
+		('first_comment', 'Слово за слово', 'Оставьте первый комментарий к любой публикации', 'social', 'common', '💬', 10, 1, 2),
+		('first_follow', 'Нейро-Связь', 'Подпишитесь на любого жителя Найт-Сити', 'social', 'common', '🤝', 10, 1, 3),
+		('give_likes_5', 'Сердечный импульс', 'Поставьте 5 лайков понравившимся записям', 'social', 'common', '❤️', 15, 5, 4),
+		('vote_poll_1', 'Голос улиц', 'Примите участие в голосовании любого опроса', 'polls', 'common', '📊', 15, 1, 5),
+		('profile_custom', 'Свой стиль', 'Настройте неоновую рамку, ауру или статус профиля', 'profile', 'common', '🎨', 20, 1, 6),
+		('profile_music', 'Синтвейв в эфире', 'Установите любимый аудиотрек в свой профиль', 'profile', 'common', '🎵', 20, 1, 7),
+		('sub_channel_1', 'Информационный поток', 'Подпишитесь хотя бы на один тематический канал', 'channels', 'common', '📢', 15, 1, 8),
+		('send_gift_1', 'Теплый жест', 'Подарите цифровой киберпанк-артефакт другому пользователю', 'gifts', 'common', '🎁', 25, 1, 9),
+		('channel_dm_1', 'Анонимный связной', 'Отправьте анонимное сообщение в диалог с каналом', 'channels', 'common', '🕵️', 20, 1, 10),
+		('posts_10', 'Летописец Найт-Сити', 'Опубликуйте 10 записей в ленте или своих каналах', 'content', 'rare', '📚', 60, 10, 11),
+		('comments_25', 'Мастер дискуссий', 'Напишите 25 комментариев под публикациями', 'social', 'rare', '🗣️', 80, 25, 12),
+		('likes_received_5', 'В лучах неона', 'Соберите суммарно 5 лайков на своих публикациях', 'content', 'rare', '⭐', 70, 5, 13),
+		('create_channel_1', 'Медиа-Магнат', 'Создайте свой собственный публичный канал', 'channels', 'rare', '🛰️', 75, 1, 14),
+		('channel_subs_3', 'Лидер мнений', 'Привлеките 3 подписчиков в свой авторский канал', 'channels', 'rare', '👥', 90, 3, 15),
+		('gifts_received_3', 'Коллекционер Реликвий', 'Получите 3 кибер-подарка от других жителей сети', 'gifts', 'rare', '🏆', 85, 3, 16),
+		('create_polls_3', 'Инициатор дебатов', 'Создайте 3 публикации с интерактивными опросами', 'polls', 'rare', '📈', 65, 3, 17),
+		('level_5_reach', 'Истинный Нетраннер', 'Прокачайте аккаунт и достигните 5-го уровня профиля', 'level', 'legendary', '⚡', 150, 5, 18),
+		('veteran_achievements_10', 'Легенда Найт-Сити', 'Разблокируйте как минимум 10 любых достижений платформы', 'level', 'legendary', '👑', 250, 10, 19)
+	ON CONFLICT (id) DO UPDATE SET
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		category = EXCLUDED.category,
+		rarity = EXCLUDED.rarity,
+		icon = EXCLUDED.icon,
+		points = EXCLUDED.points,
+		target_count = EXCLUDED.target_count,
+		sort_order = EXCLUDED.sort_order;
 	`
 
 	_, err := db.Exec(schema)

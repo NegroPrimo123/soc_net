@@ -7157,3 +7157,577 @@ input:checked + .toggle-slider:before {
     width: 100% !important;
     box-sizing: border-box !important;
 }
+
+/* ==========================================
+   ДОСТИЖЕНИЯ И ГЕЙМИФИКАЦИЯ (ACHIEVEMENTS SYSTEM)
+========================================== */
+.achievements-page-container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 1rem 0.5rem 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    animation: fadeInTab 0.3s ease;
+}
+
+.achieve-hero-card {
+    background: linear-gradient(135deg, rgba(16, 24, 40, 0.9) 0%, rgba(26, 16, 44, 0.95) 100%);
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    border-radius: var(--radius-lg);
+    padding: 1.6rem 2rem;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.achieve-hero-card::after {
+    content: 'ACHIEVEMENTS';
+    position: absolute;
+    right: 2rem;
+    top: 1rem;
+    font-size: 2.8rem;
+    font-weight: 900;
+    color: rgba(0, 240, 255, 0.04);
+    letter-spacing: 4px;
+    pointer-events: none;
+    font-family: monospace;
+}
+
+.achieve-hero-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+.achieve-user-profile-badge {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.achieve-level-hex {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(0, 240, 255, 0.25) 0%, rgba(168, 85, 247, 0.35) 100%);
+    border: 2px solid #00f0ff;
+    box-shadow: 0 0 24px rgba(0, 240, 255, 0.4), inset 0 0 12px rgba(0, 240, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.achieve-hex-num {
+    font-size: 1.85rem;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1;
+    text-shadow: 0 0 10px #00f0ff;
+}
+
+.achieve-hex-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #38bdf8;
+    letter-spacing: 1.5px;
+    margin-top: 2px;
+}
+
+.achieve-user-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.achieve-tier-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.achieve-level-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0;
+    letter-spacing: -0.5px;
+}
+
+.achieve-rank-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: rgba(0, 240, 255, 0.15);
+    border: 1px solid rgba(0, 240, 255, 0.4);
+    color: #00f0ff;
+    letter-spacing: 0.5px;
+}
+
+.achieve-xp-counter {
+    font-size: 0.88rem;
+    color: var(--text-dim);
+}
+
+.achieve-xp-num {
+    font-weight: 700;
+    color: #38bdf8;
+}
+
+.achieve-summary-metrics {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.achieve-metric-box {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    text-align: center;
+    min-width: 110px;
+}
+
+.achieve-metric-box .metric-val {
+    display: block;
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.2;
+}
+
+.achieve-metric-box .metric-lbl {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+.achieve-level-progress-block {
+    margin-top: 1.4rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.achieve-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.45rem;
+    font-size: 0.82rem;
+}
+
+.achieve-prog-label {
+    color: var(--text-dim);
+    font-weight: 600;
+}
+
+.achieve-prog-percent {
+    font-weight: 700;
+    color: #00f0ff;
+}
+
+.achieve-progress-track {
+    height: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.achieve-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00f0ff 0%, #a855f7 100%);
+    border-radius: 6px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.7);
+}
+
+/* Фильтры достижений */
+.achieve-filters-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.achieve-filter-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.achieve-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.achieve-filter-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.achieve-filter-btn.active {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: #00f0ff;
+    color: #00f0ff;
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+}
+
+.filter-count {
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.achieve-filter-btn.active .filter-count {
+    background: rgba(0, 240, 255, 0.3);
+    color: #fff;
+}
+
+.rarity-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.rarity-dot-common {
+    background: #00f0ff;
+    box-shadow: 0 0 6px #00f0ff;
+}
+
+.rarity-dot-rare {
+    background: #a855f7;
+    box-shadow: 0 0 6px #a855f7;
+}
+
+/* Сетка карточек достижений */
+.achieve-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 1.15rem;
+}
+
+.achieve-loading-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-dim);
+    font-size: 0.95rem;
+}
+
+.achieve-card {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.achieve-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Раритеты */
+.achieve-card.rarity-common {
+    border-color: rgba(0, 240, 255, 0.22);
+}
+.achieve-card.rarity-common:hover {
+    border-color: rgba(0, 240, 255, 0.5);
+    box-shadow: 0 10px 28px rgba(0, 240, 255, 0.15);
+}
+
+.achieve-card.rarity-rare {
+    border-color: rgba(168, 85, 247, 0.3);
+}
+.achieve-card.rarity-rare:hover {
+    border-color: rgba(168, 85, 247, 0.6);
+    box-shadow: 0 10px 28px rgba(168, 85, 247, 0.2);
+}
+
+.achieve-card.rarity-legendary {
+    border-color: rgba(245, 158, 11, 0.4);
+    background: linear-gradient(145deg, rgba(20, 15, 35, 0.8) 0%, rgba(35, 20, 10, 0.8) 100%);
+}
+.achieve-card.rarity-legendary:hover {
+    border-color: rgba(245, 158, 11, 0.8);
+    box-shadow: 0 10px 30px rgba(245, 158, 11, 0.25);
+}
+
+/* Статус разблокировки */
+.achieve-card.is-unlocked {
+    background: linear-gradient(145deg, rgba(16, 28, 48, 0.85) 0%, rgba(18, 22, 38, 0.95) 100%);
+}
+
+.achieve-card.is-unlocked.rarity-common {
+    border-color: rgba(0, 240, 255, 0.45);
+}
+
+.achieve-card.is-unlocked.rarity-rare {
+    border-color: rgba(168, 85, 247, 0.55);
+}
+
+.achieve-card.is-unlocked.rarity-legendary {
+    border-color: rgba(245, 158, 11, 0.65);
+}
+
+.achieve-card.is-locked {
+    opacity: 0.82;
+}
+
+.achieve-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 0.85rem;
+}
+
+.achieve-card-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.rarity-common .achieve-card-icon-wrap {
+    border-color: rgba(0, 240, 255, 0.3);
+    background: rgba(0, 240, 255, 0.08);
+}
+
+.rarity-rare .achieve-card-icon-wrap {
+    border-color: rgba(168, 85, 247, 0.35);
+    background: rgba(168, 85, 247, 0.1);
+}
+
+.rarity-legendary .achieve-card-icon-wrap {
+    border-color: rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.12);
+}
+
+.achieve-card-badges-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.achieve-rarity-pill {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.achieve-rarity-pill.pill-common {
+    background: rgba(0, 240, 255, 0.12);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    color: #00f0ff;
+}
+
+.achieve-rarity-pill.pill-rare {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    color: #c084fc;
+}
+
+.achieve-rarity-pill.pill-legendary {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    color: #fbbf24;
+}
+
+.achieve-points-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    white-space: nowrap;
+}
+
+.rarity-common .achieve-points-badge {
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.35);
+}
+
+.rarity-rare .achieve-points-badge {
+    color: #c084fc;
+    border-color: rgba(192, 132, 252, 0.35);
+}
+
+.rarity-legendary .achieve-points-badge {
+    color: #fcd34d;
+    border-color: rgba(252, 211, 77, 0.45);
+}
+
+.achieve-card-body {
+    flex: 1;
+    margin-bottom: 1rem;
+}
+
+.achieve-card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 0.35rem 0;
+    line-height: 1.3;
+}
+
+.achieve-card-desc {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    line-height: 1.45;
+    margin: 0;
+}
+
+.achieve-card-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: auto;
+}
+
+.achieve-card-prog-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+}
+
+.achieve-status-text {
+    font-weight: 700;
+}
+
+.achieve-status-text.unlocked-label {
+    color: #10b981;
+}
+
+.achieve-status-text.locked-label {
+    color: var(--text-dim);
+}
+
+.achieve-prog-ratio {
+    font-weight: 700;
+    color: #e2e8f0;
+}
+
+.achieve-card-bar-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.achieve-card-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.rarity-common .achieve-card-bar-fill {
+    background: #00f0ff;
+    box-shadow: 0 0 6px #00f0ff;
+}
+
+.rarity-rare .achieve-card-bar-fill {
+    background: #a855f7;
+    box-shadow: 0 0 6px #a855f7;
+}
+
+.rarity-legendary .achieve-card-bar-fill {
+    background: #f59e0b;
+    box-shadow: 0 0 6px #f59e0b;
+}
+
+/* Бейджи уровня пользователя */
+.hero-level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(0, 240, 255, 0.15) 0%, rgba(168, 85, 247, 0.2) 100%);
+    border: 1px solid rgba(0, 240, 255, 0.45);
+    color: #38bdf8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.hero-level-badge:hover {
+    background: linear-gradient(135deg, rgba(0, 240, 255, 0.25) 0%, rgba(168, 85, 247, 0.35) 100%);
+    border-color: #00f0ff;
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
+}
+
+.hud-level-pill {
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(0, 240, 255, 0.18);
+    color: #00f0ff;
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    white-space: nowrap;
+}
+
+.achieve-lvl-badge {
+    background: linear-gradient(135deg, #00f0ff, #a855f7) !important;
+    color: #0b1120 !important;
+    font-weight: 800 !important;
+    font-size: 0.7rem !important;
+    padding: 1px 6px !important;
+    border-radius: 10px !important;
+}
+

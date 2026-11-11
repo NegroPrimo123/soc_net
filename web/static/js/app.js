@@ -2381,7 +2381,7 @@ let currentProfileUserId = null;
 let currentProfileUserData = null;
 
 function navigateTo(view, userId = null) {
-    ['feed', 'profile', 'showcase', 'messages', 'channels', 'channelMessages'].forEach(v => {
+    ['feed', 'profile', 'showcase', 'messages', 'channels', 'channelMessages', 'achievements'].forEach(v => {
         const el = document.getElementById(`${v}View`);
         if (el) {
             el.style.display = 'none';
@@ -2389,7 +2389,7 @@ function navigateTo(view, userId = null) {
         }
     });
 
-    ['Feed', 'Profile', 'Gifts', 'Messages', 'Channels'].forEach(t => {
+    ['Feed', 'Profile', 'Gifts', 'Messages', 'Channels', 'Achievements'].forEach(t => {
         const btn = document.getElementById(`tabNav${t}`);
         if (btn) btn.classList.remove('active');
     });
@@ -2434,6 +2434,13 @@ function navigateTo(view, userId = null) {
         const btn = document.getElementById('tabNavChannels');
         if (btn) btn.classList.add('active');
         loadChannels();
+    } else if (view === 'achievements') {
+        const el = document.getElementById('achievementsView');
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
+        const btn = document.getElementById('tabNavAchievements');
+        if (btn) btn.classList.add('active');
+        loadAchievements(userId);
+        try { window.history.pushState({}, '', `/?view=achievements`); } catch (_) {}
     } else if (view === 'channel-messages') {
         const el = document.getElementById('channelMessagesView');
         if (el) { el.style.display = 'block'; el.classList.add('active'); }
@@ -2657,6 +2664,19 @@ function renderUserProfile(data) {
     document.getElementById('heroStatGifts').textContent = `🎁 ${data.gifts ? data.gifts.length : 0}`;
     document.getElementById('heroStatFollowers').textContent = data.followers ? data.followers.length : 0;
     document.getElementById('heroStatFollowing').textContent = data.following ? data.following.length : 0;
+
+    // Обновление бейджа уровня аккаунта и опыта
+    const heroLevelBadge = document.getElementById('heroLevelBadge');
+    if (heroLevelBadge) {
+        const lvl = user.account_level || 1;
+        const title = user.level_title || 'Новичок';
+        heroLevelBadge.innerHTML = `⚡ Ур. ${lvl} · ${escapeHtml(title)}`;
+        heroLevelBadge.style.display = 'inline-flex';
+    }
+    const statLevel = document.getElementById('heroStatLevel');
+    if (statLevel) statLevel.textContent = `🏆 ${user.account_level || 1} ур.`;
+    const statXP = document.getElementById('heroStatXP');
+    if (statXP) statXP.textContent = `${user.experience_points || 0} XP`;
 
     document.getElementById('badgeProfPosts').textContent = data.posts ? data.posts.length : 0;
     document.getElementById('badgeProfGifts').textContent = data.gifts ? data.gifts.length : 0;
@@ -9490,3 +9510,232 @@ async function loadUserChannelConversations() {
         listEl.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
     }
 }
+
+// ==========================================
+// ACHIEVEMENTS & GAMIFICATION SYSTEM
+// ==========================================
+let currentAchievementsFilter = 'all';
+let cachedAchievementsData = null;
+
+async function loadAchievements(targetUserId = null) {
+    const grid = document.getElementById('achieveCardsGrid');
+    if (!cachedAchievementsData && grid) {
+        grid.innerHTML = `
+            <div class="achieve-loading-state">
+                <span class="pulse-dot"></span> Синхронизация данных нейросети и достижений...
+            </div>
+        `;
+    }
+
+    try {
+        let url = '/api/achievements';
+        if (targetUserId && targetUserId !== window.CURRENT_USER_ID) {
+            url = `/api/users/${targetUserId}/achievements`;
+        }
+
+        const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error('Не удалось загрузить данные достижений');
+        }
+
+        const data = await res.json();
+        cachedAchievementsData = data;
+
+        // 1. Обновляем Hero HUD карточку уровня
+        const lvl = data.user_level || { level: 1, title: 'Новичок', current_xp: 0, next_level_xp: 50, progress_perc: 0, total_xp: 0 };
+        const lvlNum = document.getElementById('achieveHeroLevelNum');
+        if (lvlNum) lvlNum.textContent = lvl.level;
+
+        const lvlTitle = document.getElementById('achieveHeroLevelTitle');
+        if (lvlTitle) lvlTitle.textContent = lvl.title;
+
+        const rankPill = document.getElementById('achieveHeroRankPill');
+        if (rankPill) rankPill.textContent = `Уровень ${lvl.level}`;
+
+        const currXp = document.getElementById('achieveHeroCurrentXp');
+        if (currXp) currXp.textContent = lvl.current_xp;
+
+        const nextXp = document.getElementById('achieveHeroNextXp');
+        if (nextXp) nextXp.textContent = lvl.next_level_xp;
+
+        const percEl = document.getElementById('achieveHeroPercent');
+        if (percEl) percEl.textContent = `${lvl.progress_perc}%`;
+
+        const fillEl = document.getElementById('achieveHeroProgressFill');
+        if (fillEl) fillEl.style.width = `${lvl.progress_perc}%`;
+
+        const mUnlocked = document.getElementById('metricUnlockedCount');
+        if (mUnlocked) mUnlocked.textContent = `${data.unlocked_count} / ${data.total_achievements}`;
+
+        const mPoints = document.getElementById('metricTotalPoints');
+        if (mPoints) mPoints.textContent = `${data.total_points_earned} XP`;
+
+        // 2. Обновляем бейдж уровня в левой колонке навигации и в футере
+        const hudNavLvl = document.getElementById('hudNavLevelBadge');
+        if (hudNavLvl) {
+            hudNavLvl.textContent = `${lvl.level} ур.`;
+            hudNavLvl.style.display = 'inline-flex';
+        }
+        const sidebarLvl = document.getElementById('sidebarUserLvlBadge');
+        if (sidebarLvl) {
+            sidebarLvl.textContent = `${lvl.level} ур.`;
+        }
+
+        // 3. Обновляем счетчики в кнопках фильтров
+        updateAchievementFilterCounts(data.achievements);
+
+        // 4. Рендерим сетку карточек по текущему фильтру
+        renderAchievementsList(currentAchievementsFilter);
+
+    } catch (err) {
+        console.error('Achievements load error:', err);
+        if (grid) {
+            grid.innerHTML = `
+                <div class="achieve-loading-state" style="color: #ef4444;">
+                    ✕ ${escapeHtml(err.message)}
+                </div>
+            `;
+        }
+    }
+}
+
+function updateAchievementFilterCounts(achievements) {
+    if (!achievements) return;
+
+    let commonCount = 0;
+    let rareCount = 0;
+    let unlockedCount = 0;
+    let inProgressCount = 0;
+
+    achievements.forEach(a => {
+        if (a.rarity === 'common') commonCount++;
+        else rareCount++;
+
+        if (a.is_unlocked) unlockedCount++;
+        else inProgressCount++;
+    });
+
+    const cAll = document.getElementById('countFilterAll');
+    if (cAll) cAll.textContent = achievements.length;
+
+    const cCommon = document.getElementById('countFilterCommon');
+    if (cCommon) cCommon.textContent = commonCount;
+
+    const cRare = document.getElementById('countFilterRare');
+    if (cRare) cRare.textContent = rareCount;
+
+    const cUnlocked = document.getElementById('countFilterUnlocked');
+    if (cUnlocked) cUnlocked.textContent = unlockedCount;
+
+    const cInProgress = document.getElementById('countFilterInProgress');
+    if (cInProgress) cInProgress.textContent = inProgressCount;
+}
+
+function filterAchievements(filter) {
+    currentAchievementsFilter = filter;
+
+    document.querySelectorAll('.achieve-filter-btn').forEach(btn => {
+        if (btn.getAttribute('data-filter') === filter) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    renderAchievementsList(filter);
+}
+
+function renderAchievementsList(filter) {
+    const grid = document.getElementById('achieveCardsGrid');
+    if (!grid || !cachedAchievementsData) return;
+
+    const list = cachedAchievementsData.achievements || [];
+    let filtered = list;
+
+    if (filter === 'common') {
+        filtered = list.filter(a => a.rarity === 'common');
+    } else if (filter === 'rare') {
+        filtered = list.filter(a => a.rarity === 'rare' || a.rarity === 'legendary');
+    } else if (filter === 'unlocked') {
+        filtered = list.filter(a => a.is_unlocked);
+    } else if (filter === 'in_progress') {
+        filtered = list.filter(a => !a.is_unlocked);
+    }
+
+    if (filtered.length === 0) {
+        grid.innerHTML = `
+            <div class="achieve-loading-state">
+                В этой категории пока нет заданий.
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = filtered.map(a => {
+        const rarityClass = a.rarity === 'legendary' ? 'rarity-legendary' : (a.rarity === 'rare' ? 'rarity-rare' : 'rarity-common');
+        const rarityLabel = a.rarity === 'legendary' ? 'Легендарное' : (a.rarity === 'rare' ? 'Редкое' : 'Обычное');
+        const pillClass = a.rarity === 'legendary' ? 'pill-legendary' : (a.rarity === 'rare' ? 'pill-rare' : 'pill-common');
+        const statusClass = a.is_unlocked ? 'is-unlocked' : 'is-locked';
+
+        const progressPerc = a.target_count > 0 ? Math.min(100, Math.floor((a.progress * 100) / a.target_count)) : 0;
+        
+        let statusBadgeText = '';
+        if (a.is_unlocked) {
+            statusBadgeText = `<span class="achieve-status-text unlocked-label">✓ Выполнено</span>`;
+        } else {
+            statusBadgeText = `<span class="achieve-status-text locked-label">В процессе</span>`;
+        }
+
+        return `
+            <div class="achieve-card ${rarityClass} ${statusClass}">
+                <div class="achieve-card-header">
+                    <div class="achieve-card-icon-wrap" title="${escapeHtml(a.title)}">
+                        <span>${a.icon || '🏆'}</span>
+                    </div>
+                    <div class="achieve-card-badges-row">
+                        <span class="achieve-rarity-pill ${pillClass}">${rarityLabel}</span>
+                        <span class="achieve-points-badge">+${a.points} XP</span>
+                    </div>
+                </div>
+
+                <div class="achieve-card-body">
+                    <h3 class="achieve-card-title">${escapeHtml(a.title)}</h3>
+                    <p class="achieve-card-desc">${escapeHtml(a.description)}</p>
+                </div>
+
+                <div class="achieve-card-footer">
+                    <div class="achieve-card-prog-info">
+                        ${statusBadgeText}
+                        <span class="achieve-prog-ratio">${a.progress} / ${a.target_count}</span>
+                    </div>
+                    <div class="achieve-card-bar-track">
+                        <div class="achieve-card-bar-fill" style="width: ${progressPerc}%;"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Фоновая инициализация уровня при старте приложения
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.IS_AUTHENTICATED && window.CURRENT_USER_ID) {
+        // Фоновая проверка ачивок и уровня
+        fetch('/api/achievements')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data && data.user_level) {
+                    const hudNavLvl = document.getElementById('hudNavLevelBadge');
+                    if (hudNavLvl) {
+                        hudNavLvl.textContent = `${data.user_level.level} ур.`;
+                        hudNavLvl.style.display = 'inline-flex';
+                    }
+                    const sidebarLvl = document.getElementById('sidebarUserLvlBadge');
+                    if (sidebarLvl) {
+                        sidebarLvl.textContent = `${data.user_level.level} ур.`;
+                    }
+                }
+            })
+            .catch(() => {});
+    }
+});
