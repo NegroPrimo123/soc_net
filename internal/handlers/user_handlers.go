@@ -75,6 +75,13 @@ func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Синхронизируем актуальный уровень и опыт пользователя для мгновенного корректного отображения в профиле
+	if achieveData, achErr := h.achievementRepo.GetAchievements(profileUserID); achErr == nil && achieveData != nil {
+		targetUser.ExperiencePoints = achieveData.TotalPointsEarned
+		targetUser.AccountLevel = achieveData.UserLevel.Level
+		targetUser.LevelTitle = achieveData.UserLevel.Title
+	}
+
 	var (
 		posts     []models.Post
 		gifts     []models.Gift
