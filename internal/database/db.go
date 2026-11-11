@@ -332,6 +332,137 @@ func migrate(db *sql.DB) error {
 
 	CREATE INDEX IF NOT EXISTS idx_posts_search_vector ON posts USING gin(search_vector);
 	CREATE INDEX IF NOT EXISTS idx_posts_content_trgm ON posts USING gin(content gin_trgm_ops);
+
+	-- =========================================================
+	-- ДОСТИЖЕНИЯ И ГЕЙМИФИКАЦИЯ (ACHIEVEMENTS & GAMIFICATION)
+	-- =========================================================
+	CREATE TABLE IF NOT EXISTS achievements (
+		id VARCHAR(50) PRIMARY KEY,
+		title VARCHAR(100) NOT NULL,
+		description TEXT NOT NULL,
+		category VARCHAR(50) NOT NULL,
+		rarity VARCHAR(20) NOT NULL DEFAULT 'common',
+		icon VARCHAR(50) NOT NULL,
+		points INT NOT NULL DEFAULT 10,
+		target_count INT NOT NULL DEFAULT 1,
+		sort_order INT NOT NULL DEFAULT 0
+	);
+
+	CREATE TABLE IF NOT EXISTS user_achievements (
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		achievement_id VARCHAR(50) NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+		progress INT NOT NULL DEFAULT 0,
+		is_unlocked BOOLEAN NOT NULL DEFAULT FALSE,
+		unlocked_at TIMESTAMP WITH TIME ZONE,
+		PRIMARY KEY (user_id, achievement_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id, is_unlocked);
+
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS experience_points INT NOT NULL DEFAULT 0;
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS account_level INT NOT NULL DEFAULT 1;
+
+	DELETE FROM achievements WHERE id NOT IN (
+		'posts_5', 'posts_photo_5', 'posts_music_3', 'comments_10', 'give_likes_25',
+		'likes_received_15', 'follows_5', 'followers_5', 'vote_poll_5', 'create_polls_3',
+		'profile_custom', 'profile_music_4', 'sub_channels_5', 'send_gifts_3', 'gifts_received_3',
+		'channel_dm_5', 'create_channel_1', 'level_2_reach',
+		'posts_35', 'posts_photo_15', 'posts_music_10', 'comments_40', 'give_likes_80',
+		'likes_received_50', 'follows_20', 'followers_15', 'channel_subs_12', 'channel_posts_15',
+		'vote_poll_15', 'create_polls_10', 'send_gifts_8', 'gifts_received_8', 'profile_music_10',
+		'sub_channels_10', 'channel_dm_12', 'level_4_reach', 'level_6_reach', 'veteran_achievements_15',
+		'posts_100', 'comments_150', 'give_likes_200', 'likes_received_150', 'channel_subs_30',
+		'followers_30', 'gifts_received_20', 'send_gifts_20', 'level_8_reach', 'level_10_reach',
+		'veteran_achievements_25', 'veteran_achievements_40'
+	);
+
+	INSERT INTO achievements (id, title, description, category, rarity, icon, points, target_count, sort_order) VALUES
+		-- =========================================================
+		-- ОБЫЧНЫЕ ДОСТИЖЕНИЯ (COMMON, 15–30 XP, 18 ШТУК)
+		-- =========================================================
+		('posts_5', 'Первые летописи', 'Опубликуйте как минимум 5 полноценных записей в ленте', 'content', 'common', '📝', 20, 5, 1),
+		('posts_photo_5', 'Галерея Найт-Сити', 'Опубликуйте 5 записей с прикрепленными фотографиями или артами', 'content', 'common', '📸', 25, 5, 2),
+		('posts_music_3', 'Синт-Эфир', 'Опубликуйте 3 записи с прикрепленными аудиотреками', 'content', 'common', '🎶', 25, 3, 3),
+		('comments_10', 'Участник бесед', 'Оставьте 10 содержательных комментариев под публикациями', 'social', 'common', '💬', 20, 10, 4),
+		('give_likes_25', 'Одобрение улиц', 'Поставьте 25 лайков интересным записям сообщества', 'social', 'common', '❤️', 20, 25, 5),
+		('likes_received_15', 'Первая искра', 'Соберите 15 лайков на своих публикациях от других пользователей', 'content', 'common', '⭐', 25, 15, 6),
+		('follows_5', 'Сетевой агент', 'Подпишитесь на 5 активных авторов Найт-Сити', 'social', 'common', '🤝', 20, 5, 7),
+		('followers_5', 'Круг доверия', 'Привлеките 5 постоянных подписчиков в свой профиль', 'social', 'common', '👥', 25, 5, 8),
+		('vote_poll_5', 'Голос общины', 'Примите участие в голосовании 5 интерактивных опросов', 'polls', 'common', '📊', 20, 5, 9),
+		('create_polls_3', 'Инициатор опросов', 'Создайте 3 публикации с интерактивными опросами', 'polls', 'common', '📈', 25, 3, 10),
+		('profile_custom', 'Кибер-Аутентичность', 'Настройте индивидуальную рамку, неоновую ауру, цвет или статус профиля', 'profile', 'common', '🎨', 25, 1, 11),
+		('profile_music_4', 'Аудиотека профиля', 'Сформируйте коллекцию из 4 треков в фонотеке своего профиля', 'profile', 'common', '🎵', 25, 4, 12),
+		('sub_channels_5', 'Инфо-Сеть', 'Подпишитесь на 5 тематических каналов сети', 'channels', 'common', '📢', 20, 5, 13),
+		('send_gifts_3', 'Щедрый жест', 'Подарите 3 кибер-артефакта жителям Найт-Сити', 'gifts', 'common', '🎁', 30, 3, 14),
+		('gifts_received_3', 'Символ внимания', 'Получите 3 подарка от друзей или тайных поклонников', 'gifts', 'common', '🏆', 30, 3, 15),
+		('channel_dm_5', 'Шифрованный связной', 'Отправьте 5 сообщений в анонимный диалог с каналами', 'channels', 'common', '🕵️', 25, 5, 16),
+		('create_channel_1', 'Собственная станция', 'Создайте и настройте свой авторский публичный канал', 'channels', 'common', '🛰️', 30, 1, 17),
+		('level_2_reach', 'Стрит-Кид', 'Прокачайте аккаунт и достигните 2-го уровня профиля', 'level', 'common', '⚡', 30, 2, 18),
+
+		-- =========================================================
+		-- РЕДКИЕ ДОСТИЖЕНИЯ (RARE, 75–120 XP, 20 ШТУК)
+		-- =========================================================
+		('posts_35', 'Хроники Найт-Сити', 'Опубликуйте 35 записей в общей ленте и каналах', 'content', 'rare', '📚', 85, 35, 19),
+		('posts_photo_15', 'Фоторепортер неона', 'Опубликуйте 15 постов с фотографиями и артами', 'content', 'rare', '📷', 90, 15, 20),
+		('posts_music_10', 'Диджей Мегабашни', 'Опубликуйте 10 музыкальных постов в ленте', 'content', 'rare', '💽', 90, 10, 21),
+		('comments_40', 'Ветеран тредов', 'Напишите 40 комментариев в сетевых обсуждениях', 'social', 'rare', '🗣️', 90, 40, 22),
+		('give_likes_80', 'Щедрый оценщик', 'Отметьте сердечком 80 понравившихся публикаций', 'social', 'rare', '💖', 80, 80, 23),
+		('likes_received_50', 'Звезда Мегабашни', 'Соберите 50 лайков на своем авторском контенте', 'content', 'rare', '🌟', 95, 50, 24),
+		('follows_20', 'Широкая агентура', 'Подпишитесь на 20 интересных авторов и лидеров мнений', 'social', 'rare', '🌐', 80, 20, 25),
+		('followers_15', 'Популярная персона', 'Соберите постоянную аудиторию из 15 подписчиков', 'social', 'rare', '🛡️', 100, 15, 26),
+		('channel_subs_12', 'Рупор масс', 'Привлеките 12 подписчиков в свой авторский канал', 'channels', 'rare', '📢', 110, 12, 27),
+		('channel_posts_15', 'Главный редактор', 'Опубликуйте 15 авторских постов внутри своих каналов', 'channels', 'rare', '📰', 95, 15, 28),
+		('vote_poll_15', 'Голос улиц', 'Проголосуйте в 15 опросах и определите тренды сети', 'polls', 'rare', '🗳️', 85, 15, 29),
+		('create_polls_10', 'Аналитический центр', 'Создайте 10 публикаций с интерактивными опросами', 'polls', 'rare', '📊', 95, 10, 30),
+		('send_gifts_8', 'Кибер-Меценат', 'Отправьте 8 цифровых подарков жителям Найт-Сити', 'gifts', 'rare', '💎', 100, 8, 31),
+		('gifts_received_8', 'Любимец публики', 'Получите 8 подарков в знак признания от сообщества', 'gifts', 'rare', '🎖️', 105, 8, 32),
+		('profile_music_10', 'Звукорежиссер', 'Соберите коллекцию из 10 треков в своем профиле', 'profile', 'rare', '🎧', 85, 10, 33),
+		('sub_channels_10', 'Информационный магнат', 'Подпишитесь на 10 тематических каналов', 'channels', 'rare', '📡', 80, 10, 34),
+		('channel_dm_12', 'Тайный советник', 'Отправьте 12 сообщений в анонимные диалоги каналов', 'channels', 'rare', '📨', 85, 12, 35),
+		('level_4_reach', 'Признанный Соло', 'Прокачайте аккаунт и достигните 4-го ранга ("Соло")', 'level', 'rare', '⚔️', 100, 4, 36),
+		('level_6_reach', 'Мастер Нетраннер', 'Достигните престижного 6-го ранга профиля ("Нетраннер")', 'level', 'rare', '⚡', 120, 6, 37),
+		('veteran_achievements_15', 'Опытный наемник', 'Разблокируйте как минимум 15 любых достижений', 'level', 'rare', '🎖️', 110, 15, 38),
+
+		-- =========================================================
+		-- ЛЕГЕНДАРНЫЕ ДОСТИЖЕНИЯ (LEGENDARY, 250–500 XP, 12 ШТУК)
+		-- =========================================================
+		('posts_100', 'Легендарный автор', 'Опубликуйте 100 записей на платформе', 'content', 'legendary', '🔥', 300, 100, 39),
+		('comments_150', 'Оракул сети', 'Оставьте 150 комментариев под записями сообщества', 'social', 'legendary', '🔮', 350, 150, 40),
+		('give_likes_200', 'Сердце Найт-Сити', 'Поставьте 200 лайков контенту сообщества', 'social', 'legendary', '💖', 250, 200, 41),
+		('likes_received_150', 'Абсолютный хайп', 'Соберите 150 лайков на своих публикациях', 'content', 'legendary', '💥', 360, 150, 42),
+		('channel_subs_30', 'Медиа-Империя', 'Соберите 30 постоянных подписчиков в своем канале', 'channels', 'legendary', '👑', 400, 30, 43),
+		('followers_30', 'Кумир Найт-Сити', 'Наберите постоянную аудиторию из 30 подписчиков профиля', 'social', 'legendary', '🌟', 350, 30, 44),
+		('gifts_received_20', 'Золотой пантеон', 'Соберите коллекцию из 20 подарков и кибер-реликвий', 'gifts', 'legendary', '🪐', 380, 20, 45),
+		('send_gifts_20', 'Верховный Спонсор', 'Подарите 20 кибер-артефактов другим жителям сети', 'gifts', 'legendary', '🌌', 380, 20, 46),
+		('level_8_reach', 'Хром-Мастер', 'Достигните 8-го уровня профиля ("Хром-мастер")', 'level', 'legendary', '🦾', 320, 8, 47),
+		('level_10_reach', 'Легенда Найт-Сити', 'Достигните наивысшего 10-го ранга профиля', 'level', 'legendary', '🏆', 500, 10, 48),
+		('veteran_achievements_25', 'Владыка Достижений', 'Разблокируйте как минимум 25 любых достижений платформы', 'level', 'legendary', '⚜️', 420, 25, 49),
+		('veteran_achievements_40', 'Абсолютный Совершенный', 'Разблокируйте 40 любых достижений платформы', 'level', 'legendary', '✨', 500, 40, 50)
+	ON CONFLICT (id) DO UPDATE SET
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		category = EXCLUDED.category,
+		rarity = EXCLUDED.rarity,
+		icon = EXCLUDED.icon,
+		points = EXCLUDED.points,
+		target_count = EXCLUDED.target_count,
+		sort_order = EXCLUDED.sort_order;
+
+	-- Автоматическая разблокировка всех достижений для легендарного пользователя Итаква
+	INSERT INTO user_achievements (user_id, achievement_id, progress, is_unlocked, unlocked_at)
+	SELECT u.id, a.id, a.target_count, TRUE, NOW()
+	FROM users u
+	CROSS JOIN achievements a
+	WHERE LOWER(u.username) IN ('itakwa', 'ithaqua', 'итаква')
+	ON CONFLICT (user_id, achievement_id) DO UPDATE SET
+		progress = EXCLUDED.progress,
+		is_unlocked = TRUE,
+		unlocked_at = COALESCE(user_achievements.unlocked_at, NOW());
+
+	-- Обновление уровня и максимального опыта Итаквы (10 уровень - Легенда Найт-Сити)
+	UPDATE users 
+	SET experience_points = (SELECT COALESCE(SUM(points), 6500) FROM achievements),
+	    account_level = 10
+	WHERE LOWER(username) IN ('itakwa', 'ithaqua', 'итаква');
 	`
 
 	_, err := db.Exec(schema)

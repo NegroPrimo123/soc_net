@@ -47,6 +47,10 @@ type User struct {
 	GiftsCount int `json:"gifts_count"`
 
 	IsFollowing bool `json:"is_following,omitempty"`
+
+	ExperiencePoints int    `json:"experience_points"`
+	AccountLevel     int    `json:"account_level"`
+	LevelTitle       string `json:"level_title,omitempty"`
 }
 
 type Gift struct {
@@ -468,4 +472,106 @@ type UpdatePollRequest struct {
 type VotePollRequest struct {
 	PollID   int `json:"poll_id"`
 	OptionID int `json:"option_id"`
+}
+
+// ==========================================
+// ACHIEVEMENTS & GAMIFICATION MODELS
+// ==========================================
+
+type Achievement struct {
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	Description string     `json:"description"`
+	Category    string     `json:"category"`
+	Rarity      string     `json:"rarity"` // common, rare, legendary
+	Icon        string     `json:"icon"`
+	Points      int        `json:"points"`
+	TargetCount int        `json:"target_count"`
+	SortOrder   int        `json:"sort_order"`
+	Progress    int        `json:"progress"`
+	IsUnlocked  bool       `json:"is_unlocked"`
+	UnlockedAt  *time.Time `json:"unlocked_at,omitempty"`
+}
+
+type UserAchievementsResponse struct {
+	User                *User         `json:"user,omitempty"`
+	UserLevel           LevelInfo     `json:"user_level"`
+	TotalAchievements   int           `json:"total_achievements"`
+	UnlockedCount       int           `json:"unlocked_count"`
+	TotalPointsEarned   int           `json:"total_points_earned"`
+	TotalPointsPossible int           `json:"total_points_possible"`
+	Achievements        []Achievement `json:"achievements"`
+	NewUnlocked         []Achievement `json:"new_unlocked,omitempty"`
+}
+
+type LevelInfo struct {
+	Level        int    `json:"level"`
+	Title        string `json:"title"`
+	CurrentXP    int    `json:"current_xp"`
+	NextLevelXP  int    `json:"next_level_xp"`
+	PrevLevelXP  int    `json:"prev_level_xp"`
+	ProgressPerc int    `json:"progress_perc"`
+	TotalXP      int    `json:"total_xp"`
+}
+
+var LevelTiers = []struct {
+	Level int
+	XP    int
+	Title string
+}{
+	{1, 0, "Новичок"},
+	{2, 80, "Стрит-кид"},
+	{3, 220, "Фиксер"},
+	{4, 450, "Соло"},
+	{5, 800, "Техник"},
+	{6, 1300, "Нетраннер"},
+	{7, 1950, "Кибер-самурай"},
+	{8, 2800, "Хром-мастер"},
+	{9, 3900, "Арасака Оверлорд"},
+	{10, 5200, "Легенда Найт-Сити"},
+}
+
+func CalculateLevel(totalXP int) LevelInfo {
+	if totalXP < 0 {
+		totalXP = 0
+	}
+
+	currTierIdx := 0
+	for i := len(LevelTiers) - 1; i >= 0; i-- {
+		if totalXP >= LevelTiers[i].XP {
+			currTierIdx = i
+			break
+		}
+	}
+
+	currTier := LevelTiers[currTierIdx]
+	var nextTierXP int
+	if currTierIdx < len(LevelTiers)-1 {
+		nextTierXP = LevelTiers[currTierIdx+1].XP
+	} else {
+		nextTierXP = currTier.XP + 1000
+	}
+
+	prevTierXP := currTier.XP
+	xpInCurrentLevel := totalXP - prevTierXP
+	xpNeededForNext := nextTierXP - prevTierXP
+	perc := 0
+	if xpNeededForNext > 0 {
+		perc = (xpInCurrentLevel * 100) / xpNeededForNext
+		if perc > 100 {
+			perc = 100
+		}
+	} else {
+		perc = 100
+	}
+
+	return LevelInfo{
+		Level:        currTier.Level,
+		Title:        currTier.Title,
+		CurrentXP:    xpInCurrentLevel,
+		NextLevelXP:  xpNeededForNext,
+		PrevLevelXP:  prevTierXP,
+		ProgressPerc: perc,
+		TotalXP:      totalXP,
+	}
 }

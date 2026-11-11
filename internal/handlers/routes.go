@@ -98,6 +98,10 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/notifications/read-all", h.MarkAllNotificationsAsRead)
 	mux.HandleFunc("GET /api/notifications/unread", h.GetUnreadNotificationsCount)
 
+	// Achievements & Gamification API (Достижения и уровни аккаунта)
+	mux.HandleFunc("GET /api/achievements", h.GetAchievements)
+	mux.HandleFunc("GET /api/users/{id}/achievements", h.GetPublicUserAchievements)
+
 	// File Upload API (Загрузка фотографий и файлов с диска)
 	mux.HandleFunc("POST /api/upload", h.UploadFile)
 
