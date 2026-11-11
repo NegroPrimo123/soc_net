@@ -2710,6 +2710,9 @@ function renderUserProfile(data) {
                     <button type="button" class="profile-dropdown-item" onclick="openProfileEdit(); closeProfileOptionsMenu();">
                         <span>✏️ Редактировать</span>
                     </button>
+                    <button type="button" class="profile-dropdown-item" onclick="openUserAchievements(${user.id}); closeProfileOptionsMenu();">
+                        <span>🏆 Мои достижения</span>
+                    </button>
                     <div class="profile-dropdown-divider"></div>
                     <button type="button" class="profile-dropdown-item text-danger" onclick="handleLogout(); closeProfileOptionsMenu();">
                         <span>🚪 Выйти</span>
@@ -2729,6 +2732,9 @@ function renderUserProfile(data) {
             <button class="btn btn-outline btn-sm" onclick="openSendGiftModal(${user.id}, '${escapeHtml(user.display_name)}', '${escapeHtml(user.username)}')">
                 <span>Отправить подарок</span>
             </button>
+            <button class="btn btn-secondary btn-sm" onclick="openUserAchievements(${user.id})" title="Посмотреть достижения и прогресс пользователя">
+                <span>🏆 Достижения</span>
+            </button>
             <button class="btn ${followClass} btn-sm" onclick="toggleProfileFollow(${user.id})">
                 <span>${followText}</span>
             </button>
@@ -2741,6 +2747,9 @@ function renderUserProfile(data) {
                     </svg>
                 </button>
                 <div class="profile-options-dropdown-menu" id="profileOptionsMenu" style="display: none;">
+                    <button type="button" class="profile-dropdown-item" onclick="openUserAchievements(${user.id}); closeProfileOptionsMenu();">
+                        <span>🏆 Достижения пользователя</span>
+                    </button>
                     <button type="button" class="profile-dropdown-item" onclick="copyProfileLink(${user.id}); closeProfileOptionsMenu();">
                         <span>📋 Скопировать ссылку</span>
                     </button>
@@ -9516,8 +9525,23 @@ async function loadUserChannelConversations() {
 // ==========================================
 let currentAchievementsFilter = 'all';
 let cachedAchievementsData = null;
+let currentAchievementsTargetUserId = null;
+
+function openUserAchievements(userId) {
+    currentAchievementsTargetUserId = userId;
+    navigateTo('achievements', userId);
+}
+
+function backFromAchievements() {
+    if (currentAchievementsTargetUserId) {
+        navigateTo('profile', currentAchievementsTargetUserId);
+    } else {
+        navigateTo('feed');
+    }
+}
 
 async function loadAchievements(targetUserId = null) {
+    currentAchievementsTargetUserId = targetUserId;
     const grid = document.getElementById('achieveCardsGrid');
     if (!cachedAchievementsData && grid) {
         grid.innerHTML = `
@@ -9528,9 +9552,11 @@ async function loadAchievements(targetUserId = null) {
     }
 
     try {
+        let isForeignUser = false;
         let url = '/api/achievements';
-        if (targetUserId && targetUserId !== window.CURRENT_USER_ID) {
+        if (targetUserId && Number(targetUserId) !== Number(window.CURRENT_USER_ID)) {
             url = `/api/users/${targetUserId}/achievements`;
+            isForeignUser = true;
         }
 
         const res = await fetch(url);
@@ -9541,8 +9567,36 @@ async function loadAchievements(targetUserId = null) {
         const data = await res.json();
         cachedAchievementsData = data;
 
-        // 1. Обновляем Hero HUD карточку уровня
-        const lvl = data.user_level || { level: 1, title: 'Новичок', current_xp: 0, next_level_xp: 50, progress_perc: 0, total_xp: 0 };
+        // 1. Верхний бар возврата к профилю
+        const headerBar = document.getElementById('achieveUserHeaderBar');
+        if (headerBar) {
+            if (isForeignUser && data.user) {
+                headerBar.style.display = 'flex';
+                const nameEl = document.getElementById('achieveViewingUserName');
+                if (nameEl) nameEl.textContent = data.user.display_name;
+                const handleEl = document.getElementById('achieveViewingUserHandle');
+                if (handleEl) handleEl.textContent = `@${data.user.username}`;
+                const avatarEl = document.getElementById('achieveViewingUserAvatar');
+                if (avatarEl) avatarEl.src = data.user.avatar_url || '/static/avatars/default.svg';
+                const backLabel = document.getElementById('achieveBackBtnLabel');
+                if (backLabel) backLabel.textContent = `← Назад к профилю ${data.user.display_name}`;
+            } else if (targetUserId && Number(targetUserId) === Number(window.CURRENT_USER_ID)) {
+                headerBar.style.display = 'flex';
+                const backLabel = document.getElementById('achieveBackBtnLabel');
+                if (backLabel) backLabel.textContent = '← Назад в мой профиль';
+                const nameEl = document.getElementById('achieveViewingUserName');
+                if (nameEl) nameEl.textContent = 'Мои награды';
+                const handleEl = document.getElementById('achieveViewingUserHandle');
+                if (handleEl) handleEl.textContent = `@${window.CURRENT_USER_USERNAME || 'me'}`;
+                const avatarEl = document.getElementById('achieveViewingUserAvatar');
+                if (avatarEl && data.user) avatarEl.src = data.user.avatar_url || '/static/avatars/default.svg';
+            } else {
+                headerBar.style.display = 'none';
+            }
+        }
+
+        // 2. Обновляем Hero HUD карточку уровня
+        const lvl = data.user_level || { level: 1, title: 'Новичок', current_xp: 0, next_level_xp: 70, progress_perc: 0, total_xp: 0 };
         const lvlNum = document.getElementById('achieveHeroLevelNum');
         if (lvlNum) lvlNum.textContent = lvl.level;
 
@@ -9570,21 +9624,23 @@ async function loadAchievements(targetUserId = null) {
         const mPoints = document.getElementById('metricTotalPoints');
         if (mPoints) mPoints.textContent = `${data.total_points_earned} XP`;
 
-        // 2. Обновляем бейдж уровня в левой колонке навигации и в футере
-        const hudNavLvl = document.getElementById('hudNavLevelBadge');
-        if (hudNavLvl) {
-            hudNavLvl.textContent = `${lvl.level} ур.`;
-            hudNavLvl.style.display = 'inline-flex';
-        }
-        const sidebarLvl = document.getElementById('sidebarUserLvlBadge');
-        if (sidebarLvl) {
-            sidebarLvl.textContent = `${lvl.level} ур.`;
+        // 3. Обновляем бейдж уровня в левой колонке навигации и в футере (только если свои данные)
+        if (!isForeignUser) {
+            const hudNavLvl = document.getElementById('hudNavLevelBadge');
+            if (hudNavLvl) {
+                hudNavLvl.textContent = `${lvl.level} ур.`;
+                hudNavLvl.style.display = 'inline-flex';
+            }
+            const sidebarLvl = document.getElementById('sidebarUserLvlBadge');
+            if (sidebarLvl) {
+                sidebarLvl.textContent = `${lvl.level} ур.`;
+            }
         }
 
-        // 3. Обновляем счетчики в кнопках фильтров
+        // 4. Обновляем счетчики в кнопках фильтров
         updateAchievementFilterCounts(data.achievements);
 
-        // 4. Рендерим сетку карточек по текущему фильтру
+        // 5. Рендерим сетку карточек по текущему фильтру
         renderAchievementsList(currentAchievementsFilter);
 
     } catch (err) {

@@ -494,6 +494,7 @@ type Achievement struct {
 }
 
 type UserAchievementsResponse struct {
+	User                *User         `json:"user,omitempty"`
 	UserLevel           LevelInfo     `json:"user_level"`
 	TotalAchievements   int           `json:"total_achievements"`
 	UnlockedCount       int           `json:"unlocked_count"`
@@ -519,15 +520,15 @@ var LevelTiers = []struct {
 	Title string
 }{
 	{1, 0, "Новичок"},
-	{2, 50, "Стрит-кид"},
-	{3, 120, "Фиксер"},
-	{4, 220, "Соло"},
-	{5, 350, "Техник"},
-	{6, 500, "Нетраннер"},
-	{7, 700, "Кибер-самурай"},
-	{8, 950, "Хром-мастер"},
-	{9, 1250, "Арасака Оверлорд"},
-	{10, 1600, "Легенда Найт-Сити"},
+	{2, 70, "Стрит-кид"},
+	{3, 180, "Фиксер"},
+	{4, 350, "Соло"},
+	{5, 600, "Техник"},
+	{6, 950, "Нетраннер"},
+	{7, 1400, "Кибер-самурай"},
+	{8, 2000, "Хром-мастер"},
+	{9, 2800, "Арасака Оверлорд"},
+	{10, 3800, "Легенда Найт-Сити"},
 }
 
 func CalculateLevel(totalXP int) LevelInfo {
@@ -548,7 +549,7 @@ func CalculateLevel(totalXP int) LevelInfo {
 	if currTierIdx < len(LevelTiers)-1 {
 		nextTierXP = LevelTiers[currTierIdx+1].XP
 	} else {
-		nextTierXP = currTier.XP + 500
+		nextTierXP = currTier.XP + 1000
 	}
 
 	prevTierXP := currTier.XP

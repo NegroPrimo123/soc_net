@@ -1623,7 +1623,7 @@
                                 <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.2rem;">
                                     <h2 class="hero-display-name" id="heroDisplayName" style="margin: 0;">Имя Фамилия</h2>
                                     <span class="hero-rank-badge" id="heroRankBadge" style="display: none;">Ранг</span>
-                                    <span class="hero-level-badge" id="heroLevelBadge" style="display: none;" onclick="navigateTo('achievements')" title="Нажмите, чтобы открыть достижения">⚡ Ур. 1 · Новичок</span>
+                                    <span class="hero-level-badge" id="heroLevelBadge" style="display: none;" onclick="openUserAchievements(currentProfileUserId)" title="Посмотреть достижения и прогресс пользователя">⚡ Ур. 1 · Новичок</span>
                                 </div>
                                 <span class="hero-username" id="heroUsername">@username</span>
 
@@ -1693,7 +1693,7 @@
                                     <span class="stat-num" id="heroStatFollowing">0</span>
                                     <span class="stat-label">подписок</span>
                                 </div>
-                                <div class="stat-pill" id="statCardAchievements" onclick="navigateTo('achievements')" title="Открыть достижения">
+                                <div class="stat-pill" id="statCardAchievements" onclick="openUserAchievements(currentProfileUserId)" title="Посмотреть достижения и прогресс пользователя">
                                     <span class="stat-num text-neon" id="heroStatLevel">🏆 1 ур.</span>
                                     <span class="stat-label" id="heroStatXP">0 XP</span>
                                 </div>
@@ -2422,6 +2422,21 @@
             ========================================== -->
             <div id="achievementsView" class="view-panel" style="display: none;">
                 <div class="achievements-page-container">
+                    <!-- Верхний бар возврата и досье пользователя -->
+                    <div class="achieve-user-header-bar" id="achieveUserHeaderBar" style="display: none;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btnAchieveBack" onclick="backFromAchievements()">
+                            <span id="achieveBackBtnLabel">← Назад к профилю</span>
+                        </button>
+                        <div class="achieve-viewing-user-info" id="achieveViewingUserInfo">
+                            <span class="achieve-viewing-badge">🏆 ПРОФИЛЬ ДОСТИЖЕНИЙ</span>
+                            <div class="achieve-target-user-pill">
+                                <img id="achieveViewingUserAvatar" src="/static/avatars/default.svg" class="mini-avatar" alt="Avatar">
+                                <span id="achieveViewingUserName">Пользователь</span>
+                                <span id="achieveViewingUserHandle" class="achieve-user-handle-sub">@user</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Заголовок и карточка уровня пользователя (Level Hero HUD) -->
                     <div class="achieve-hero-card">
                         <div class="achieve-hero-top">

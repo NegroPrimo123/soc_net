@@ -7171,6 +7171,59 @@ input:checked + .toggle-slider:before {
     animation: fadeInTab 0.3s ease;
 }
 
+/* Верхний бар при просмотре достижений другого пользователя */
+.achieve-user-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.85rem 1.25rem;
+    background: rgba(16, 24, 40, 0.7);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.achieve-viewing-user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.achieve-viewing-badge {
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #00f0ff;
+    background: rgba(0, 240, 255, 0.12);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    padding: 3px 8px;
+    border-radius: 8px;
+    letter-spacing: 0.5px;
+}
+
+.achieve-target-user-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.achieve-target-user-pill .mini-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid #00f0ff;
+}
+
+.achieve-user-handle-sub {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-dim);
+}
+
 .achieve-hero-card {
     background: linear-gradient(135deg, rgba(16, 24, 40, 0.9) 0%, rgba(26, 16, 44, 0.95) 100%);
     border: 1px solid rgba(0, 240, 255, 0.35);

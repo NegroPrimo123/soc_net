@@ -17,7 +17,7 @@ func NewAchievementRepository(db *sql.DB) *AchievementRepository {
 }
 
 // GetAchievements evaluates all user activities, unlocks achievements, updates user XP & Level,
-// and returns full achievement list and level information.
+// and returns full achievement list, level information, and target user profile.
 func (r *AchievementRepository) GetAchievements(userID int) (*models.UserAchievementsResponse, error) {
 	// 1. Fetch all system achievements
 	query := `
@@ -63,28 +63,35 @@ func (r *AchievementRepository) GetAchievements(userID int) (*models.UserAchieve
 
 	// 3. Compute live user metrics
 	var (
-		postsCount          int
-		commentsCount       int
-		followsCount        int
-		likesGivenCount     int
-		pollVotesCount      int
-		hasProfileCustom    bool
-		profileMusicCount   int
-		channelSubsCount    int
-		giftsSentCount      int
-		channelDMsCount     int
-		likesReceivedCount  int
+		postsCount           int
+		postsPhotoCount      int
+		commentsCount        int
+		followsCount         int
+		followersCount       int
+		likesGivenCount      int
+		likesReceivedCount   int
+		pollVotesCount       int
+		pollsCreatedCount    int
+		hasProfileCustom     bool
+		profileMusicCount    int
+		channelSubsCount     int
+		giftsSentCount       int
+		giftsReceivedCount   int
+		channelDMsCount      int
 		channelsCreatedCount int
-		maxChannelSubs      int
-		giftsReceivedCount  int
-		pollsCreatedCount   int
+		maxChannelSubs       int
+		channelPostsCount    int
 	)
 
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM posts WHERE user_id = $1`, userID).Scan(&postsCount)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM posts WHERE user_id = $1 AND image_url != ''`, userID).Scan(&postsPhotoCount)
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM comments WHERE user_id = $1`, userID).Scan(&commentsCount)
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM follows WHERE follower_id = $1`, userID).Scan(&followsCount)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM follows WHERE following_id = $1`, userID).Scan(&followersCount)
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM likes WHERE user_id = $1`, userID).Scan(&likesGivenCount)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM likes l JOIN posts p ON l.post_id = p.id WHERE p.user_id = $1`, userID).Scan(&likesReceivedCount)
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM poll_votes WHERE user_id = $1`, userID).Scan(&pollVotesCount)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM posts WHERE user_id = $1 AND poll_question IS NOT NULL AND poll_question != ''`, userID).Scan(&pollsCreatedCount)
 	_ = r.db.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM users 
@@ -95,8 +102,8 @@ func (r *AchievementRepository) GetAchievements(userID int) (*models.UserAchieve
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM user_music WHERE user_id = $1`, userID).Scan(&profileMusicCount)
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM channel_subscribers WHERE user_id = $1`, userID).Scan(&channelSubsCount)
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM gifts WHERE sender_id = $1`, userID).Scan(&giftsSentCount)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM gifts WHERE receiver_id = $1`, userID).Scan(&giftsReceivedCount)
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE sender_id = $1 AND receiver_channel_id IS NOT NULL`, userID).Scan(&channelDMsCount)
-	_ = r.db.QueryRow(`SELECT COUNT(*) FROM likes l JOIN posts p ON l.post_id = p.id WHERE p.user_id = $1`, userID).Scan(&likesReceivedCount)
 	_ = r.db.QueryRow(`SELECT COUNT(*) FROM channels WHERE owner_id = $1`, userID).Scan(&channelsCreatedCount)
 	_ = r.db.QueryRow(`
 		SELECT COALESCE(MAX(sub_cnt), 0) FROM (
@@ -104,8 +111,7 @@ func (r *AchievementRepository) GetAchievements(userID int) (*models.UserAchieve
 			JOIN channels c ON cs.channel_id = c.id 
 			WHERE c.owner_id = $1 GROUP BY c.id
 		) t`, userID).Scan(&maxChannelSubs)
-	_ = r.db.QueryRow(`SELECT COUNT(*) FROM gifts WHERE receiver_id = $1`, userID).Scan(&giftsReceivedCount)
-	_ = r.db.QueryRow(`SELECT COUNT(*) FROM posts WHERE user_id = $1 AND poll_question IS NOT NULL AND poll_question != ''`, userID).Scan(&pollsCreatedCount)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM posts p JOIN channels c ON p.channel_id = c.id WHERE c.owner_id = $1`, userID).Scan(&channelPostsCount)
 
 	now := time.Now()
 	var newUnlocked []models.Achievement
@@ -118,46 +124,82 @@ func (r *AchievementRepository) GetAchievements(userID int) (*models.UserAchieve
 
 		var currentVal int
 		switch a.ID {
-		case "first_post":
+		case "posts_3":
 			currentVal = postsCount
-		case "first_comment":
+		case "posts_photo_3":
+			currentVal = postsPhotoCount
+		case "comments_5":
 			currentVal = commentsCount
-		case "first_follow":
-			currentVal = followsCount
-		case "give_likes_5":
+		case "give_likes_15":
 			currentVal = likesGivenCount
-		case "vote_poll_1":
+		case "likes_received_10":
+			currentVal = likesReceivedCount
+		case "follows_3":
+			currentVal = followsCount
+		case "followers_3":
+			currentVal = followersCount
+		case "vote_poll_3":
 			currentVal = pollVotesCount
+		case "create_polls_2":
+			currentVal = pollsCreatedCount
 		case "profile_custom":
 			if hasProfileCustom {
 				currentVal = 1
 			} else {
 				currentVal = 0
 			}
-		case "profile_music":
+		case "profile_music_3":
 			currentVal = profileMusicCount
-		case "sub_channel_1":
+		case "sub_channels_3":
 			currentVal = channelSubsCount
-		case "send_gift_1":
+		case "send_gifts_2":
 			currentVal = giftsSentCount
-		case "channel_dm_1":
+		case "gifts_received_2":
+			currentVal = giftsReceivedCount
+		case "channel_dm_3":
 			currentVal = channelDMsCount
-		case "posts_10":
+		case "posts_25":
 			currentVal = postsCount
-		case "comments_25":
+		case "comments_30":
 			currentVal = commentsCount
-		case "likes_received_5":
+		case "give_likes_60":
+			currentVal = likesGivenCount
+		case "likes_received_40":
 			currentVal = likesReceivedCount
+		case "follows_15":
+			currentVal = followsCount
+		case "followers_10":
+			currentVal = followersCount
 		case "create_channel_1":
 			currentVal = channelsCreatedCount
-		case "channel_subs_3":
+		case "channel_subs_10":
 			currentVal = maxChannelSubs
-		case "gifts_received_3":
-			currentVal = giftsReceivedCount
-		case "create_polls_3":
+		case "channel_posts_10":
+			currentVal = channelPostsCount
+		case "vote_poll_12":
+			currentVal = pollVotesCount
+		case "create_polls_8":
 			currentVal = pollsCreatedCount
+		case "send_gifts_6":
+			currentVal = giftsSentCount
+		case "gifts_received_6":
+			currentVal = giftsReceivedCount
+		case "profile_music_8":
+			currentVal = profileMusicCount
+		case "posts_75":
+			currentVal = postsCount
+		case "comments_100":
+			currentVal = commentsCount
+		case "likes_received_100":
+			currentVal = likesReceivedCount
+		case "channel_subs_25":
+			currentVal = maxChannelSubs
+		case "gifts_received_15":
+			currentVal = giftsReceivedCount
+		case "send_gifts_15":
+			currentVal = giftsSentCount
 		default:
-			// level_5_reach & veteran_achievements_10 evaluated in Second Pass
+			// level tiers and veteran achievements evaluated in Second Pass
 			continue
 		}
 
@@ -189,10 +231,11 @@ func (r *AchievementRepository) GetAchievements(userID int) (*models.UserAchieve
 
 	prelimLevel := models.CalculateLevel(calcTotalXP)
 
-	// 6. Second Pass: evaluate meta/legendary achievements
+	// 6. Second Pass: evaluate level and veteran meta achievements
 	for i := range achievements {
 		a := &achievements[i]
-		if a.ID == "level_5_reach" {
+		switch a.ID {
+		case "level_4_reach":
 			a.Progress = prelimLevel.Level
 			if a.Progress > a.TargetCount {
 				a.Progress = a.TargetCount
@@ -208,8 +251,55 @@ func (r *AchievementRepository) GetAchievements(userID int) (*models.UserAchieve
 				calcTotalXP += a.Points
 				calcUnlockedCount++
 			}
-		} else if a.ID == "veteran_achievements_10" {
-			// Counts other achievements unlocked
+		case "level_6_reach":
+			a.Progress = prelimLevel.Level
+			if a.Progress > a.TargetCount {
+				a.Progress = a.TargetCount
+			}
+			if prevTime, ok := unlockedMap[a.ID]; ok {
+				a.IsUnlocked = true
+				a.UnlockedAt = &prevTime
+			} else if a.Progress >= a.TargetCount {
+				a.IsUnlocked = true
+				a.UnlockedAt = &now
+				unlockedMap[a.ID] = now
+				newUnlocked = append(newUnlocked, *a)
+				calcTotalXP += a.Points
+				calcUnlockedCount++
+			}
+		case "level_8_reach":
+			a.Progress = prelimLevel.Level
+			if a.Progress > a.TargetCount {
+				a.Progress = a.TargetCount
+			}
+			if prevTime, ok := unlockedMap[a.ID]; ok {
+				a.IsUnlocked = true
+				a.UnlockedAt = &prevTime
+			} else if a.Progress >= a.TargetCount {
+				a.IsUnlocked = true
+				a.UnlockedAt = &now
+				unlockedMap[a.ID] = now
+				newUnlocked = append(newUnlocked, *a)
+				calcTotalXP += a.Points
+				calcUnlockedCount++
+			}
+		case "level_10_reach":
+			a.Progress = prelimLevel.Level
+			if a.Progress > a.TargetCount {
+				a.Progress = a.TargetCount
+			}
+			if prevTime, ok := unlockedMap[a.ID]; ok {
+				a.IsUnlocked = true
+				a.UnlockedAt = &prevTime
+			} else if a.Progress >= a.TargetCount {
+				a.IsUnlocked = true
+				a.UnlockedAt = &now
+				unlockedMap[a.ID] = now
+				newUnlocked = append(newUnlocked, *a)
+				calcTotalXP += a.Points
+				calcUnlockedCount++
+			}
+		case "veteran_achievements_20":
 			a.Progress = calcUnlockedCount
 			if a.Progress > a.TargetCount {
 				a.Progress = a.TargetCount
@@ -263,7 +353,20 @@ func (r *AchievementRepository) GetAchievements(userID int) (*models.UserAchieve
 		`, userID, a.ID, a.Progress, a.IsUnlocked, unlockedAtVal)
 	}
 
+	// 9. Load target user info
+	var targetUser models.User
+	_ = r.db.QueryRow(`
+		SELECT id, username, display_name, avatar_url, bio, experience_points, account_level
+		FROM users WHERE id = $1
+	`, userID).Scan(
+		&targetUser.ID, &targetUser.Username, &targetUser.DisplayName,
+		&targetUser.AvatarURL, &targetUser.Bio,
+		&targetUser.ExperiencePoints, &targetUser.AccountLevel,
+	)
+	targetUser.LevelTitle = userLevel.Title
+
 	return &models.UserAchievementsResponse{
+		User:                &targetUser,
 		UserLevel:           userLevel,
 		TotalAchievements:   len(achievements),
 		UnlockedCount:       finalUnlockedCount,
