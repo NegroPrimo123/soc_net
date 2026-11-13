@@ -32,9 +32,10 @@ func setupTestApp(t *testing.T) (*http.ServeMux, *repository.UserRepository, *re
 	notifRepo := repository.NewNotificationRepository(db)
 	channelRepo := repository.NewChannelRepository(db)
 	pollRepo := repository.NewPollRepository(db)
+	achievementRepo := repository.NewAchievementRepository(db)
 	hub := events.NewHub()
 
-	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, notifRepo, channelRepo, pollRepo, hub)
+	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, notifRepo, channelRepo, pollRepo, achievementRepo, hub)
 	if err != nil {
 		t.Fatalf("Failed to initialize handler: %v", err)
 	}
@@ -674,5 +675,100 @@ func TestMessageEditAndDeleteOperations(t *testing.T) {
 		if wBatch.Code != http.StatusOK {
 			t.Fatalf("Expected 200 OK, got %d. Body: %s", wBatch.Code, wBatch.Body.String())
 		}
+	})
+}
+
+// 9. Тест на изоляцию переписки: пользователь C не видит диалог A-B (403 Forbidden или пустой список)
+func TestDirectMessagePrivacyAndIsolationUserC(t *testing.T) {
+	mux, userRepo, _, _, _, tokenUser1, _ := setupTestApp(t)
+
+	// Пользователь 3 (User C - сторонняя третья сторона)
+	tokenUser3, err := userRepo.CreateSession(3)
+	if err != nil {
+		t.Fatalf("Failed to create session for user 3 (User C): %v", err)
+	}
+
+	secretMessage := "TOP_SECRET_PAYLOAD_ABC_7788: Конфиденциальный финансовый отчет A и B"
+
+	t.Run("Этап 1: Пользователь A (id=1) отправляет секретное сообщение пользователю B (id=2)", func(t *testing.T) {
+		body, _ := json.Marshal(models.SendMessageRequest{
+			ReceiverID: 2,
+			Content:    secretMessage,
+		})
+		req := httptest.NewRequest("POST", "/api/messages", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+		w := httptest.NewRecorder()
+
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("Expected 201 Created, got %d. Body: %s", w.Code, w.Body.String())
+		}
+		t.Logf("✓ [УСПЕХ] Пользователь A успешно отправил секретное сообщение пользователю B (код 201 Created)")
+	})
+
+	t.Run("Этап 2: Пользователь C запрашивает переписку с B (GET /api/messages/2) -> Ожидание: пустой список [] (0 сообщений), утечки нет", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/messages/2", nil)
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser3})
+		w := httptest.NewRecorder()
+
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d", w.Code)
+		}
+
+		var msgs []models.Message
+		if err := json.Unmarshal(w.Body.Bytes(), &msgs); err != nil {
+			t.Fatalf("JSON decode error: %v", err)
+		}
+
+		if len(msgs) != 0 {
+			t.Fatalf("НАРУШЕНИЕ ИЗОЛЯЦИИ: Пользователь C получил %d сообщений между A и B!", len(msgs))
+		}
+		if strings.Contains(w.Body.String(), secretMessage) {
+			t.Fatalf("КРИТИЧЕСКАЯ УТЕЧКА ДАННЫХ: Текст приватного сообщения обнаружен в ответе для C!")
+		}
+		t.Logf("✓ [УСПЕХ] Пользователь C получил пустой список диалога с B (длина: %d, статус: %d OK). Утечки приватных данных A-B нет.", len(msgs), w.Code)
+	})
+
+	t.Run("Этап 3: Пользователь C пытается принудительно перехватить диалог A-B (GET /api/messages/2?user1=1&user2=2) -> Ожидание: 403 Forbidden", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/messages/2?user1=1&user2=2", nil)
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser3})
+		w := httptest.NewRecorder()
+
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("ОШИБКА БЕЗОПАСНОСТИ: Ожидался статус 403 Forbidden при попытке перехвата, получен %d", w.Code)
+		}
+
+		var errResp map[string]string
+		_ = json.Unmarshal(w.Body.Bytes(), &errResp)
+		t.Logf("✓ [УСПЕХ] Сервер заблокировал несанкционированный запрос C к чужому диалогу A-B. Статус: 403 Forbidden, ответ: %s", errResp["error"])
+	})
+
+	t.Run("Этап 4: Пользователь C запрашивает список своих диалогов (GET /api/messages/conversations) -> Ожидание: диалог с B отсутствует, секретное сообщение A-B не утекает", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/messages/conversations", nil)
+		req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser3})
+		w := httptest.NewRecorder()
+
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d", w.Code)
+		}
+
+		var convs []models.Conversation
+		if err := json.Unmarshal(w.Body.Bytes(), &convs); err != nil {
+			t.Fatalf("JSON decode error: %v", err)
+		}
+
+		for _, c := range convs {
+			if c.User.ID == 2 {
+				t.Fatalf("НАРУШЕНИЕ ПРИВАТНОСТИ: Диалог с пользователем B (id=2) появился у стороннего пользователя C!")
+			}
+			if strings.Contains(c.LastMessage.Content, secretMessage) {
+				t.Fatalf("КРИТИЧЕСКАЯ УТЕЧКА: Секретное сообщение A-B попало в последнее сообщение диалога для C!")
+			}
+		}
+		t.Logf("✓ [УСПЕХ] В списке диалогов пользователя C отсутствует переписка с B (id=2), секретное сообщение A-B не скомпрометировано (диалогов C: %d)", len(convs))
 	})
 }
