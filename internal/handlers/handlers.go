@@ -32,8 +32,14 @@ type Handler struct {
 	socialGraph     *graph.Graph
 	rankingEngine   *ranking.Engine
 	federationSvc   *federation.Service
+	remoteGraphClient *graph.RemoteClient
 	hub             *events.Hub
 	tmpl            *template.Template
+}
+
+// SetRemoteGraphClient подключает удаленный gRPC микросервис графа и ранжирования.
+func (h *Handler) SetRemoteGraphClient(client *graph.RemoteClient) {
+	h.remoteGraphClient = client
 }
 
 func NewHandler(

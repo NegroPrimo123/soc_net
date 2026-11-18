@@ -1736,6 +1736,16 @@
                                     <span class="crypto-key-val" id="profileX25519Val">Загрузка...</span>
                                 </div>
                             </div>
+                            <div class="profile-standards-row" id="profileStandardsRow" style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                                <a id="profileDidBadge" class="crypto-key-badge" target="_blank" href="#" style="text-decoration: none; color: #a855f7; border-color: rgba(168, 85, 247, 0.4); font-size: 11px;" title="W3C Decentralized Identifier (DID)">
+                                    <span class="crypto-key-label" style="color: #a855f7;">W3C DID:</span>
+                                    <span class="crypto-key-val" id="profileDidVal">did:gosocial:user:...</span>
+                                </a>
+                                <a id="profileActivityPubBadge" class="crypto-key-badge" target="_blank" href="#" style="text-decoration: none; color: #10b981; border-color: rgba(16, 185, 129, 0.4); font-size: 11px;" title="W3C ActivityPub / RFC 7033 WebFinger">
+                                    <span class="crypto-key-label" style="color: #10b981;">ActivityPub:</span>
+                                    <span class="crypto-key-val" id="profileActivityPubVal">@user@node</span>
+                                </a>
+                            </div>
                         </div>
                     </div>
 
@@ -2714,6 +2724,20 @@
                                 <span class="fed-stat-num text-neon">Ed25519</span>
                                 <span class="fed-stat-lbl">Крипто-протокол</span>
                             </div>
+                            <div class="fed-stat-box">
+                                <span class="fed-stat-num" style="color: #10b981;">ActivityPub</span>
+                                <span class="fed-stat-lbl">RFC 7033 WebFinger</span>
+                            </div>
+                            <div class="fed-stat-box">
+                                <span class="fed-stat-num" style="color: #a855f7;">W3C DID</span>
+                                <span class="fed-stat-lbl">did:gosocial:user</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; gap: 8px; font-size: 12px; flex-wrap: wrap;">
+                            <span style="color: var(--text-muted); font-weight: 600;">🌐 Стандарты интероперабельности:</span>
+                            <a href="/.well-known/webfinger?resource=acct:oleg@localhost:8080" target="_blank" style="color: #10b981; text-decoration: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); padding: 3px 10px; border-radius: 6px; font-family: monospace;">RFC 7033 WebFinger</a>
+                            <a href="/api/did/users/1" target="_blank" style="color: #a855f7; text-decoration: none; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.3); padding: 3px 10px; border-radius: 6px; font-family: monospace;">W3C DID Document</a>
+                            <a href="/api/activitypub/users/1" target="_blank" style="color: #00f0ff; text-decoration: none; background: rgba(0, 240, 255, 0.12); border: 1px solid rgba(0, 240, 255, 0.3); padding: 3px 10px; border-radius: 6px; font-family: monospace;">ActivityPub Actor</a>
                         </div>
                     </div>
 

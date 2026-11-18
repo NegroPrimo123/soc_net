@@ -1,11 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"social-network/internal/models"
+	pb "social-network/proto/graphranking"
 )
 
 // GetRankedFeed возвращает персонализированную умную ленту с многофакторным скорингом.
@@ -53,7 +57,78 @@ func (h *Handler) GetRankedFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.rankingEngine == nil || len(posts) == 0 {
+	if len(posts) == 0 {
+		respondJSON(w, http.StatusOK, posts)
+		return
+	}
+
+	// 1. Попытка вызова gRPC микросервиса ранжирования
+	if h.remoteGraphClient != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 1500*time.Millisecond)
+		defer cancel()
+
+		var candidates []*pb.PostCandidate
+		for _, p := range posts {
+			candidates = append(candidates, &pb.PostCandidate{
+				Id:            int64(p.ID),
+				UserId:        int64(p.UserID),
+				Content:       p.Content,
+				CreatedAtUnix: p.CreatedAt.Unix(),
+				LikesCount:    int32(p.LikesCount),
+				CommentsCount: int32(p.CommentsCount),
+			})
+		}
+
+		resp, err := h.remoteGraphClient.Client().RankFeed(ctx, &pb.RankFeedRequest{
+			CurrentUserId: int64(currentUserID),
+			Limit:         int32(limit),
+			Offset:        int32(offset),
+			Candidates:    candidates,
+		})
+
+		if err == nil && resp != nil && len(resp.RankedPosts) > 0 {
+			type rScore struct {
+				score   float64
+				factors models.RankingFactors
+			}
+			scoreMap := make(map[int]rScore)
+			for _, rp := range resp.RankedPosts {
+				scoreMap[int(rp.Id)] = rScore{
+					score: rp.FinalScore,
+					factors: models.RankingFactors{
+						FinalScore:       rp.FinalScore,
+						GraphAffinity:    rp.AffinityScore,
+						FreshnessScore:   rp.FreshnessScore,
+						EngagementScore:  rp.EngagementScore,
+						TopicMatchScore:  rp.TopicScore,
+						DiversityPenalty: rp.DiversityPenalty,
+					},
+				}
+			}
+
+			for i := range posts {
+				if sc, ok := scoreMap[posts[i].ID]; ok {
+					posts[i].RankingScore = sc.score
+					fCopy := sc.factors
+					posts[i].RankingFactors = &fCopy
+				}
+			}
+
+			sort.Slice(posts, func(i, j int) bool {
+				return posts[i].RankingScore > posts[j].RankingScore
+			})
+
+			if len(posts) > limit {
+				posts = posts[:limit]
+			}
+
+			respondJSON(w, http.StatusOK, posts)
+			return
+		}
+	}
+
+	// 2. Локальный fallback
+	if h.rankingEngine == nil {
 		respondJSON(w, http.StatusOK, posts)
 		return
 	}

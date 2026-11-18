@@ -123,6 +123,14 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/federation/inbox", h.FederationInbox)
 	mux.HandleFunc("GET /api/federation/outbox", h.FederationOutbox)
 
+	// W3C ActivityPub & Decentralized Identifiers (DID) Standards API
+	mux.HandleFunc("GET /.well-known/webfinger", h.WebFinger)
+	mux.HandleFunc("GET /api/activitypub/users/{id}", h.ActivityPubActor)
+	mux.HandleFunc("POST /api/activitypub/inbox", h.ActivityPubInbox)
+	mux.HandleFunc("GET /api/activitypub/outbox", h.ActivityPubOutbox)
+	mux.HandleFunc("GET /api/did/users/{id}", h.ResolveUserDID)
+	mux.HandleFunc("GET /api/did/{did}", h.ResolveDID)
+
 	// File Upload API (Загрузка фотографий и файлов с диска)
 	mux.HandleFunc("POST /api/upload", h.UploadFile)
 

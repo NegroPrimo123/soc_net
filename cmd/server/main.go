@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"social-network/internal/config"
 	"social-network/internal/database"
@@ -70,6 +71,19 @@ func main() {
 	)
 	if err != nil {
 		log.Fatalf("Fatal: Handler initialization error: %v", err)
+	}
+
+	// Подключение к gRPC микросервису графа и ранжирования при его наличии
+	grpcAddr := os.Getenv("GRAPH_SERVICE_ADDR")
+	if grpcAddr == "" {
+		grpcAddr = "localhost:50051"
+	}
+	if remoteClient, err := graph.NewRemoteClient(grpcAddr); err == nil {
+		h.SetRemoteGraphClient(remoteClient)
+		defer remoteClient.Close()
+		log.Printf("[Microservice Architecture] API Gateway подключен к gRPC Graph & Ranking Service (%s)", grpcAddr)
+	} else {
+		log.Printf("[Microservice Architecture] gRPC микросервис не обнаружен, используется локальный in-process движок (fallback: %v)", err)
 	}
 
 	mux := http.NewServeMux()
