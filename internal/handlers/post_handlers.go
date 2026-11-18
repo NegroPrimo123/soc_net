@@ -162,7 +162,7 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	req.ImageURL = strings.TrimSpace(req.ImageURL)
 
-	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, req.ChannelID, req.PollID)
+	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, req.ChannelID, req.PollID, req.Signature, req.AuthorPubKey)
 
 	if err != nil {
 

@@ -102,6 +102,27 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/achievements", h.GetAchievements)
 	mux.HandleFunc("GET /api/users/{id}/achievements", h.GetPublicUserAchievements)
 
+	// Personalized Content Ranking Feed API (Умная персонализированная лента)
+	mux.HandleFunc("GET /api/feed/ranked", h.GetRankedFeed)
+	mux.HandleFunc("GET /api/feed/ranked/explain/{id}", h.ExplainRanking)
+
+	// Social Graph Analytics & Recommendations API (Графовые алгоритмы)
+	mux.HandleFunc("GET /api/graph/topology", h.GetGraphTopology)
+	mux.HandleFunc("GET /api/graph/path/{id}", h.GetShortestPath)
+	mux.HandleFunc("GET /api/graph/recommendations", h.GetGraphRecommendations)
+
+	// Cryptographic Privacy & Digital Signatures API (E2EE / Ed25519)
+	mux.HandleFunc("POST /api/crypto/keys", h.RegisterCryptoKeys)
+	mux.HandleFunc("GET /api/crypto/keys/{id}", h.GetUserCryptoKeys)
+	mux.HandleFunc("POST /api/crypto/verify-post", h.VerifyPostSignature)
+
+	// Decentralized Federation & Mesh Nodes API (Федерация узлов)
+	mux.HandleFunc("GET /api/federation/nodes", h.GetFederationNodes)
+	mux.HandleFunc("POST /api/federation/nodes", h.RegisterFederationNode)
+	mux.HandleFunc("POST /api/federation/ping", h.PingFederationNode)
+	mux.HandleFunc("POST /api/federation/inbox", h.FederationInbox)
+	mux.HandleFunc("GET /api/federation/outbox", h.FederationOutbox)
+
 	// File Upload API (Загрузка фотографий и файлов с диска)
 	mux.HandleFunc("POST /api/upload", h.UploadFile)
 

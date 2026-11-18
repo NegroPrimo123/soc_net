@@ -24,7 +24,7 @@ func NewMessageRepository(db *sql.DB) *MessageRepository {
 
 }
 
-func (r *MessageRepository) SendMessage(senderID, receiverID int, content, audioURL, audioTitle, audioArtist string, channelID *int, isFromChannel bool, pollID *int) (*models.Message, error) {
+func (r *MessageRepository) SendMessage(senderID, receiverID int, content, audioURL, audioTitle, audioArtist string, channelID *int, isFromChannel bool, pollID *int, isEncrypted bool, ciphertext, nonce, senderPubKey, receiverPubKey, keyFingerprint string) (*models.Message, error) {
 	if channelID == nil && senderID == receiverID {
 		return nil, fmt.Errorf("нельзя отправить сообщение самому себе")
 	}
@@ -46,13 +46,13 @@ func (r *MessageRepository) SendMessage(senderID, receiverID int, content, audio
 	}
 
 	query := `
-	INSERT INTO messages (sender_id, receiver_id, content, audio_url, audio_title, audio_artist, channel_id, is_from_channel, poll_id, is_read, created_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, FALSE, NOW())
+	INSERT INTO messages (sender_id, receiver_id, content, audio_url, audio_title, audio_artist, channel_id, is_from_channel, poll_id, is_read, is_encrypted, ciphertext, nonce, sender_pubkey, receiver_pubkey, key_fingerprint, created_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, FALSE, $10, $11, $12, $13, $14, $15, NOW())
 	RETURNING id, created_at
 	`
 	var msgID int
 	var createdAt time.Time
-	err := r.db.QueryRow(query, senderID, receiverID, content, audioURL, audioTitle, audioArtist, channelID, isFromChannel, pollID).Scan(&msgID, &createdAt)
+	err := r.db.QueryRow(query, senderID, receiverID, content, audioURL, audioTitle, audioArtist, channelID, isFromChannel, pollID, isEncrypted, ciphertext, nonce, senderPubKey, receiverPubKey, keyFingerprint).Scan(&msgID, &createdAt)
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}
@@ -65,6 +65,7 @@ func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 	SELECT 
 		m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
 		m.channel_id, COALESCE(m.is_from_channel, FALSE), m.poll_id,
+		COALESCE(m.is_encrypted, FALSE), COALESCE(m.ciphertext, ''), COALESCE(m.nonce, ''), COALESCE(m.sender_pubkey, ''), COALESCE(m.receiver_pubkey, ''), COALESCE(m.key_fingerprint, ''),
 		s.id, s.username, s.display_name, s.avatar_url, s.bio,
 		rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio,
 		COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, '')
@@ -82,6 +83,7 @@ func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 	err := r.db.QueryRow(query, msgID).Scan(
 		&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.AudioURL, &m.AudioTitle, &m.AudioArtist, &m.IsRead, &m.IsEdited, &m.CreatedAt,
 		&m.ChannelID, &m.IsFromChannel, &m.PollID,
+		&m.IsEncrypted, &m.Ciphertext, &m.Nonce, &m.SenderPubKey, &m.ReceiverPubKey, &m.KeyFingerprint,
 		&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
 		&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
 		&chName, &chHandle, &chAvatar,
@@ -135,6 +137,7 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 		SELECT 
 			m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
 			m.channel_id, COALESCE(m.is_from_channel, FALSE), m.poll_id,
+			COALESCE(m.is_encrypted, FALSE), COALESCE(m.ciphertext, ''), COALESCE(m.nonce, ''), COALESCE(m.sender_pubkey, ''), COALESCE(m.receiver_pubkey, ''), COALESCE(m.key_fingerprint, ''),
 			s.id, s.username, s.display_name, s.avatar_url, s.bio,
 			rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio
 		FROM messages m
@@ -171,6 +174,7 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 		if err := rows.Scan(
 			&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.AudioURL, &m.AudioTitle, &m.AudioArtist, &m.IsRead, &m.IsEdited, &m.CreatedAt,
 			&m.ChannelID, &m.IsFromChannel, &m.PollID,
+			&m.IsEncrypted, &m.Ciphertext, &m.Nonce, &m.SenderPubKey, &m.ReceiverPubKey, &m.KeyFingerprint,
 			&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
 			&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
 		); err != nil {
@@ -677,6 +681,7 @@ func (r *MessageRepository) GetChannelConversation(channelID, subscriberID, curr
 		SELECT 
 			m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
 			m.channel_id, COALESCE(m.is_from_channel, FALSE), m.poll_id,
+			COALESCE(m.is_encrypted, FALSE), COALESCE(m.ciphertext, ''), COALESCE(m.nonce, ''), COALESCE(m.sender_pubkey, ''), COALESCE(m.receiver_pubkey, ''), COALESCE(m.key_fingerprint, ''),
 			s.id, s.username, s.display_name, s.avatar_url, s.bio,
 			rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio,
 			ch.name, ch.handle, ch.avatar_url
@@ -710,6 +715,7 @@ func (r *MessageRepository) GetChannelConversation(channelID, subscriberID, curr
 		if err := rows.Scan(
 			&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.AudioURL, &m.AudioTitle, &m.AudioArtist, &m.IsRead, &m.IsEdited, &m.CreatedAt,
 			&m.ChannelID, &m.IsFromChannel, &m.PollID,
+			&m.IsEncrypted, &m.Ciphertext, &m.Nonce, &m.SenderPubKey, &m.ReceiverPubKey, &m.KeyFingerprint,
 			&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
 			&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
 			&chName, &chHandle, &chAvatar,

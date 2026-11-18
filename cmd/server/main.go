@@ -8,7 +8,10 @@ import (
 	"social-network/internal/config"
 	"social-network/internal/database"
 	"social-network/internal/events"
+	"social-network/internal/federation"
+	"social-network/internal/graph"
 	"social-network/internal/handlers"
+	"social-network/internal/ranking"
 	"social-network/internal/repository"
 )
 
@@ -30,12 +33,41 @@ func main() {
 	channelRepo := repository.NewChannelRepository(db)
 	pollRepo := repository.NewPollRepository(db)
 	achievementRepo := repository.NewAchievementRepository(db)
+	cryptoRepo := repository.NewCryptoRepository(db)
+	federationRepo := repository.NewFederationRepository(db)
+
+	// Инициализация Social Graph Engine
+	socialGraph := graph.NewGraph()
+	if err := socialGraph.BuildFromDB(db); err != nil {
+		log.Printf("[SocialGraph] Предупреждение: %v", err)
+	}
+
+	// Инициализация рекомендательного ранжирующего движка контента
+	rankingEngine := ranking.NewEngine(socialGraph)
+
+	// Инициализация сервиса федерации узлов
+	federationSvc := federation.NewService("NeoNet Hub Alpha", fmt.Sprintf("http://localhost:%s", cfg.Port))
 
 	// Инициализация и запуск Real-time SSE Hub (паттерн Hub/Subscriber)
 	hub := events.NewHub()
 	go hub.Run()
 
-	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, notifRepo, channelRepo, pollRepo, achievementRepo, hub)
+	h, err := handlers.NewHandler(
+		userRepo,
+		postRepo,
+		giftRepo,
+		messageRepo,
+		notifRepo,
+		channelRepo,
+		pollRepo,
+		achievementRepo,
+		cryptoRepo,
+		federationRepo,
+		socialGraph,
+		rankingEngine,
+		federationSvc,
+		hub,
+	)
 	if err != nil {
 		log.Fatalf("Fatal: Handler initialization error: %v", err)
 	}
@@ -48,9 +80,13 @@ func main() {
 
 	serverAddr := fmt.Sprintf(":%s", cfg.Port)
 	fmt.Println("==================================================")
-	fmt.Println("🚀 GoSocial Backend & Web UI is running!")
+	fmt.Println("🚀 GoSocial Decentralized Core & Web UI is running!")
 	fmt.Printf("🌐 Open in browser: http://localhost:%s\n", cfg.Port)
 	fmt.Println("🗄️  Database: PostgreSQL (gosocial)")
+	fmt.Println("🕸️  Social Graph Engine: Initialized (PageRank + BFS)")
+	fmt.Println("⚡ Content Ranking Engine: Active (Smart Multi-factor Feed)")
+	fmt.Println("🔐 Cryptographic Protocol: Ed25519 & X25519 E2EE Enabled")
+	fmt.Println("🌐 Federation Protocol: Active (Peer Discovery & Signed Sync)")
 	fmt.Println("==================================================")
 
 	if err := http.ListenAndServe(serverAddr, handler); err != nil {

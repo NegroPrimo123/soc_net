@@ -1116,6 +1116,14 @@
                 <span class="hud-nav-icon">🎁</span>
                 <span class="hud-nav-label">Подарки</span>
             </button>
+            <button class="hud-nav-item" id="tabNavGraph" onclick="navigateTo('graph')">
+                <span class="hud-nav-icon">🌐</span>
+                <span class="hud-nav-label">Граф связей</span>
+            </button>
+            <button class="hud-nav-item" id="tabNavFederation" onclick="navigateTo('federation')">
+                <span class="hud-nav-icon">⚡</span>
+                <span class="hud-nav-label">Федерация</span>
+            </button>
             <button class="hud-nav-item" id="tabNavProfile" onclick="navigateTo('my-profile')">
                 <span class="hud-nav-icon">👤</span>
                 <span class="hud-nav-label">Профиль</span>
@@ -1421,13 +1429,15 @@
                     <div class="feed-filter-bar">
                         <div class="segmented-control">
                             <button class="seg-btn {{if eq .FeedType "all"}}active{{end}}" onclick="switchFeedTab('all')">
-                                <span>Вся лента</span>
+                                <span>⏱ Вся лента</span>
                             </button>
                             <button class="seg-btn {{if eq .FeedType "following"}}active{{end}}" onclick="switchFeedTab('following')">
-                                <span>Мои подписки</span>
+                                <span>👥 Мои подписки</span>
+                            </button>
+                            <button class="seg-btn {{if eq .FeedType "smart"}}active{{end}}" id="smartFeedTabBtn" onclick="switchFeedTab('smart')">
+                                <span>⚡ Умная лента (AI PPR)</span>
                             </button>
                         </div>
-                        
                     </div>
 
                     <!-- Блок найденных каналов в глобальном поиске -->
@@ -1462,6 +1472,11 @@
                                         <div class="meta-line">
                                             <time class="post-time">{{.CreatedAt.Format "15:04 • 02.01.2006"}}</time>
                                             {{if .IsEdited}}<span class="edited-badge">• (ред.)</span>{{end}}
+                                            {{if .IsVerified}}
+                                            <span class="crypto-verified-badge" onclick="verifyPostCryptoSignature({{.ID}}, event)" title="Ed25519 цифровая подпись подтверждена">
+                                                <span class="crypto-icon">✓</span> Ed25519
+                                            </span>
+                                            {{end}}
                                         </div>
                                     </div>
                                 </div>
@@ -1696,6 +1711,29 @@
                                 <div class="stat-pill" id="statCardAchievements" onclick="openUserAchievements(currentProfileUserId)" title="Посмотреть достижения и прогресс пользователя">
                                     <span class="stat-num text-neon" id="heroStatLevel">🏆 1 ур.</span>
                                     <span class="stat-label" id="heroStatXP">0 XP</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Карточка Шесть рукопожатий и Криптографический паспорт -->
+                    <div class="profile-handshake-card" id="profileHandshakeCard">
+                        <div class="handshake-card-header">
+                            <div class="handshake-badge">🌐 ТОПОЛОГИЯ СВЯЗЕЙ &amp; E2EE ПАСПОРТ</div>
+                            <div class="handshake-degree-pill" id="handshakeDegreePill">Анализ дистанции...</div>
+                        </div>
+                        <div class="handshake-body">
+                            <div class="handshake-chain-row" id="handshakeChainRow">
+                                <div class="handshake-loading">Определение кратчайшего пути в графе (BFS)...</div>
+                            </div>
+                            <div class="profile-crypto-keys-row" id="profileCryptoKeysRow">
+                                <div class="crypto-key-badge" id="profileEd25519Badge" onclick="copyCryptoKey('ed25519')" title="Нажмите, чтобы скопировать">
+                                    <span class="crypto-key-label">Ed25519 Pubkey:</span>
+                                    <span class="crypto-key-val" id="profileEd25519Val">Загрузка...</span>
+                                </div>
+                                <div class="crypto-key-badge" id="profileX25519Badge" onclick="copyCryptoKey('x25519')" title="Нажмите, чтобы скопировать">
+                                    <span class="crypto-key-label">X25519 DH Pubkey:</span>
+                                    <span class="crypto-key-val" id="profileX25519Val">Загрузка...</span>
                                 </div>
                             </div>
                         </div>
@@ -1983,6 +2021,13 @@
                                     </div>
                                 </div>
                                 <div class="chat-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button type="button" class="btn btn-secondary btn-sm btn-e2ee-toggle" id="btnToggleE2EE" onclick="toggleE2EEMode()" title="Сквозное E2EE шифрование (X25519 + AES-256-GCM)">
+                                        <span id="e2eeIcon">🔓</span>
+                                        <span id="e2eeText">E2EE: Выкл</span>
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="btnE2EEFingerprint" onclick="showE2EEFingerprintModal()" title="Код безопасности (Safety Number)" style="display: none;">
+                                        <span>🛡️ Отпечаток</span>
+                                    </button>
                                     <button type="button" class="btn btn-secondary btn-sm" id="btnToggleChatSound" onclick="openChatSoundSettingsModal()" title="Настройка звуков сообщений">
                                         <span id="chatSoundIcon">🔊</span>
                                     </button>
@@ -2517,6 +2562,187 @@
                 </div>
             </div>
 
+            <!-- ==========================================
+                 VIEW 8: СОЦИАЛЬНЫЙ ТОПОЛОГИЧЕСКИЙ ГРАФ
+            ========================================== -->
+            <div id="socialGraphView" class="view-panel" style="display: none;">
+                <div class="graph-page-container">
+                    <!-- Заголовок и панель метрик топологии -->
+                    <div class="graph-header-card">
+                        <div class="graph-title-group">
+                            <div class="graph-badge">🌐 ТОПОЛОГИЯ ДЕЦЕНТРАЛИЗОВАННОЙ СЕТИ</div>
+                            <h2 class="graph-main-title">Интерактивный граф связей GoSocial</h2>
+                            <p class="graph-subtext">Персонализированный PageRank, эго-сети и алгоритм "Шесть рукопожатий" (BFS)</p>
+                        </div>
+                        <div class="graph-metrics-row">
+                            <div class="graph-metric-pill">
+                                <span class="metric-num" id="graphMetricNodes">0</span>
+                                <span class="metric-lbl">Узлов</span>
+                            </div>
+                            <div class="graph-metric-pill">
+                                <span class="metric-num" id="graphMetricEdges">0</span>
+                                <span class="metric-lbl">Связей</span>
+                            </div>
+                            <div class="graph-metric-pill">
+                                <span class="metric-num" id="graphMetricAvgDegree">0.0</span>
+                                <span class="metric-lbl">Ср. степень</span>
+                            </div>
+                            <div class="graph-metric-pill">
+                                <span class="metric-num text-neon" id="graphMetricUserPPR">0.000</span>
+                                <span class="metric-lbl">Ваш PageRank</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Панель управления графом -->
+                    <div class="graph-toolbar">
+                        <div class="graph-search-box">
+                            <span class="graph-search-icon">🔍</span>
+                            <input type="text" id="graphSearchInput" placeholder="Поиск пользователя в графе..." oninput="handleGraphSearch(event)">
+                        </div>
+                        <div class="graph-filter-modes">
+                            <button type="button" class="btn btn-secondary btn-sm active" id="graphDepth1Btn" onclick="setGraphFilter('ego1')">1-й круг (Прямые)</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="graphDepth2Btn" onclick="setGraphFilter('ego2')">2 круга (Рекомендации)</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="graphAllBtn" onclick="setGraphFilter('all')">Вся топология</button>
+                        </div>
+                        <div class="graph-action-btns">
+                            <button type="button" class="btn btn-outline btn-xs" onclick="resetGraphView()" title="Центрировать">🎯 Центр</button>
+                            <button type="button" class="btn btn-outline btn-xs" onclick="zoomGraph(1.2)" title="Приблизить">+</button>
+                            <button type="button" class="btn btn-outline btn-xs" onclick="zoomGraph(0.8)" title="Отдалить">-</button>
+                            <button type="button" class="btn btn-outline btn-xs" onclick="toggleGraphPhysics()" id="btnGraphPhysics" title="Пауза симуляции">⏸ Физика</button>
+                        </div>
+                    </div>
+
+                    <!-- Основное рабочее пространство графа с холстом Canvas и инспектором узла -->
+                    <div class="graph-workspace">
+                        <div class="graph-canvas-wrapper" id="graphCanvasWrapper">
+                            <canvas id="socialGraphCanvas"></canvas>
+                            <div class="graph-canvas-legend">
+                                <div class="legend-item"><span class="legend-dot dot-self"></span> Вы (Центр)</div>
+                                <div class="legend-item"><span class="legend-dot dot-direct"></span> 1-е рукопожатие</div>
+                                <div class="legend-item"><span class="legend-dot dot-second"></span> 2-е рукопожатие</div>
+                                <div class="legend-item"><span class="legend-dot dot-edge"></span> Взаимодействия (лайки/диалоги)</div>
+                            </div>
+                        </div>
+
+                        <!-- Боковая панель: детали выбранного узла и рекомендации Adamic-Adar -->
+                        <div class="graph-sidebar-panel">
+                            <!-- Карточка выбранного узла -->
+                            <div class="node-inspector-card" id="nodeInspectorCard">
+                                <div class="inspector-badge">ИНСПЕКТОР УЗЛА</div>
+                                <div class="node-inspector-empty" id="nodeInspectorEmpty">
+                                    <span>👆 Кликните на любой узел в графе для анализа метрик и построения цепочки рукопожатий</span>
+                                </div>
+                                <div class="node-inspector-content" id="nodeInspectorContent" style="display: none;">
+                                    <div class="inspector-user-row">
+                                        <img src="/static/avatars/default.svg" id="inspAvatar" class="inspector-avatar" alt="Avatar">
+                                        <div class="inspector-user-info">
+                                            <div class="insp-name" id="inspName">Пользователь</div>
+                                            <div class="insp-handle" id="inspHandle">@handle</div>
+                                        </div>
+                                    </div>
+                                    <div class="insp-stats-grid">
+                                        <div class="insp-stat-item">
+                                            <span class="insp-stat-lbl">Дистанция:</span>
+                                            <span class="insp-stat-val text-neon" id="inspDistance">1 шаг</span>
+                                        </div>
+                                        <div class="insp-stat-item">
+                                            <span class="insp-stat-lbl">PageRank:</span>
+                                            <span class="insp-stat-val" id="inspPageRank">0.042</span>
+                                        </div>
+                                        <div class="insp-stat-item">
+                                            <span class="insp-stat-lbl">Общих связей:</span>
+                                            <span class="insp-stat-val" id="inspMutualCount">0</span>
+                                        </div>
+                                    </div>
+                                    <div class="insp-path-box" id="inspPathBox">
+                                        <div class="insp-path-label">Цепочка рукопожатий (BFS):</div>
+                                        <div class="insp-path-chain" id="inspPathChain"></div>
+                                    </div>
+                                    <div class="insp-actions-row">
+                                        <button type="button" class="btn btn-primary btn-xs" id="btnInspProfile" onclick="openInspectedUserProfile()">Открыть профиль</button>
+                                        <button type="button" class="btn btn-secondary btn-xs" id="btnInspChat" onclick="openInspectedUserChat()">Написать</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Рекомендации друзей (Adamic-Adar / Jaccard Link Prediction) -->
+                            <div class="recommendations-card">
+                                <div class="rec-card-header">
+                                    <span class="rec-title">🤝 Рекомендованные связи</span>
+                                    <span class="rec-sub">Adamic-Adar</span>
+                                </div>
+                                <div class="rec-list" id="graphRecommendationsList">
+                                    <div class="rec-loading">Анализ пересечений графа...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==========================================
+                 VIEW 9: ДЕЦЕНТРАЛИЗОВАННАЯ ФЕДЕРАЦИЯ (MESH NODES)
+            ========================================== -->
+            <div id="federationView" class="view-panel" style="display: none;">
+                <div class="federation-page-container">
+                    <!-- Заголовок федерации -->
+                    <div class="federation-hero-card">
+                        <div class="fed-hero-top">
+                            <div class="fed-hero-badge">⚡ ДЕЦЕНТРАЛИЗОВАННАЯ СЕТЬ (FEDERATION MESH)</div>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="openAddFederationNodeModal()">
+                                <span>+ Подключить узел сети</span>
+                            </button>
+                        </div>
+                        <h2 class="fed-main-title">Федеративная Mesh-сеть GoSocial</h2>
+                        <p class="fed-subtext">Независимые узлы (Nodes), обмен данными через подписанные Ed25519 конверты и распределенный Gossip протокол</p>
+                        
+                        <div class="fed-stats-row">
+                            <div class="fed-stat-box">
+                                <span class="fed-stat-num" id="fedTotalNodesCount">3</span>
+                                <span class="fed-stat-lbl">Активных узлов</span>
+                            </div>
+                            <div class="fed-stat-box">
+                                <span class="fed-stat-num text-success">🟢 100%</span>
+                                <span class="fed-stat-lbl">Доступность</span>
+                            </div>
+                            <div class="fed-stat-box">
+                                <span class="fed-stat-num" id="fedAvgLatency">34 ms</span>
+                                <span class="fed-stat-lbl">Ср. задержка</span>
+                            </div>
+                            <div class="fed-stat-box">
+                                <span class="fed-stat-num text-neon">Ed25519</span>
+                                <span class="fed-stat-lbl">Крипто-протокол</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Сетка узлов федерации -->
+                    <div class="fed-nodes-section">
+                        <div class="fed-section-header">
+                            <h3>Реестр узлов федерации</h3>
+                            <button type="button" class="btn btn-outline btn-xs" onclick="pingAllFederationNodes()">
+                                <span>⚡ Пинг всех узлов</span>
+                            </button>
+                        </div>
+                        <div class="fed-nodes-grid" id="federationNodesGrid">
+                            <div class="fed-loading">Опрос топологии федерации...</div>
+                        </div>
+                    </div>
+
+                    <!-- Лента распределенных криптографических событий -->
+                    <div class="fed-activity-section">
+                        <div class="fed-section-header">
+                            <h3>Журнал федеративных событий (Gossip Protocol Outbox/Inbox)</h3>
+                            <span class="fed-badge-live"><span class="pulse-dot"></span> LIVE SYNC</span>
+                        </div>
+                        <div class="fed-events-list" id="federationEventsList">
+                            <!-- Rendered via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div><!-- /.content-viewport -->
     </div><!-- /.app-main -->
 </div><!-- /.app-layout -->
@@ -2795,6 +3021,89 @@
             <div class="modal-actions-row" style="margin-top: 1.2rem; display: flex; justify-content: flex-end; gap: 8px;">
                 <button type="button" class="btn btn-secondary" onclick="closeChatPollModal()">Отмена</button>
                 <button type="submit" class="btn btn-primary" id="btnSubmitChatPoll">Отправить опрос</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ==========================================
+     МОДАЛЬНОЕ ОКНО: ДЕТАЛИЗАЦИЯ РАНЖИРОВАНИЯ (EXPLAIN RANKING)
+========================================== -->
+<div id="explainRankingModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeExplainRankingModal()">
+    <div class="modal-card modal-ranking-card" style="max-width: 620px; width: 95%;">
+        <button type="button" class="modal-close-btn" onclick="closeExplainRankingModal()" title="Закрыть">✕</button>
+        <div class="modal-header">
+            <div class="modal-header-badge">⚡ AI МУЛЬТИФАКТОРНОЕ РАНЖИРОВАНИЕ</div>
+            <h3>Детализация оценки ранжирования</h3>
+            <p class="modal-subtext">Математическая формула скоринга: Graph Affinity (PPR) + Freshness + Engagement + Topic Match - Diversity Penalty</p>
+        </div>
+        <div class="ranking-modal-body" id="explainRankingBody">
+            <div class="ranking-loading">Загрузка факторов ранжирования...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     МОДАЛЬНОЕ ОКНО: КРИПТОГРАФИЧЕСКАЯ ВЕРИФИКАЦИЯ (ED25519)
+========================================== -->
+<div id="cryptoVerifyModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeCryptoVerifyModal()">
+    <div class="modal-card modal-crypto-card" style="max-width: 640px; width: 95%;">
+        <button type="button" class="modal-close-btn" onclick="closeCryptoVerifyModal()" title="Закрыть">✕</button>
+        <div class="modal-header">
+            <div class="modal-header-badge">🛡️ КРИПТОГРАФИЧЕСКИЙ АУДИТ</div>
+            <h3>Верификация цифровой подписи Ed25519</h3>
+            <p class="modal-subtext">Сквозной протокол криптографической защиты: проверка авторского открытого ключа и канонического хэша SHA-256</p>
+        </div>
+        <div class="crypto-modal-body" id="cryptoVerifyBody">
+            <div class="crypto-loading">Проверка математической подписи...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     МОДАЛЬНОЕ ОКНО: SAFETY NUMBER / E2EE ОТПЕЧАТОК
+========================================== -->
+<div id="e2eeFingerprintModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeE2EEFingerprintModal()">
+    <div class="modal-card modal-e2ee-card" style="max-width: 560px; width: 95%;">
+        <button type="button" class="modal-close-btn" onclick="closeE2EEFingerprintModal()" title="Закрыть">✕</button>
+        <div class="modal-header">
+            <div class="modal-header-badge">🔐 E2EE ПРИВАТНОСТЬ</div>
+            <h3>Код безопасности (Safety Number)</h3>
+            <p class="modal-subtext">Сверьте данный отпечаток ключей с собеседником для исключения атак подмены (MITM). Ключи согласованы через X25519 ECDH.</p>
+        </div>
+        <div class="e2ee-modal-body" id="e2eeFingerprintBody">
+            <div class="e2ee-loading">Вычисление отпечатка...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==========================================
+     МОДАЛЬНОЕ ОКНО: ДОБАВЛЕНИЕ УЗЛА ФЕДЕРАЦИИ
+========================================== -->
+<div id="addFederationNodeModal" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeAddFederationNodeModal()">
+    <div class="modal-card modal-federation-card" style="max-width: 520px; width: 95%;">
+        <button type="button" class="modal-close-btn" onclick="closeAddFederationNodeModal()" title="Закрыть">✕</button>
+        <div class="modal-header">
+            <div class="modal-header-badge">🌐 РЕЕСТР УЗЛОВ СЕТИ</div>
+            <h3>Подключить независимый узел</h3>
+            <p class="modal-subtext">Добавление пира в децентрализованную топологию GoSocial Mesh</p>
+        </div>
+        <form onsubmit="handleAddFederationNode(event)" style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+            <div class="form-group">
+                <label style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">Название узла</label>
+                <input type="text" id="fedNodeName" placeholder="Например: NeoNet Tokyo Relay" required style="width: 100%;">
+            </div>
+            <div class="form-group">
+                <label style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">URL адрес узла (Endpoint)</label>
+                <input type="url" id="fedNodeURL" placeholder="https://tokyo.gosocial.net" required style="width: 100%;">
+            </div>
+            <div class="form-group">
+                <label style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">Публичный ключ узла (Ed25519 Pubkey)</label>
+                <input type="text" id="fedNodePubkey" placeholder="64-значный hex ключ..." style="font-family: monospace; font-size: 0.82rem; width: 100%;">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.5rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAddFederationNodeModal()">Отмена</button>
+                <button type="submit" class="btn btn-primary">Подключить узел</button>
             </div>
         </form>
     </div>
