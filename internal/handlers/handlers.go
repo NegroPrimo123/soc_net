@@ -11,21 +11,35 @@ import (
 	"time"
 
 	"social-network/internal/events"
+	"social-network/internal/federation"
+	"social-network/internal/graph"
 	"social-network/internal/models"
+	"social-network/internal/ranking"
 	"social-network/internal/repository"
 )
 
 type Handler struct {
-	userRepo    *repository.UserRepository
-	postRepo    *repository.PostRepository
-	giftRepo    *repository.GiftRepository
-	messageRepo *repository.MessageRepository
-	notifRepo   *repository.NotificationRepository
-	channelRepo *repository.ChannelRepository
-	pollRepo    *repository.PollRepository
+	userRepo        *repository.UserRepository
+	postRepo        *repository.PostRepository
+	giftRepo        *repository.GiftRepository
+	messageRepo     *repository.MessageRepository
+	notifRepo       *repository.NotificationRepository
+	channelRepo     *repository.ChannelRepository
+	pollRepo        *repository.PollRepository
 	achievementRepo *repository.AchievementRepository
-	hub         *events.Hub
-	tmpl        *template.Template
+	cryptoRepo      *repository.CryptoRepository
+	federationRepo  *repository.FederationRepository
+	socialGraph     *graph.Graph
+	rankingEngine   *ranking.Engine
+	federationSvc   *federation.Service
+	remoteGraphClient *graph.RemoteClient
+	hub             *events.Hub
+	tmpl            *template.Template
+}
+
+// SetRemoteGraphClient подключает удаленный gRPC микросервис графа и ранжирования.
+func (h *Handler) SetRemoteGraphClient(client *graph.RemoteClient) {
+	h.remoteGraphClient = client
 }
 
 func NewHandler(
@@ -37,6 +51,11 @@ func NewHandler(
 	channelRepo *repository.ChannelRepository,
 	pollRepo *repository.PollRepository,
 	achievementRepo *repository.AchievementRepository,
+	cryptoRepo *repository.CryptoRepository,
+	federationRepo *repository.FederationRepository,
+	socialGraph *graph.Graph,
+	rankingEngine *ranking.Engine,
+	federationSvc *federation.Service,
 	hub *events.Hub,
 ) (*Handler, error) {
 	tmplPath := filepath.Join("web", "templates", "index.html")
@@ -57,6 +76,11 @@ func NewHandler(
 		channelRepo:     channelRepo,
 		pollRepo:        pollRepo,
 		achievementRepo: achievementRepo,
+		cryptoRepo:      cryptoRepo,
+		federationRepo:  federationRepo,
+		socialGraph:     socialGraph,
+		rankingEngine:   rankingEngine,
+		federationSvc:   federationSvc,
 		hub:             hub,
 		tmpl:            tmpl,
 	}, nil

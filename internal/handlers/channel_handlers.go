@@ -386,7 +386,7 @@ func (h *Handler) CreateChannelPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cID := channelID
-	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, &cID, req.PollID)
+	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, &cID, req.PollID, req.Signature, req.AuthorPubKey)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -543,7 +543,7 @@ func (h *Handler) SendChannelMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cID := channelID
-	msg, err := h.messageRepo.SendMessage(authUser.ID, receiverID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist, &cID, isFromChannel, req.PollID)
+	msg, err := h.messageRepo.SendMessage(authUser.ID, receiverID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist, &cID, isFromChannel, req.PollID, req.IsEncrypted, req.Ciphertext, req.Nonce, req.SenderPubKey, req.ReceiverPubKey, req.KeyFingerprint)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

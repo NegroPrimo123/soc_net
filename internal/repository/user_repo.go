@@ -362,6 +362,22 @@ func (r *UserRepository) Authenticate(username, password string) (*models.User, 
 	return &u, nil
 }
 
+func (r *UserRepository) GetByUsername(username string) (*models.User, error) {
+	query := `
+	SELECT id, username, display_name, avatar_url, bio, created_at
+	FROM users
+	WHERE LOWER(username) = LOWER($1)
+	`
+	var u models.User
+	err := r.db.QueryRow(query, username).Scan(
+		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 func (r *UserRepository) CreateSession(userID int) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {

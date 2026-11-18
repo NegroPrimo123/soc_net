@@ -11,10 +11,14 @@ import (
 	"testing"
 
 	"social-network/internal/config"
+	"social-network/internal/crypto"
 	"social-network/internal/database"
 	"social-network/internal/events"
+	"social-network/internal/federation"
+	"social-network/internal/graph"
 	"social-network/internal/handlers"
 	"social-network/internal/models"
+	"social-network/internal/ranking"
 	"social-network/internal/repository"
 )
 
@@ -33,9 +37,18 @@ func setupTestApp(t *testing.T) (*http.ServeMux, *repository.UserRepository, *re
 	channelRepo := repository.NewChannelRepository(db)
 	pollRepo := repository.NewPollRepository(db)
 	achievementRepo := repository.NewAchievementRepository(db)
+	cryptoRepo := repository.NewCryptoRepository(db)
+	federationRepo := repository.NewFederationRepository(db)
+	socialGraph := graph.NewGraph()
+	_ = socialGraph.BuildFromDB(db)
+	rankingEngine := ranking.NewEngine(socialGraph)
+	federationSvc := federation.NewService("test-node", "http://localhost:8080")
 	hub := events.NewHub()
 
-	h, err := handlers.NewHandler(userRepo, postRepo, giftRepo, messageRepo, notifRepo, channelRepo, pollRepo, achievementRepo, hub)
+	h, err := handlers.NewHandler(
+		userRepo, postRepo, giftRepo, messageRepo, notifRepo, channelRepo, pollRepo, achievementRepo,
+		cryptoRepo, federationRepo, socialGraph, rankingEngine, federationSvc, hub,
+	)
 	if err != nil {
 		t.Fatalf("Failed to initialize handler: %v", err)
 	}
@@ -150,7 +163,7 @@ func TestForbiddenOnForeignResource(t *testing.T) {
 	mux, _, postRepo, _, _, _, tokenUser2 := setupTestApp(t)
 
 	// Создаем тестовый пост от имени Пользователя 1 (Олег)
-	post, err := postRepo.CreatePost(1, "Пост автора Олег для проверки прав", "", "", "", "", nil, nil)
+	post, err := postRepo.CreatePost(1, "Пост автора Олег для проверки прав", "", "", "", "", nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("Failed to create post: %v", err)
 	}
@@ -772,3 +785,238 @@ func TestDirectMessagePrivacyAndIsolationUserC(t *testing.T) {
 		t.Logf("✓ [УСПЕХ] В списке диалогов пользователя C отсутствует переписка с B (id=2), секретное сообщение A-B не скомпрометировано (диалогов C: %d)", len(convs))
 	})
 }
+
+// 7. Тестирование криптографического протокола: Регистрация ключей, E2EE и подпись постов Ed25519
+func TestCryptoProtocolAndVerifiablePosts(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, _ := setupTestApp(t)
+
+	// 1. Получение существующих ключей пользователя 1
+	reqGet := httptest.NewRequest("GET", "/api/crypto/keys/1", nil)
+	wGet := httptest.NewRecorder()
+	mux.ServeHTTP(wGet, reqGet)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for GET /api/crypto/keys/1, got %d", wGet.Code)
+	}
+
+	// 2. Регистрация новой ключевой пары через POST /api/crypto/keys
+	pubEd, privEd, err := crypto.GenerateEd25519KeyPair()
+	if err != nil {
+		t.Fatalf("failed to generate ed25519 key: %v", err)
+	}
+	pubX, _, err := crypto.GenerateX25519KeyPair()
+	if err != nil {
+		t.Fatalf("failed to generate x25519 key: %v", err)
+	}
+	fp := crypto.ComputeFingerprint(pubEd)
+
+	regBody, _ := json.Marshal(models.RegisterKeysRequest{
+		PublicKeyEd25519: pubEd,
+		PublicKeyX25519:  pubX,
+		KeyFingerprint:   fp,
+	})
+	reqReg := httptest.NewRequest("POST", "/api/crypto/keys", bytes.NewReader(regBody))
+	reqReg.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wReg := httptest.NewRecorder()
+	mux.ServeHTTP(wReg, reqReg)
+	if wReg.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for register keys, got %d: %s", wReg.Code, wReg.Body.String())
+	}
+	t.Logf("✓ [УСПЕХ] Ключи Ed25519 и X25519 успешно зарегистрированы. Fingerprint: %s", fp)
+
+	// 3. Создание криптографически подписанного поста Ed25519
+	postContent := "Криптографически подписанный манифест децентрализации 2077"
+	contentHash := crypto.ComputePostContentHash(1, postContent, "", "", nil, nil)
+	sig, err := crypto.SignMessage(privEd, contentHash)
+	if err != nil {
+		t.Fatalf("failed to sign post content: %v", err)
+	}
+
+	createPostReq, _ := json.Marshal(models.CreatePostRequest{
+		Content:      postContent,
+		Signature:    sig,
+		AuthorPubKey: pubEd,
+	})
+	reqPost := httptest.NewRequest("POST", "/api/posts", bytes.NewReader(createPostReq))
+	reqPost.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wPost := httptest.NewRecorder()
+	mux.ServeHTTP(wPost, reqPost)
+	if wPost.Code != http.StatusCreated {
+		t.Fatalf("Expected 201 Created for signed post, got %d: %s", wPost.Code, wPost.Body.String())
+	}
+
+	var createdPost models.Post
+	_ = json.Unmarshal(wPost.Body.Bytes(), &createdPost)
+	if !createdPost.IsVerified {
+		t.Fatalf("Expected post to be marked as is_verified=true upon creation with valid signature")
+	}
+	t.Logf("✓ [УСПЕХ] Пост #%d создан и успешно криптографически верифицирован на сервере (is_verified: true)", createdPost.ID)
+
+	// 4. Проверка эндпоинта валидации подписи /api/crypto/verify-post
+	verifyReq, _ := json.Marshal(models.VerifyPostSignatureRequest{
+		PostID:       createdPost.ID,
+		Content:      postContent,
+		AuthorPubKey: pubEd,
+		Signature:    sig,
+	})
+	reqVer := httptest.NewRequest("POST", "/api/crypto/verify-post", bytes.NewReader(verifyReq))
+	wVer := httptest.NewRecorder()
+	mux.ServeHTTP(wVer, reqVer)
+	if wVer.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for verify-post, got %d", wVer.Code)
+	}
+
+	var verResp models.VerifySignatureResponse
+	_ = json.Unmarshal(wVer.Body.Bytes(), &verResp)
+	if !verResp.IsValid {
+		t.Fatalf("Verification API returned is_valid=false for valid post signature")
+	}
+	t.Logf("✓ [УСПЕХ] API валидации подписи подтвердило аутентичность (Алгоритм: %s, Отпечаток: %s)", verResp.Algorithm, verResp.SignerFingerprint)
+}
+
+// 8. Тестирование социального графа: Степени разделения (рукопожатия) и рекомендации связей
+func TestSocialGraphAndHandshakes(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, _ := setupTestApp(t)
+
+	// 1. Топология графа связей /api/graph/topology
+	reqTop := httptest.NewRequest("GET", "/api/graph/topology?limit=20", nil)
+	reqTop.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wTop := httptest.NewRecorder()
+	mux.ServeHTTP(wTop, reqTop)
+	if wTop.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for /api/graph/topology, got %d", wTop.Code)
+	}
+
+	var topResp map[string]interface{}
+	_ = json.Unmarshal(wTop.Body.Bytes(), &topResp)
+	nodes, _ := topResp["nodes"].([]interface{})
+	edges, _ := topResp["edges"].([]interface{})
+	if len(nodes) == 0 {
+		t.Fatalf("Social graph topology returned 0 nodes")
+	}
+	t.Logf("✓ [УСПЕХ] Топология графа связей загружена: %d узлов, %d ребер", len(nodes), len(edges))
+
+	// 2. Расчет цепочки рукопожатий /api/graph/path/2 (Олег -> Алексей)
+	reqPath := httptest.NewRequest("GET", "/api/graph/path/2", nil)
+	reqPath.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wPath := httptest.NewRecorder()
+	mux.ServeHTTP(wPath, reqPath)
+	if wPath.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for /api/graph/path/2, got %d", wPath.Code)
+	}
+
+	var pathResp models.DegreesOfSeparationResponse
+	_ = json.Unmarshal(wPath.Body.Bytes(), &pathResp)
+	if pathResp.Degree < 0 {
+		t.Fatalf("Degrees of separation failed, returned negative degree: %d", pathResp.Degree)
+	}
+	t.Logf("✓ [УСПЕХ] Степени разделения рассчитаны: степень %d (%s)", pathResp.Degree, pathResp.PathDescription)
+
+	// 3. Графовые рекомендации кандидатов /api/graph/recommendations
+	reqRec := httptest.NewRequest("GET", "/api/graph/recommendations?limit=5", nil)
+	reqRec.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wRec := httptest.NewRecorder()
+	mux.ServeHTTP(wRec, reqRec)
+	if wRec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for /api/graph/recommendations, got %d", wRec.Code)
+	}
+	t.Logf("✓ [УСПЕХ] Графовые рекомендации контактов (Adamic-Adar) успешно сгенерированы")
+}
+
+// 9. Тестирование персонализированного ранжирования (Smart Feed & Explain Ranking)
+func TestPersonalizedRankingFeed(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, _ := setupTestApp(t)
+
+	// 1. Запрос умной персонализированной ленты /api/feed/ranked
+	reqFeed := httptest.NewRequest("GET", "/api/feed/ranked?limit=10", nil)
+	reqFeed.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wFeed := httptest.NewRecorder()
+	mux.ServeHTTP(wFeed, reqFeed)
+	if wFeed.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for /api/feed/ranked, got %d", wFeed.Code)
+	}
+
+	var rankedPosts []models.Post
+	if err := json.Unmarshal(wFeed.Body.Bytes(), &rankedPosts); err != nil {
+		t.Fatalf("Failed to parse ranked posts: %v", err)
+	}
+
+	if len(rankedPosts) == 0 {
+		t.Fatalf("Expected ranked posts, got 0")
+	}
+
+	topPost := rankedPosts[0]
+	if topPost.RankingFactors == nil {
+		t.Fatalf("Expected ranking_factors object attached to ranked post #%d", topPost.ID)
+	}
+	t.Logf("✓ [УСПЕХ] Умная лента сформирована. Топ-пост #%d (Score: %.2f, Граф: %.2f, Свежесть: %.2f)",
+		topPost.ID, topPost.RankingScore, topPost.RankingFactors.GraphAffinity, topPost.RankingFactors.FreshnessScore)
+
+	// 2. Объяснение факторов ранжирования /api/feed/ranked/explain/{id}
+	explainURL := fmt.Sprintf("/api/feed/ranked/explain/%d", topPost.ID)
+	reqExpl := httptest.NewRequest("GET", explainURL, nil)
+	reqExpl.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wExpl := httptest.NewRecorder()
+	mux.ServeHTTP(wExpl, reqExpl)
+	if wExpl.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for %s, got %d", explainURL, wExpl.Code)
+	}
+
+	var explainResp map[string]interface{}
+	_ = json.Unmarshal(wExpl.Body.Bytes(), &explainResp)
+	if explainResp["ranking_factors"] == nil {
+		t.Fatalf("Expected ranking_factors in explain response")
+	}
+	t.Logf("✓ [УСПЕХ] Эндпоинт Explain Ranking успешно вернул разбор математических факторов скоринга")
+}
+
+// 10. Тестирование децентрализованной федерации узлов (Peer Discovery & Protocol)
+func TestDecentralizedFederationAPI(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, _ := setupTestApp(t)
+
+	// 1. Получение списка известных узлов сети /api/federation/nodes
+	reqNodes := httptest.NewRequest("GET", "/api/federation/nodes", nil)
+	wNodes := httptest.NewRecorder()
+	mux.ServeHTTP(wNodes, reqNodes)
+	if wNodes.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for /api/federation/nodes, got %d", wNodes.Code)
+	}
+
+	var nodesResp map[string]interface{}
+	_ = json.Unmarshal(wNodes.Body.Bytes(), &nodesResp)
+	localNode, _ := nodesResp["local_node"].(map[string]interface{})
+	peers, _ := nodesResp["peers"].([]interface{})
+	if localNode == nil || len(peers) == 0 {
+		t.Fatalf("Expected local node and peers list, got: %v", nodesResp)
+	}
+	t.Logf("✓ [УСПЕХ] Децентрализованная сеть: Локальный узел '%s', обнаружено активных пиров: %d",
+		localNode["node_name"], len(peers))
+
+	// 2. Пинг федеративного пира /api/federation/ping
+	pingReq, _ := json.Marshal(map[string]string{
+		"node_url": "https://alpha.neonet.network",
+	})
+	reqPing := httptest.NewRequest("POST", "/api/federation/ping", bytes.NewReader(pingReq))
+	reqPing.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wPing := httptest.NewRecorder()
+	mux.ServeHTTP(wPing, reqPing)
+	if wPing.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for ping, got %d", wPing.Code)
+	}
+
+	var pingResp map[string]interface{}
+	_ = json.Unmarshal(wPing.Body.Bytes(), &pingResp)
+	if pingResp["status"] != "online" {
+		t.Fatalf("Expected peer status online, got: %v", pingResp["status"])
+	}
+	t.Logf("✓ [УСПЕХ] Пинг узла https://alpha.neonet.network подтвержден: %v мс", pingResp["ping_ms"])
+
+	// 3. Федеративный Outbox /api/federation/outbox
+	reqOut := httptest.NewRequest("GET", "/api/federation/outbox", nil)
+	wOut := httptest.NewRecorder()
+	mux.ServeHTTP(wOut, reqOut)
+	if wOut.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for outbox, got %d", wOut.Code)
+	}
+	t.Logf("✓ [УСПЕХ] Федеративный Outbox успешно отдал публикации для синхронизации узлов сети")
+}
+

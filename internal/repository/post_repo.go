@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"social-network/internal/crypto"
 	"database/sql"
 
 	"fmt"
@@ -48,6 +49,7 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 	SELECT 
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 		p.channel_id, p.poll_id,
+		COALESCE(p.signature, ''), COALESCE(p.author_pubkey, ''), COALESCE(p.is_verified, FALSE),
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
 		COALESCE(p.likes_count, 0) as likes_count,
 		COALESCE(p.comments_count, 0) as comments_count,
@@ -166,6 +168,7 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 		if err := rows.Scan(
 			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
 			&p.ChannelID, &p.PollID,
+			&p.Signature, &p.AuthorPubKey, &p.IsVerified,
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
 			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
 			&chID, &chName, &chHandle, &chAvatar, &chSubs,
@@ -225,6 +228,7 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 	SELECT 
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 		p.channel_id, p.poll_id,
+		COALESCE(p.signature, ''), COALESCE(p.author_pubkey, ''), COALESCE(p.is_verified, FALSE),
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
 		COALESCE(p.likes_count, 0) as likes_count,
 		COALESCE(p.comments_count, 0) as comments_count,
@@ -265,6 +269,7 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 		if err := rows.Scan(
 			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
 			&p.ChannelID, &p.PollID,
+			&p.Signature, &p.AuthorPubKey, &p.IsVerified,
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
 			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
 			&chID, &chName, &chHandle, &chAvatar, &chSubs,
@@ -317,10 +322,15 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 	return posts, nil
 }
 
-func (r *PostRepository) CreatePost(userID int, content, imageURL, musicURL, musicTitle, musicArtist string, channelID, pollID *int) (*models.Post, error) {
+func (r *PostRepository) CreatePost(userID int, content, imageURL, musicURL, musicTitle, musicArtist string, channelID, pollID *int, signature, authorPubKey string) (*models.Post, error) {
 	var postID int
-	query := `INSERT INTO posts (user_id, content, image_url, music_url, music_title, music_artist, channel_id, poll_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`
-	err := r.db.QueryRow(query, userID, content, imageURL, musicURL, musicTitle, musicArtist, channelID, pollID).Scan(&postID)
+	isVerified := false
+	if signature != "" && authorPubKey != "" {
+		hash := crypto.ComputePostContentHash(userID, content, imageURL, musicURL, channelID, pollID)
+		isVerified = crypto.VerifySignature(authorPubKey, hash, signature)
+	}
+	query := `INSERT INTO posts (user_id, content, image_url, music_url, music_title, music_artist, channel_id, poll_id, signature, author_pubkey, is_verified) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`
+	err := r.db.QueryRow(query, userID, content, imageURL, musicURL, musicTitle, musicArtist, channelID, pollID, signature, authorPubKey, isVerified).Scan(&postID)
 	if err != nil {
 		return nil, fmt.Errorf("create post: %w", err)
 	}
@@ -361,6 +371,7 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 	SELECT 
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 		p.channel_id, p.poll_id,
+		COALESCE(p.signature, ''), COALESCE(p.author_pubkey, ''), COALESCE(p.is_verified, FALSE),
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
 		COALESCE(p.likes_count, 0) as likes_count,
 		COALESCE(p.comments_count, 0) as comments_count,
@@ -380,6 +391,7 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 	err := r.db.QueryRow(query, currentUserID, postID).Scan(
 		&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
 		&p.ChannelID, &p.PollID,
+		&p.Signature, &p.AuthorPubKey, &p.IsVerified,
 		&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
 		&p.LikesCount, &p.CommentsCount, &p.IsLiked,
 		&chID, &chName, &chHandle, &chAvatar, &chSubs,
@@ -894,6 +906,7 @@ func (r *PostRepository) GetChannelPosts(channelID, currentUserID int, limit, of
 	SELECT 
 		p.id, p.user_id, p.content, COALESCE(p.image_url, ''), COALESCE(p.music_url, ''), COALESCE(p.music_title, ''), COALESCE(p.music_artist, ''), COALESCE(p.is_edited, FALSE), p.created_at, COALESCE(p.updated_at, p.created_at),
 		p.channel_id, p.poll_id,
+		COALESCE(p.signature, ''), COALESCE(p.author_pubkey, ''), COALESCE(p.is_verified, FALSE),
 		u.id, u.username, u.display_name, u.avatar_url, u.bio,
 		COALESCE(p.likes_count, 0) as likes_count,
 		COALESCE(p.comments_count, 0) as comments_count,
@@ -925,6 +938,7 @@ func (r *PostRepository) GetChannelPosts(channelID, currentUserID int, limit, of
 		if err := rows.Scan(
 			&p.ID, &p.UserID, &p.Content, &p.ImageURL, &p.MusicURL, &p.MusicTitle, &p.MusicArtist, &p.IsEdited, &p.CreatedAt, &p.UpdatedAt,
 			&p.ChannelID, &p.PollID,
+			&p.Signature, &p.AuthorPubKey, &p.IsVerified,
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
 			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
 			&chID, &chName, &chHandle, &chAvatar, &chSubs,

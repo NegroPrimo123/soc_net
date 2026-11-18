@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"social-network/internal/config"
+	"social-network/internal/crypto"
 
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -469,6 +470,50 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+
+	// Миграции для децентрализации, сквозного шифрования и графовой аналитики
+	cryptoAndFederationMigrations := `
+	-- Таблица криптографических ключей пользователей (DID / E2EE / Ed25519 / X25519)
+	CREATE TABLE IF NOT EXISTS user_crypto_keys (
+		user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+		public_key_ed25519 TEXT NOT NULL DEFAULT '',
+		public_key_x25519 TEXT NOT NULL DEFAULT '',
+		key_fingerprint VARCHAR(100) NOT NULL DEFAULT '',
+		created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+
+	-- Расширение таблицы posts для криптографических подписей Ed25519
+	ALTER TABLE posts ADD COLUMN IF NOT EXISTS signature TEXT NOT NULL DEFAULT '';
+	ALTER TABLE posts ADD COLUMN IF NOT EXISTS author_pubkey TEXT NOT NULL DEFAULT '';
+	ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
+	-- Расширение таблицы messages для сквозного шифрования (E2EE)
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_encrypted BOOLEAN NOT NULL DEFAULT FALSE;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS ciphertext TEXT NOT NULL DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_pubkey TEXT NOT NULL DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS receiver_pubkey TEXT NOT NULL DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS key_fingerprint TEXT NOT NULL DEFAULT '';
+
+	-- Таблица узлов децентрализованной федерации (Federation Nodes)
+	CREATE TABLE IF NOT EXISTS federation_nodes (
+		id SERIAL PRIMARY KEY,
+		node_name VARCHAR(100) NOT NULL,
+		node_url VARCHAR(255) UNIQUE NOT NULL,
+		public_key_ed25519 TEXT NOT NULL DEFAULT '',
+		status VARCHAR(20) NOT NULL DEFAULT 'online',
+		ping_ms INT NOT NULL DEFAULT 12,
+		synced_posts_count INT NOT NULL DEFAULT 0,
+		last_sync_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+	_, err = db.Exec(cryptoAndFederationMigrations)
+	if err != nil {
+		return fmt.Errorf("failed to apply crypto/federation migrations: %w", err)
+	}
+
 	log.Println("Database schema migrations applied successfully.")
 	return nil
 }
@@ -643,6 +688,38 @@ func seed(db *sql.DB) error {
 			music_artist = 'Олег Кибер-Пилот'
 		WHERE id = 1 AND (music_url = '' OR music_url IS NULL);
 	`)
+
+	// Сидирование узлов децентрализованной федерации
+	_, _ = db.Exec(`
+		INSERT INTO federation_nodes (node_name, node_url, public_key_ed25519, status, ping_ms, synced_posts_count) VALUES
+		('NeoNet Hub Alpha', 'https://alpha.neonet.network', 'w5T8+VbN3/3rL8h3lW1r9q9+P1mN5qP4R8sT2uV3wX4=', 'online', 8, 1420),
+		('NightCity Mesh Node 02', 'https://mesh02.nightcity.org', 'k7Y1+RtN4/4mP9j4mX2s0r0+Q2nO6rQ5S9tU3vW4xY5=', 'online', 14, 890),
+		('Arasaka Orbital Peer', 'https://peer.arasaka-net.io', 'z9B2+SuO5/5nQ0k5nY3t1s1+R3oP7sR6T0uV4wX5yZ6=', 'degraded', 45, 310)
+		ON CONFLICT (node_url) DO NOTHING;
+	`)
+
+	// Генерация и сохранение криптографических ключей для существующих пользователей
+	uRows, err := db.Query("SELECT id FROM users")
+	if err == nil {
+		defer uRows.Close()
+		for uRows.Next() {
+			var uID int
+			if err := uRows.Scan(&uID); err == nil {
+				var dummy int
+				keyExists := db.QueryRow("SELECT user_id FROM user_crypto_keys WHERE user_id = $1", uID).Scan(&dummy) == nil
+				if !keyExists {
+					edPub, _, _ := crypto.GenerateEd25519KeyPair()
+					xPub, _, _ := crypto.GenerateX25519KeyPair()
+					fp := crypto.ComputeFingerprint(edPub)
+					_, _ = db.Exec(`
+						INSERT INTO user_crypto_keys (user_id, public_key_ed25519, public_key_x25519, key_fingerprint)
+						VALUES ($1, $2, $3, $4)
+						ON CONFLICT (user_id) DO NOTHING
+					`, uID, edPub, xPub, fp)
+				}
+			}
+		}
+	}
 
 	log.Println("Initial sample data seeded successfully.")
 	return nil

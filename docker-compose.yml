@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: gosocial-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root111}
+      POSTGRES_DB: ${DB_NAME:-gosocial}
+    ports:
+      - "${DB_PORT:-1357}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-gosocial}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gosocial-mesh
+
+  graph-ranking-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.graph
+    container_name: gosocial-graph-service
+    restart: unless-stopped
+    environment:
+      GRPC_PORT: "50051"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-root111}
+      DB_NAME: ${DB_NAME:-gosocial}
+      DB_SSLMODE: disable
+    ports:
+      - "50051:50051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gosocial-mesh
+
+  web-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: gosocial-web-gateway
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      GRAPH_SERVICE_ADDR: "graph-ranking-service:50051"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-root111}
+      DB_NAME: ${DB_NAME:-gosocial}
+      DB_SSLMODE: disable
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      graph-ranking-service:
+        condition: service_started
+    networks:
+      - gosocial-mesh
+
+volumes:
+  pgdata:
+    driver: local
+
+networks:
+  gosocial-mesh:
+    driver: bridge

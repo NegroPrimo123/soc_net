@@ -118,6 +118,14 @@ type Message struct {
 	PollID             *int              `json:"poll_id,omitempty"`
 	Poll               *Poll             `json:"poll,omitempty"`
 	Reactions          []MessageReaction `json:"reactions,omitempty"`
+
+	// Сквозное шифрование (E2EE)
+	IsEncrypted    bool   `json:"is_encrypted"`
+	Ciphertext     string `json:"ciphertext,omitempty"`
+	Nonce          string `json:"nonce,omitempty"`
+	SenderPubKey   string `json:"sender_pubkey,omitempty"`
+	ReceiverPubKey string `json:"receiver_pubkey,omitempty"`
+	KeyFingerprint string `json:"key_fingerprint,omitempty"`
 }
 
 type UpdateMessageRequest struct {
@@ -154,6 +162,14 @@ type SendMessageRequest struct {
 	ChannelID     *int   `json:"channel_id,omitempty"`
 	IsFromChannel bool   `json:"is_from_channel,omitempty"`
 	PollID        *int   `json:"poll_id,omitempty"`
+
+	// Сквозное шифрование (E2EE)
+	IsEncrypted    bool   `json:"is_encrypted,omitempty"`
+	Ciphertext     string `json:"ciphertext,omitempty"`
+	Nonce          string `json:"nonce,omitempty"`
+	SenderPubKey   string `json:"sender_pubkey,omitempty"`
+	ReceiverPubKey string `json:"receiver_pubkey,omitempty"`
+	KeyFingerprint string `json:"key_fingerprint,omitempty"`
 }
 
 type UpdateProfileRequest struct {
@@ -240,6 +256,15 @@ type Post struct {
 
 	IsLiked bool `json:"is_liked"`
 
+	// Криптографическая защита и цифровая подпись Ed25519
+	Signature    string `json:"signature,omitempty"`
+	AuthorPubKey string `json:"author_pubkey,omitempty"`
+	IsVerified   bool   `json:"is_verified"`
+
+	// Персонализированное ранжирование
+	RankingScore   float64         `json:"ranking_score,omitempty"`
+	RankingFactors *RankingFactors `json:"ranking_factors,omitempty"`
+
 	Comments []Comment `json:"comments,omitempty"`
 }
 
@@ -254,6 +279,10 @@ type CreatePostRequest struct {
 	MusicArtist string `json:"music_artist,omitempty"`
 	ChannelID   *int   `json:"channel_id,omitempty"`
 	PollID      *int   `json:"poll_id,omitempty"`
+
+	// Криптографическая подпись Ed25519
+	Signature    string `json:"signature,omitempty"`
+	AuthorPubKey string `json:"author_pubkey,omitempty"`
 }
 
 type UpdatePostRequest struct {
@@ -575,3 +604,84 @@ func CalculateLevel(totalXP int) LevelInfo {
 		TotalXP:      totalXP,
 	}
 }
+
+// RankingFactors содержит объяснение факторов персонального ранжирования поста (Explain Ranking).
+type RankingFactors struct {
+	FinalScore            float64 `json:"final_score"`
+	GraphAffinity         float64 `json:"graph_affinity"`
+	FreshnessScore        float64 `json:"freshness_score"`
+	EngagementScore       float64 `json:"engagement_score"`
+	TopicMatchScore       float64 `json:"topic_match_score"`
+	DiversityPenalty      float64 `json:"diversity_penalty"`
+	AffinityExplanation   string  `json:"affinity_explanation"`
+	FreshnessExplanation  string  `json:"freshness_explanation"`
+	EngagementExplanation string  `json:"engagement_explanation"`
+	TopicExplanation      string  `json:"topic_explanation"`
+}
+
+// UserCryptoKeys криптографические публичные ключи и отпечаток безопасности пользователя.
+type UserCryptoKeys struct {
+	UserID            int       `json:"user_id"`
+	PublicKeyEd25519  string    `json:"public_key_ed25519"`
+	PublicKeyX25519   string    `json:"public_key_x25519"`
+	KeyFingerprint    string    `json:"key_fingerprint"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// RegisterKeysRequest запрос регистрации/обновления криптографических ключей клиента.
+type RegisterKeysRequest struct {
+	PublicKeyEd25519 string `json:"public_key_ed25519"`
+	PublicKeyX25519  string `json:"public_key_x25519"`
+	KeyFingerprint   string `json:"key_fingerprint"`
+}
+
+// VerifyPostSignatureRequest запрос проверки цифровой подписи поста.
+type VerifyPostSignatureRequest struct {
+	PostID       int    `json:"post_id"`
+	Content      string `json:"content"`
+	AuthorPubKey string `json:"author_pubkey"`
+	Signature    string `json:"signature"`
+}
+
+// VerifySignatureResponse ответ проверки цифровой подписи.
+type VerifySignatureResponse struct {
+	IsValid           bool   `json:"is_valid"`
+	SignerFingerprint string `json:"signer_fingerprint"`
+	Algorithm         string `json:"algorithm"`
+}
+
+// FederationNode децентрализованный узел сети.
+type FederationNode struct {
+	ID               int       `json:"id"`
+	NodeName         string    `json:"node_name"`
+	NodeURL          string    `json:"node_url"`
+	PublicKeyEd25519 string    `json:"public_key_ed25519"`
+	Status           string    `json:"status"` // 'online', 'degraded', 'offline'
+	PingMs           int       `json:"ping_ms"`
+	SyncedPostsCount int       `json:"synced_posts_count"`
+	LastSyncAt       time.Time `json:"last_sync_at"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+// FederationEvent федеративное событие, передаваемое между узлами сети.
+type FederationEvent struct {
+	EventID    string                 `json:"event_id"`
+	EventType  string                 `json:"event_type"` // 'post.created', 'node.ping'
+	OriginNode string                 `json:"origin_node"`
+	ActorDID   string                 `json:"actor_did"`
+	Payload    map[string]interface{} `json:"payload"`
+	Timestamp  time.Time              `json:"timestamp"`
+	Signature  string                 `json:"signature"`
+}
+
+// DegreesOfSeparationResponse ответ расчета социальной дистанции (Шесть рукопожатий).
+type DegreesOfSeparationResponse struct {
+	SourceUserID    int      `json:"source_user_id"`
+	TargetUserID    int      `json:"target_user_id"`
+	Degree          int      `json:"degree"`
+	PathUsernames   []string `json:"path_usernames"`
+	PathNames       []string `json:"path_names"`
+	PathDescription string   `json:"path_description"`
+}
+

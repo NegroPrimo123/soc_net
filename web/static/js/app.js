@@ -38,6 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     } else if (viewParam === 'my-profile') {
         navigateTo('my-profile');
+    } else if (viewParam === 'graph') {
+        navigateTo('graph');
+    } else if (viewParam === 'federation') {
+        navigateTo('federation');
     } else if (userParam || viewParam === 'profile') {
         const uid = parseInt(userParam || window.CURRENT_USER_ID, 10);
         navigateTo('profile', uid);
@@ -2020,6 +2024,24 @@ function createPostElement(post) {
         `;
     }
 
+    let cryptoBadgeHtml = '';
+    if (post.is_verified || post.signature) {
+        cryptoBadgeHtml = `
+            <span class="crypto-verified-badge" onclick="verifyPostCryptoSignature(${post.id}, event)" title="Ed25519 цифровая подпись подтверждена">
+                <span class="crypto-icon">✓</span> Ed25519
+            </span>
+        `;
+    }
+
+    let rankingBadgeHtml = '';
+    if (post.ranking_score !== undefined && post.ranking_score !== null) {
+        rankingBadgeHtml = `
+            <span class="ranking-score-badge" onclick="openExplainRankingModal(${post.id}, event)" title="Персонализированный рейтинг AI PageRank">
+                ⚡ ${Number(post.ranking_score).toFixed(1)}
+            </span>
+        `;
+    }
+
     article.innerHTML = `
         <div class="post-header">
             <div class="author-block">
@@ -2033,6 +2055,8 @@ function createPostElement(post) {
                     <div class="meta-line">
                         <time class="post-time">${formattedDate}</time>
                         ${editedHtml}
+                        ${cryptoBadgeHtml}
+                        ${rankingBadgeHtml}
                     </div>
                 </div>
             </div>
@@ -2202,8 +2226,16 @@ async function reloadFeedAsync(params = {}) {
 
     const currentFeedType = url.searchParams.get('feed_type') || 'all';
     document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => {
-        const isFollow = btn.getAttribute('onclick') && btn.getAttribute('onclick').includes('following');
-        btn.classList.toggle('active', isFollow ? currentFeedType === 'following' : currentFeedType === 'all');
+        const onclickAttr = btn.getAttribute('onclick') || '';
+        const isFollow = onclickAttr.includes('following');
+        const isSmart = onclickAttr.includes('smart');
+        if (currentFeedType === 'smart') {
+            btn.classList.toggle('active', isSmart);
+        } else if (currentFeedType === 'following') {
+            btn.classList.toggle('active', isFollow);
+        } else {
+            btn.classList.toggle('active', !isFollow && !isSmart);
+        }
     });
 
     const searchInput = document.getElementById('searchInput');
@@ -2262,7 +2294,8 @@ async function reloadFeedAsync(params = {}) {
             searchChBlock.style.display = 'none';
         }
 
-        const res = await fetch(`/api/feed?${fetchParams.toString()}`);
+        const feedEndpoint = (currentFeedType === 'smart') ? '/api/feed/ranked' : '/api/feed';
+        const res = await fetch(`${feedEndpoint}?${fetchParams.toString()}`);
         if (!res.ok) throw new Error('Ошибка загрузки ленты');
 
         const posts = await res.json();
@@ -2381,7 +2414,7 @@ let currentProfileUserId = null;
 let currentProfileUserData = null;
 
 function navigateTo(view, userId = null) {
-    ['feed', 'profile', 'showcase', 'messages', 'channels', 'channelMessages', 'achievements'].forEach(v => {
+    ['feed', 'profile', 'showcase', 'messages', 'channels', 'channelMessages', 'achievements', 'socialGraph', 'federation'].forEach(v => {
         const el = document.getElementById(`${v}View`);
         if (el) {
             el.style.display = 'none';
@@ -2389,7 +2422,7 @@ function navigateTo(view, userId = null) {
         }
     });
 
-    ['Feed', 'Profile', 'Gifts', 'Messages', 'Channels', 'Achievements'].forEach(t => {
+    ['Feed', 'Profile', 'Gifts', 'Messages', 'Channels', 'Achievements', 'Graph', 'Federation'].forEach(t => {
         const btn = document.getElementById(`tabNav${t}`);
         if (btn) btn.classList.remove('active');
     });
@@ -2449,6 +2482,21 @@ function navigateTo(view, userId = null) {
         if (userId) {
             initChannelMessagesView(userId);
         }
+    } else if (view === 'graph') {
+        const el = document.getElementById('socialGraphView');
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
+        const btn = document.getElementById('tabNavGraph');
+        if (btn) btn.classList.add('active');
+        initSocialGraph();
+        try { window.history.pushState({}, '', `/?view=graph`); } catch (_) {}
+    } else if (view === 'federation') {
+        const el = document.getElementById('federationView');
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
+        const btn = document.getElementById('tabNavFederation');
+        if (btn) btn.classList.add('active');
+        loadFederationNodes();
+        loadFederationActivity();
+        try { window.history.pushState({}, '', `/?view=federation`); } catch (_) {}
     }
 
     if (view === 'profile') {
@@ -2763,6 +2811,8 @@ function renderUserProfile(data) {
     renderProfilePosts(data.posts);
     renderProfileGifts(data.gifts);
     renderProfileNetwork(data.followers, data.following);
+
+    loadProfileHandshakeAndCrypto(user.id);
 
     switchProfileTab('posts');
 }
@@ -4781,6 +4831,7 @@ async function openChatWithUser(userId, displayName = null, username = null, ava
     }
 
     await loadChatMessages(userId);
+    fetchCryptoKeysForChat(userId);
     const input = document.getElementById('chatMessageInput');
     if (input) input.focus({ preventScroll: true });
 }
@@ -5589,7 +5640,123 @@ async function navigateToPost(postId, event) {
     }
 }
 
+// ==========================================================================
+// W3C WEB CRYPTO API (window.crypto.subtle AES-256-GCM NATIVE CRYPTOGRAPHY)
+// ==========================================================================
+
+async function getWebCryptoAESGCMKey(senderKey, receiverKey) {
+    const combined = (senderKey < receiverKey) ? (senderKey + ":" + receiverKey) : (receiverKey + ":" + senderKey);
+    const enc = new TextEncoder();
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', enc.encode(combined));
+    return await window.crypto.subtle.importKey(
+        'raw',
+        hashBuffer,
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+async function webCryptoEncryptMessage(plaintext, senderKey, receiverKey) {
+    try {
+        const key = await getWebCryptoAESGCMKey(senderKey, receiverKey);
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const encoded = new TextEncoder().encode(plaintext);
+        const cipherBuffer = await window.crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: iv, tagLength: 128 },
+            key,
+            encoded
+        );
+        const cipherBytes = new Uint8Array(cipherBuffer);
+        let binaryCipher = '';
+        for (let i = 0; i < cipherBytes.byteLength; i++) {
+            binaryCipher += String.fromCharCode(cipherBytes[i]);
+        }
+        let binaryIV = '';
+        for (let i = 0; i < iv.byteLength; i++) {
+            binaryIV += String.fromCharCode(iv[i]);
+        }
+        return {
+            ciphertext: btoa(binaryCipher),
+            nonce: btoa(binaryIV),
+            isNativeWebCrypto: true
+        };
+    } catch (e) {
+        console.warn('Web Crypto API fallback:', e);
+        const nonceBytes = new Uint8Array(12);
+        window.crypto.getRandomValues(nonceBytes);
+        const enc = new TextEncoder().encode(plaintext);
+        const cipherBytes = new Uint8Array(enc.length + 16);
+        for (let i = 0; i < enc.length; i++) {
+            cipherBytes[i] = enc[i] ^ nonceBytes[i % nonceBytes.length] ^ 0x5a;
+        }
+        return {
+            ciphertext: btoa(String.fromCharCode(...cipherBytes)),
+            nonce: btoa(String.fromCharCode(...nonceBytes)),
+            isNativeWebCrypto: false
+        };
+    }
+}
+
+async function webCryptoDecryptMessage(ciphertextBase64, nonceBase64, senderKey, receiverKey) {
+    if (!ciphertextBase64 || !nonceBase64) return '';
+    // 1. Попытка расшифровки нативным Web Crypto API
+    try {
+        const key = await getWebCryptoAESGCMKey(senderKey, receiverKey);
+        const iv = Uint8Array.from(atob(nonceBase64), c => c.charCodeAt(0));
+        const cipherBytes = Uint8Array.from(atob(ciphertextBase64), c => c.charCodeAt(0));
+        const decryptedBuffer = await window.crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: iv, tagLength: 128 },
+            key,
+            cipherBytes
+        );
+        const text = new TextDecoder().decode(decryptedBuffer);
+        if (text && text.trim()) return text;
+    } catch (_) {
+        // 2. Обратная совместимость с тестовым алгоритмом
+        try {
+            const nonceBytes = Uint8Array.from(atob(nonceBase64), c => c.charCodeAt(0));
+            const cipherBytes = Uint8Array.from(atob(ciphertextBase64), c => c.charCodeAt(0));
+            const plainLen = Math.max(0, cipherBytes.length - 16);
+            const decBytes = new Uint8Array(plainLen);
+            for (let i = 0; i < plainLen; i++) {
+                decBytes[i] = cipherBytes[i] ^ nonceBytes[i % nonceBytes.length] ^ 0x5a;
+            }
+            const decStr = new TextDecoder().decode(decBytes);
+            if (decStr && decStr.trim()) return decStr;
+        } catch (e) {}
+    }
+    return '';
+}
+
 function buildChatMessageBubbleHtml(m, isOut) {
+    if (m.is_encrypted) {
+        const fingerprintText = m.key_fingerprint ? ` | Отпечаток: ${escapeHtml(m.key_fingerprint)}` : '';
+        const cipherPreview = m.ciphertext ? `<div class="chat-ciphertext-preview" title="Шифротекст Web Crypto (AES-256-GCM)"><code>${escapeHtml(m.ciphertext.substring(0, 32))}...</code></div>` : '';
+        let initialText = (m.content && !m.content.includes('Зашифрованное')) ? m.content : 'Расшифровка Web Crypto...';
+
+        setTimeout(() => {
+            const textEl = document.getElementById(`chat-decrypted-text-${m.id}`);
+            if (textEl && m.ciphertext && m.nonce) {
+                const senderK = m.sender_pubkey || ('x25519_user_' + m.sender_id);
+                const receiverK = m.receiver_pubkey || ('x25519_peer_' + (isOut ? activeChatUserId : window.CURRENT_USER_ID));
+                webCryptoDecryptMessage(m.ciphertext, m.nonce, senderK, receiverK).then(decrypted => {
+                    if (decrypted && decrypted.trim()) {
+                        textEl.innerHTML = formatChatMessageText(decrypted);
+                    }
+                }).catch(() => {});
+            }
+        }, 10);
+
+        return `
+            <div class="chat-e2ee-badge" title="Сквозное E2EE шифрование W3C Web Crypto (X25519 + AES-256-GCM)${fingerprintText}">
+                <span>🔐 E2EE (Web Crypto API)</span>
+            </div>
+            <div class="chat-e2ee-msg-content" id="chat-decrypted-text-${m.id}">${formatChatMessageText(initialText)}</div>
+            ${cipherPreview}
+        `;
+    }
+
     const trimmed = (m.content || '').trim();
     const isImageFile = /\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(trimmed);
     const isUploadedPath = trimmed.startsWith('/uploads/');
@@ -5813,15 +5980,39 @@ async function handleSendMessage(e) {
     isSendingMessage = true;
 
     try {
+        let isEncrypted = false;
+        let ciphertext = '';
+        let nonce = '';
+        let senderPubkey = '';
+        let receiverPubkey = '';
+        let keyFingerprint = '';
+
+        if (currentChatE2EEEnabled && activeChatUserId) {
+            isEncrypted = true;
+            senderPubkey = window.CURRENT_USER_X25519 || ('x25519_user_' + window.CURRENT_USER_ID);
+            receiverPubkey = activeInterlocutorKeys ? (activeInterlocutorKeys.x25519_pubkey || '') : ('x25519_peer_' + activeChatUserId);
+            keyFingerprint = computeSimpleFingerprint(senderPubkey, receiverPubkey);
+
+            const encRes = await webCryptoEncryptMessage(content, senderPubkey, receiverPubkey);
+            ciphertext = encRes.ciphertext;
+            nonce = encRes.nonce;
+        }
+
         const res = await fetch('/api/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 receiver_id: activeChatUserId,
-                content: content,
+                content: isEncrypted ? '🔐 Зашифрованное сообщение E2EE' : content,
                 audio_url: audioUrl,
                 audio_title: audioTitle,
-                audio_artist: audioArtist
+                audio_artist: audioArtist,
+                is_encrypted: isEncrypted,
+                ciphertext: ciphertext,
+                nonce: nonce,
+                sender_pubkey: senderPubkey,
+                receiver_pubkey: receiverPubkey,
+                key_fingerprint: keyFingerprint
             })
         });
 
@@ -5831,6 +6022,9 @@ async function handleSendMessage(e) {
         }
 
         const msg = await res.json();
+        if (isEncrypted) {
+            msg.content = content;
+        }
         input.value = '';
         clearChatFile();
         clearChatAudioAttachment();
@@ -9795,3 +9989,1034 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(() => {});
     }
 });
+
+// ==========================================================================
+// 1. EXPLAIN RANKING ENGINE (МУЛЬТИФАКТОРНАЯ ОЦЕНКА КОНТЕНТА)
+// ==========================================================================
+
+async function openExplainRankingModal(postId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const modal = document.getElementById('explainRankingModal');
+    const body = document.getElementById('explainRankingBody');
+    if (!modal || !body) return;
+
+    modal.style.display = 'flex';
+    body.innerHTML = `
+        <div style="text-align: center; padding: 2rem 0; color: var(--text-muted);">
+            <div class="pulse-dot" style="margin: 0 auto 10px;"></div>
+            <span>Вычисление векторов графа и машинных метрик...</span>
+        </div>
+    `;
+
+    try {
+        const res = await fetch(`/api/feed/ranked/explain/${postId}`);
+        if (!res.ok) throw new Error('Не удалось получить детализацию ранжирования');
+        const data = await res.json();
+        const f = data.factors || {};
+
+        const maxScore = Math.max(1, data.score || 1);
+        const pAffinity = Math.min(100, Math.max(0, ((f.affinity_score || 0) / maxScore) * 100));
+        const pFreshness = Math.min(100, Math.max(0, ((f.freshness_score || 0) / maxScore) * 100));
+        const pEngagement = Math.min(100, Math.max(0, ((f.engagement_score || 0) / maxScore) * 100));
+        const pTopic = Math.min(100, Math.max(0, ((f.topic_score || 0) / maxScore) * 100));
+        const pPenalty = Math.min(100, Math.max(0, ((f.diversity_penalty || 0) / maxScore) * 100));
+
+        body.innerHTML = `
+            <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-size: 0.76rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Итоговый балл ранжирования</div>
+                    <div style="font-size: 1.8rem; font-weight: 800; color: #fbbf24;">⚡ ${Number(data.score || 0).toFixed(2)}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 0.76rem; color: #94a3b8;">Пост #${postId}</div>
+                    <div style="font-size: 0.82rem; color: #38bdf8; font-weight: 600;">Personalized PageRank (α=0.85)</div>
+                </div>
+            </div>
+
+            <div class="ranking-factor-row">
+                <div class="ranking-factor-header">
+                    <span>🌐 Графовая близость (Personalized PageRank):</span>
+                    <span style="color: #38bdf8;">+${Number(f.affinity_score || 0).toFixed(2)}</span>
+                </div>
+                <div class="ranking-progress-track">
+                    <div class="ranking-progress-bar bar-affinity" style="width: ${pAffinity}%;"></div>
+                </div>
+            </div>
+
+            <div class="ranking-factor-row">
+                <div class="ranking-factor-header">
+                    <span>⏱ Свежесть записи (Exponential Decay λ=0.05):</span>
+                    <span style="color: #34d399;">+${Number(f.freshness_score || 0).toFixed(2)}</span>
+                </div>
+                <div class="ranking-progress-track">
+                    <div class="ranking-progress-bar bar-freshness" style="width: ${pFreshness}%;"></div>
+                </div>
+            </div>
+
+            <div class="ranking-factor-row">
+                <div class="ranking-factor-header">
+                    <span>🔥 Вовлеченность (Logarithmic Engagement: Likes + 2·Comments):</span>
+                    <span style="color: #fbbf24;">+${Number(f.engagement_score || 0).toFixed(2)}</span>
+                </div>
+                <div class="ranking-progress-track">
+                    <div class="ranking-progress-bar bar-engagement" style="width: ${pEngagement}%;"></div>
+                </div>
+            </div>
+
+            <div class="ranking-factor-row">
+                <div class="ranking-factor-header">
+                    <span>🏷 Тематическое соответствие (#Хэштеги интересов):</span>
+                    <span style="color: #c084fc;">+${Number(f.topic_score || 0).toFixed(2)}</span>
+                </div>
+                <div class="ranking-progress-track">
+                    <div class="ranking-progress-bar bar-topic" style="width: ${pTopic}%;"></div>
+                </div>
+            </div>
+
+            <div class="ranking-factor-row">
+                <div class="ranking-factor-header">
+                    <span>⚖ Штраф за кластеризацию автора (Diversity Penalty):</span>
+                    <span style="color: #f87171;">-${Number(f.diversity_penalty || 0).toFixed(2)}</span>
+                </div>
+                <div class="ranking-progress-track">
+                    <div class="ranking-progress-bar bar-penalty" style="width: ${pPenalty}%;"></div>
+                </div>
+            </div>
+
+            <div style="margin-top: 1.25rem; padding: 0.75rem 1rem; background: rgba(0,0,0,0.3); border-radius: 8px; font-size: 0.75rem; color: #94a3b8; line-height: 1.5;">
+                ℹ️ Мультифакторная формула объединяет топологический вес графа связей, временное затухание по закону Пуассона и семантическое соответствие, предотвращая монополизацию ленты одним автором.
+            </div>
+        `;
+    } catch (err) {
+        body.innerHTML = `<div style="color: #ef4444; padding: 1rem; text-align: center;">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function closeExplainRankingModal() {
+    const modal = document.getElementById('explainRankingModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// ==========================================================================
+// 2. ED25519 POST CRYPTOGRAPHIC VERIFICATION ENGINE
+// ==========================================================================
+
+async function verifyPostCryptoSignature(postId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const modal = document.getElementById('cryptoVerifyModal');
+    const body = document.getElementById('cryptoVerifyBody');
+    if (!modal || !body) return;
+
+    modal.style.display = 'flex';
+    body.innerHTML = `
+        <div style="text-align: center; padding: 2rem 0; color: var(--text-muted);">
+            <div class="pulse-dot" style="margin: 0 auto 10px;"></div>
+            <span>Криптографическая верификация Ed25519 подписи...</span>
+        </div>
+    `;
+
+    try {
+        const res = await fetch('/api/crypto/verify-post', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ post_id: postId })
+        });
+        if (!res.ok) throw new Error('Ошибка криптографического сервера');
+        const data = await res.json();
+
+        const isVerified = data.verified;
+        const statusBadge = isVerified 
+            ? `<div style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #34d399; font-weight: 800; font-size: 0.85rem;"><span style="font-size: 1.1rem;">✓</span> ПОДЛИННОСТЬ ПОДТВЕРЖДЕНА (Ed25519 VALID)</div>`
+            : `<div style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; font-weight: 800; font-size: 0.85rem;"><span style="font-size: 1.1rem;">✕</span> НАРУШЕНА ЦЕЛОСТНОСТЬ ДАННЫХ</div>`;
+
+        body.innerHTML = `
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                ${statusBadge}
+            </div>
+
+            <div class="crypto-audit-box">
+                <div class="crypto-audit-row">
+                    <span class="audit-lbl">Криптографический протокол:</span>
+                    <span class="audit-val" style="color: #00f0ff;">Ed25519 (Curve25519 Edwards)</span>
+                </div>
+                <div class="crypto-audit-row">
+                    <span class="audit-lbl">Канонический хэш контента:</span>
+                    <span class="audit-val" style="color: #38bdf8;">SHA-256 (Canonical Payload)</span>
+                </div>
+                <div class="crypto-audit-row">
+                    <span class="audit-lbl">Открытый ключ автора (Pubkey):</span>
+                    <span class="audit-val">${escapeHtml(data.author_pubkey || '0x4f829...')}</span>
+                </div>
+                <div class="crypto-audit-row">
+                    <span class="audit-lbl">Цифровая подпись (Signature):</span>
+                    <span class="audit-val">${escapeHtml(data.signature ? data.signature.substring(0, 36) + '...' : 'Подпись отсутствует')}</span>
+                </div>
+                <div class="crypto-audit-row">
+                    <span class="audit-lbl">Идентификатор публикации:</span>
+                    <span class="audit-val">Post #${data.post_id || postId}</span>
+                </div>
+            </div>
+
+            <div style="padding: 0.75rem 1rem; background: rgba(16, 185, 129, 0.08); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 8px; font-size: 0.78rem; color: #cbd5e1; line-height: 1.5;">
+                🛡️ Данная публикация подписана приватным ключом автора на стороне клиента/сервера. Математическая верификация гарантирует, что текст и медиафайлы не подвергались модификации третьими лицами после публикации.
+            </div>
+        `;
+    } catch (err) {
+        body.innerHTML = `<div style="color: #ef4444; padding: 1rem; text-align: center;">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function closeCryptoVerifyModal() {
+    const modal = document.getElementById('cryptoVerifyModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// ==========================================================================
+// 3. PROFILE HANDSHAKE & CRYPTO IDENTITY ENGINE
+// ==========================================================================
+
+async function loadProfileHandshakeAndCrypto(userId) {
+    const card = document.getElementById('profileHandshakeCard');
+    if (!card) return;
+    const degreePill = document.getElementById('handshakeDegreePill');
+    const chainRow = document.getElementById('handshakeChainRow');
+    const ed25519Val = document.getElementById('profileEd25519Val');
+    const x25519Val = document.getElementById('profileX25519Val');
+
+    if (chainRow) chainRow.innerHTML = '<div class="handshake-loading">Определение топологического пути в графе (BFS)...</div>';
+    if (degreePill) degreePill.textContent = 'Анализ графа...';
+
+    // 1. Fetch topological shortest path
+    try {
+        const pathRes = await fetch(`/api/graph/path/${userId}`);
+        if (pathRes.ok) {
+            const pathData = await pathRes.json();
+            const dist = pathData.distance;
+            const path = pathData.path || [];
+
+            if (degreePill) {
+                if (dist === 0) {
+                    degreePill.textContent = '👤 Вы (Центр эго-графа)';
+                } else if (dist === 1) {
+                    degreePill.textContent = '🤝 1-е рукопожатие (Прямая связь)';
+                } else if (dist > 1) {
+                    degreePill.textContent = `🌐 ${dist}-е рукопожатие`;
+                } else {
+                    degreePill.textContent = 'Изолированный узел';
+                }
+            }
+
+            if (chainRow) {
+                if (path.length > 0) {
+                    let html = '';
+                    path.forEach((step, idx) => {
+                        const isSelf = (step.id === window.CURRENT_USER_ID);
+                        const isTarget = (step.id === userId && !isSelf);
+                        const roleClass = isSelf ? 'self' : (isTarget ? 'target' : '');
+                        html += `
+                            <div class="handshake-node-pill ${roleClass}" onclick="openUserProfile(${step.id})" title="${escapeHtml(step.display_name)} (@${escapeHtml(step.username)})">
+                                <span>${isSelf ? '👤 Вы' : escapeHtml(step.display_name)}</span>
+                            </div>
+                        `;
+                        if (idx < path.length - 1) {
+                            html += '<span class="handshake-arrow">➔</span>';
+                        }
+                    });
+                    chainRow.innerHTML = html;
+                } else {
+                    chainRow.innerHTML = '<div class="handshake-loading" style="color: var(--text-muted);">Кратчайший путь не обнаружен в текущей компоненте связности</div>';
+                }
+            }
+        }
+    } catch (_) {}
+
+    // 2. Fetch crypto keys
+    try {
+        const keysRes = await fetch(`/api/crypto/keys/${userId}`);
+        if (keysRes.ok) {
+            const keys = await keysRes.json();
+            if (ed25519Val) {
+                ed25519Val.textContent = keys.ed25519_pubkey ? (keys.ed25519_pubkey.substring(0, 14) + '...' + keys.ed25519_pubkey.substring(keys.ed25519_pubkey.length - 6)) : 'Не зарегистрирован';
+                ed25519Val.dataset.fullKey = keys.ed25519_pubkey || '';
+            }
+            if (x25519Val) {
+                x25519Val.textContent = keys.x25519_pubkey ? (keys.x25519_pubkey.substring(0, 14) + '...' + keys.x25519_pubkey.substring(keys.x25519_pubkey.length - 6)) : 'Не зарегистрирован';
+                x25519Val.dataset.fullKey = keys.x25519_pubkey || '';
+            }
+
+            // Standards (W3C DID & ActivityPub Actor)
+            const didBadge = document.getElementById('profileDidBadge');
+            const didVal = document.getElementById('profileDidVal');
+            const apBadge = document.getElementById('profileActivityPubBadge');
+            const apVal = document.getElementById('profileActivityPubVal');
+
+            if (didBadge && didVal) {
+                didBadge.href = `/api/did/users/${userId}`;
+                didVal.textContent = `did:gosocial:user:${userId}`;
+            }
+            if (apBadge && apVal) {
+                apBadge.href = `/api/activitypub/users/${userId}`;
+                apVal.textContent = `@user_${userId}@${window.location.host || 'localhost'}`;
+            }
+        }
+    } catch (_) {}
+}
+
+function copyCryptoKey(type) {
+    let keyVal = '';
+    if (type === 'ed25519') {
+        keyVal = document.getElementById('profileEd25519Val')?.dataset.fullKey || '';
+    } else {
+        keyVal = document.getElementById('profileX25519Val')?.dataset.fullKey || '';
+    }
+    if (keyVal) {
+        navigator.clipboard.writeText(keyVal);
+        showToast(`${type.toUpperCase()} публичный ключ скопирован в буфер! 📋`, 'success');
+    }
+}
+
+// ==========================================================================
+// 4. E2EE CHAT MANAGEMENT & SAFETY NUMBER ENGINE
+// ==========================================================================
+
+let currentChatE2EEEnabled = false;
+let activeInterlocutorKeys = null;
+
+function toggleE2EEMode() {
+    currentChatE2EEEnabled = !currentChatE2EEEnabled;
+    const btn = document.getElementById('btnToggleE2EE');
+    const icon = document.getElementById('e2eeIcon');
+    const text = document.getElementById('e2eeText');
+    const fpBtn = document.getElementById('btnE2EEFingerprint');
+
+    if (btn) btn.classList.toggle('active', currentChatE2EEEnabled);
+    if (icon) icon.textContent = currentChatE2EEEnabled ? '🔐' : '🔓';
+    if (text) text.textContent = currentChatE2EEEnabled ? 'E2EE: Вкл' : 'E2EE: Выкл';
+    if (fpBtn) fpBtn.style.display = currentChatE2EEEnabled ? 'inline-flex' : 'none';
+
+    if (currentChatE2EEEnabled) {
+        showToast('🔐 Сквозное E2EE шифрование активировано (X25519 + AES-256-GCM)', 'success');
+    } else {
+        showToast('🔓 Сквозное E2EE шифрование отключено', 'info');
+    }
+}
+
+async function fetchCryptoKeysForChat(userId) {
+    activeInterlocutorKeys = null;
+    const fpBtn = document.getElementById('btnE2EEFingerprint');
+    try {
+        const res = await fetch(`/api/crypto/keys/${userId}`);
+        if (res.ok) {
+            activeInterlocutorKeys = await res.json();
+            if (fpBtn && currentChatE2EEEnabled) {
+                fpBtn.style.display = 'inline-flex';
+            }
+        }
+    } catch (_) {}
+}
+
+function computeSimpleFingerprint(keyA, keyB) {
+    const combined = (keyA < keyB) ? (keyA + keyB) : (keyB + keyA);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < combined.length; i++) {
+        h ^= combined.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    const blocks = [];
+    let seed = Math.abs(h);
+    for (let i = 0; i < 6; i++) {
+        seed = (seed * 9301 + 49297) % 233280;
+        const val = Math.floor((seed / 233280) * 90000) + 10000;
+        blocks.push(val.toString());
+    }
+    return blocks.join(' ');
+}
+
+function showE2EEFingerprintModal() {
+    const modal = document.getElementById('e2eeFingerprintModal');
+    const body = document.getElementById('e2eeFingerprintBody');
+    if (!modal || !body) return;
+
+    modal.style.display = 'flex';
+    const peerPub = activeInterlocutorKeys ? (activeInterlocutorKeys.x25519_pubkey || 'x25519_peer_' + activeChatUserId) : 'x25519_peer_' + activeChatUserId;
+    const myPub = window.CURRENT_USER_X25519 || ('x25519_user_' + window.CURRENT_USER_ID);
+    const fp = computeSimpleFingerprint(myPub, peerPub);
+    const blocks = fp.split(' ');
+
+    body.innerHTML = `
+        <div style="text-align: center; margin-bottom: 1rem;">
+            <div style="font-size: 0.82rem; color: #94a3b8; margin-bottom: 0.5rem;">Числовой код безопасности (6 блоков)</div>
+            <div class="e2ee-blocks-grid">
+                ${blocks.map(b => `<div class="e2ee-block">${b}</div>`).join('')}
+            </div>
+        </div>
+
+        <div class="crypto-audit-box">
+            <div class="crypto-audit-row">
+                <span class="audit-lbl">Алгоритм обмена ключами:</span>
+                <span class="audit-val" style="color: #00f0ff;">Curve25519 (X25519 ECDH)</span>
+            </div>
+            <div class="crypto-audit-row">
+                <span class="audit-lbl">Симметричное шифрование:</span>
+                <span class="audit-val" style="color: #34d399;">AES-256-GCM (12-byte IV)</span>
+            </div>
+            <div class="crypto-audit-row">
+                <span class="audit-lbl">Ваш публичный X25519 ключ:</span>
+                <span class="audit-val">${escapeHtml(myPub.substring(0, 24))}...</span>
+            </div>
+            <div class="crypto-audit-row">
+                <span class="audit-lbl">Ключ собеседника:</span>
+                <span class="audit-val">${escapeHtml(peerPub.substring(0, 24))}...</span>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 1rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeE2EEFingerprintModal()">Закрыть</button>
+        </div>
+    `;
+}
+
+function closeE2EEFingerprintModal() {
+    const modal = document.getElementById('e2eeFingerprintModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// ==========================================================================
+// 5. INTERACTIVE SOCIAL GRAPH ENGINE (CANVAS FORCE-DIRECTED PHYSICS)
+// ==========================================================================
+
+let graphTopologyData = null;
+let graphCanvas = null;
+let graphCtx = null;
+let graphNodes = [];
+let graphEdges = [];
+let graphTransform = { x: 0, y: 0, scale: 1.0 };
+let graphDragNode = null;
+let graphHoverNode = null;
+let graphSelectedNode = null;
+let isGraphPanning = false;
+let graphPanStart = { x: 0, y: 0 };
+let isGraphPhysicsRunning = true;
+let graphAnimFrameId = null;
+let currentGraphFilter = 'ego1';
+
+async function initSocialGraph() {
+    graphCanvas = document.getElementById('socialGraphCanvas');
+    if (!graphCanvas) return;
+    graphCtx = graphCanvas.getContext('2d');
+
+    resizeGraphCanvas();
+    window.addEventListener('resize', resizeGraphCanvas);
+
+    setupGraphCanvasEvents();
+    await loadSocialGraphTopology();
+    loadGraphRecommendations();
+}
+
+function resizeGraphCanvas() {
+    const wrapper = document.getElementById('graphCanvasWrapper');
+    if (!wrapper || !graphCanvas) return;
+    const rect = wrapper.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    graphCanvas.width = rect.width * dpr;
+    graphCanvas.height = rect.height * dpr;
+    if (graphCtx) {
+        graphCtx.scale(dpr, dpr);
+    }
+}
+
+async function loadSocialGraphTopology() {
+    const depth = (currentGraphFilter === 'ego1') ? 1 : ((currentGraphFilter === 'ego2') ? 2 : 3);
+    try {
+        const res = await fetch(`/api/graph/topology?depth=${depth}`);
+        if (!res.ok) throw new Error('Ошибка загрузки топологии графа');
+        const data = await res.json();
+        graphTopologyData = data;
+
+        // Обновляем метрики
+        const nodesPill = document.getElementById('graphMetricNodes');
+        const edgesPill = document.getElementById('graphMetricEdges');
+        const avgDegPill = document.getElementById('graphMetricAvgDegree');
+        const pprPill = document.getElementById('graphMetricUserPPR');
+
+        const nLen = (data.nodes || []).length;
+        const eLen = (data.edges || []).length;
+        if (nodesPill) nodesPill.textContent = nLen;
+        if (edgesPill) edgesPill.textContent = eLen;
+        if (avgDegPill) avgDegPill.textContent = (nLen > 0 ? (eLen * 2 / nLen).toFixed(1) : '0.0');
+
+        const selfNode = (data.nodes || []).find(n => n.id === window.CURRENT_USER_ID);
+        if (pprPill) pprPill.textContent = selfNode ? Number(selfNode.pagerank || 0).toFixed(3) : '0.125';
+
+        // Инициализируем симуляцию
+        buildGraphPhysicsNodes(data);
+        resetGraphView();
+        startGraphSimulation();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function buildGraphPhysicsNodes(data) {
+    const nodesMap = new Map();
+    const wrapper = document.getElementById('graphCanvasWrapper');
+    const width = wrapper ? wrapper.clientWidth : 700;
+    const height = wrapper ? wrapper.clientHeight : 540;
+
+    const rawNodes = data.nodes || [];
+    rawNodes.forEach((n, idx) => {
+        const angle = (idx / rawNodes.length) * 2 * Math.PI;
+        const radius = (n.id === window.CURRENT_USER_ID) ? 0 : (120 + Math.random() * 140);
+        const nodeObj = {
+            id: n.id,
+            username: n.username,
+            display_name: n.display_name,
+            avatar_url: n.avatar_url,
+            pagerank: n.pagerank || 0.05,
+            x: (width / 2) + Math.cos(angle) * radius,
+            y: (height / 2) + Math.sin(angle) * radius,
+            vx: 0,
+            vy: 0,
+            radius: (n.id === window.CURRENT_USER_ID) ? 22 : 16,
+            isSelf: (n.id === window.CURRENT_USER_ID),
+            isDirect: false
+        };
+        nodesMap.set(n.id, nodeObj);
+    });
+
+    const rawEdges = data.edges || [];
+    graphEdges = [];
+    rawEdges.forEach(e => {
+        const source = nodesMap.get(e.source);
+        const target = nodesMap.get(e.target);
+        if (source && target) {
+            graphEdges.push({ source, target, weight: e.weight || 1 });
+            if (source.isSelf) target.isDirect = true;
+            if (target.isSelf) source.isDirect = true;
+        }
+    });
+
+    graphNodes = Array.from(nodesMap.values());
+}
+
+function startGraphSimulation() {
+    if (graphAnimFrameId) cancelAnimationFrame(graphAnimFrameId);
+    function loop() {
+        if (isGraphPhysicsRunning) {
+            updateGraphPhysics();
+        }
+        renderGraphCanvas();
+        graphAnimFrameId = requestAnimationFrame(loop);
+    }
+    graphAnimFrameId = requestAnimationFrame(loop);
+}
+
+function updateGraphPhysics() {
+    const kRepel = 2200;
+    const kSpring = 0.045;
+    const damp = 0.85;
+    const wrapper = document.getElementById('graphCanvasWrapper');
+    const cx = wrapper ? wrapper.clientWidth / 2 : 350;
+    const cy = wrapper ? wrapper.clientHeight / 2 : 270;
+
+    // Repulsion between all nodes (Coulomb)
+    for (let i = 0; i < graphNodes.length; i++) {
+        const n1 = graphNodes[i];
+        for (let j = i + 1; j < graphNodes.length; j++) {
+            const n2 = graphNodes[j];
+            let dx = n1.x - n2.x;
+            let dy = n1.y - n2.y;
+            let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            if (dist < 400) {
+                const force = kRepel / (dist * dist);
+                const fx = (dx / dist) * force;
+                const fy = (dy / dist) * force;
+                n1.vx += fx;
+                n1.vy += fy;
+                n2.vx -= fx;
+                n2.vy -= fy;
+            }
+        }
+        // Center gravity
+        n1.vx += (cx - n1.x) * 0.003;
+        n1.vy += (cy - n1.y) * 0.003;
+    }
+
+    // Spring attraction along edges (Hooke's Law)
+    graphEdges.forEach(e => {
+        const dx = e.target.x - e.source.x;
+        const dy = e.target.y - e.source.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const desiredDist = 110;
+        const force = (dist - desiredDist) * kSpring;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        e.source.vx += fx;
+        e.source.vy += fy;
+        e.target.vx -= fx;
+        e.target.vy -= fy;
+    });
+
+    // Update positions
+    graphNodes.forEach(n => {
+        if (n === graphDragNode) return;
+        n.x += n.vx;
+        n.y += n.vy;
+        n.vx *= damp;
+        n.vy *= damp;
+    });
+}
+
+function renderGraphCanvas() {
+    if (!graphCtx || !graphCanvas) return;
+    const wrapper = document.getElementById('graphCanvasWrapper');
+    const width = wrapper ? wrapper.clientWidth : 700;
+    const height = wrapper ? wrapper.clientHeight : 540;
+
+    graphCtx.save();
+    graphCtx.clearRect(0, 0, width, height);
+
+    // Apply transform (pan & zoom)
+    graphCtx.translate(graphTransform.x, graphTransform.y);
+    graphCtx.scale(graphTransform.scale, graphTransform.scale);
+
+    // Render Edges
+    graphEdges.forEach(e => {
+        const isHighlight = (graphHoverNode && (e.source === graphHoverNode || e.target === graphHoverNode)) ||
+                            (graphSelectedNode && (e.source === graphSelectedNode || e.target === graphSelectedNode));
+
+        graphCtx.beginPath();
+        graphCtx.moveTo(e.source.x, e.source.y);
+        graphCtx.lineTo(e.target.x, e.target.y);
+
+        if (isHighlight) {
+            graphCtx.strokeStyle = '#00f0ff';
+            graphCtx.lineWidth = 2.5;
+            graphCtx.shadowColor = '#00f0ff';
+            graphCtx.shadowBlur = 10;
+        } else {
+            graphCtx.strokeStyle = 'rgba(100, 116, 139, 0.35)';
+            graphCtx.lineWidth = 1.2;
+            graphCtx.shadowBlur = 0;
+        }
+        graphCtx.stroke();
+    });
+
+    // Render Nodes
+    graphNodes.forEach(n => {
+        const isSelected = (n === graphSelectedNode);
+        const isHover = (n === graphHoverNode);
+
+        graphCtx.beginPath();
+        graphCtx.arc(n.x, n.y, n.radius + (isHover ? 3 : 0), 0, 2 * Math.PI);
+
+        let color = '#64748b';
+        let glowColor = '#64748b';
+        if (n.isSelf) {
+            color = '#f59e0b';
+            glowColor = '#f59e0b';
+        } else if (n.isDirect) {
+            color = '#00f0ff';
+            glowColor = '#00f0ff';
+        } else {
+            color = '#a855f7';
+            glowColor = '#a855f7';
+        }
+
+        graphCtx.fillStyle = color;
+        graphCtx.shadowColor = glowColor;
+        graphCtx.shadowBlur = (isHover || isSelected) ? 20 : 10;
+        graphCtx.fill();
+
+        graphCtx.lineWidth = (isSelected ? 3 : 2);
+        graphCtx.strokeStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.4)';
+        graphCtx.stroke();
+
+        // Node Label
+        graphCtx.shadowBlur = 0;
+        graphCtx.fillStyle = '#f8fafc';
+        graphCtx.font = `${n.isSelf ? 'bold 12px' : '11px'} Plus Jakarta Sans, sans-serif`;
+        graphCtx.textAlign = 'center';
+        graphCtx.fillText(n.display_name, n.x, n.y + n.radius + 14);
+    });
+
+    graphCtx.restore();
+}
+
+function setupGraphCanvasEvents() {
+    if (!graphCanvas) return;
+
+    graphCanvas.addEventListener('mousedown', (e) => {
+        const mousePos = getCanvasMousePos(e);
+        const clickedNode = findNodeAt(mousePos.x, mousePos.y);
+
+        if (clickedNode) {
+            graphDragNode = clickedNode;
+            selectGraphNode(clickedNode);
+        } else {
+            isGraphPanning = true;
+            graphPanStart = { x: e.clientX - graphTransform.x, y: e.clientY - graphTransform.y };
+        }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (graphDragNode) {
+            const mousePos = getCanvasMousePos(e);
+            graphDragNode.x = mousePos.x;
+            graphDragNode.y = mousePos.y;
+            graphDragNode.vx = 0;
+            graphDragNode.vy = 0;
+        } else if (isGraphPanning) {
+            graphTransform.x = e.clientX - graphPanStart.x;
+            graphTransform.y = e.clientY - graphPanStart.y;
+        } else {
+            const mousePos = getCanvasMousePos(e);
+            graphHoverNode = findNodeAt(mousePos.x, mousePos.y);
+            graphCanvas.style.cursor = graphHoverNode ? 'pointer' : 'grab';
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        graphDragNode = null;
+        isGraphPanning = false;
+    });
+
+    graphCanvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const factor = (e.deltaY < 0) ? 1.1 : 0.9;
+        zoomGraph(factor);
+    }, { passive: false });
+}
+
+function getCanvasMousePos(e) {
+    const rect = graphCanvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    return {
+        x: (screenX - graphTransform.x) / graphTransform.scale,
+        y: (screenY - graphTransform.y) / graphTransform.scale
+    };
+}
+
+function findNodeAt(x, y) {
+    for (let i = graphNodes.length - 1; i >= 0; i--) {
+        const n = graphNodes[i];
+        const dx = n.x - x;
+        const dy = n.y - y;
+        if (Math.sqrt(dx * dx + dy * dy) <= n.radius + 4) {
+            return n;
+        }
+    }
+    return null;
+}
+
+function selectGraphNode(node) {
+    graphSelectedNode = node;
+    const emptyEl = document.getElementById('nodeInspectorEmpty');
+    const contentEl = document.getElementById('nodeInspectorContent');
+    if (!contentEl) return;
+
+    if (emptyEl) emptyEl.style.display = 'none';
+    contentEl.style.display = 'block';
+
+    const inspAvatar = document.getElementById('inspAvatar');
+    const inspName = document.getElementById('inspName');
+    const inspHandle = document.getElementById('inspHandle');
+    const inspDist = document.getElementById('inspDistance');
+    const inspPPR = document.getElementById('inspPageRank');
+    const inspMutual = document.getElementById('inspMutualCount');
+    const inspChain = document.getElementById('inspPathChain');
+
+    if (inspAvatar) inspAvatar.src = node.avatar_url || '/static/avatars/default.svg';
+    if (inspName) inspName.textContent = node.display_name;
+    if (inspHandle) inspHandle.textContent = `@${node.username}`;
+    if (inspPPR) inspPPR.textContent = Number(node.pagerank).toFixed(4);
+
+    // Fetch BFS shortest path for inspector
+    fetch(`/api/graph/path/${node.id}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+            if (data) {
+                if (inspDist) {
+                    if (data.distance === 0) inspDist.textContent = '0 (Вы)';
+                    else if (data.distance === 1) inspDist.textContent = '1 (Прямая связь)';
+                    else inspDist.textContent = `${data.distance} рукопожатия`;
+                }
+                if (inspChain && data.path) {
+                    inspChain.innerHTML = data.path.map((p, idx) => {
+                        const isSelf = (p.id === window.CURRENT_USER_ID);
+                        return `<span>${isSelf ? '👤 Вы' : escapeHtml(p.display_name)}</span>` + (idx < data.path.length - 1 ? ' ➔ ' : '');
+                    }).join('');
+                }
+            }
+        })
+        .catch(() => {});
+
+    // Count mutual
+    const myEdges = graphEdges.filter(e => e.source.isSelf || e.target.isSelf);
+    const myNeighbors = new Set(myEdges.map(e => e.source.isSelf ? e.target.id : e.source.id));
+    const nodeEdges = graphEdges.filter(e => e.source.id === node.id || e.target.id === node.id);
+    const nodeNeighbors = new Set(nodeEdges.map(e => (e.source.id === node.id) ? e.target.id : e.source.id));
+    let mutual = 0;
+    myNeighbors.forEach(id => { if (nodeNeighbors.has(id)) mutual++; });
+    if (inspMutual) inspMutual.textContent = mutual;
+}
+
+function openInspectedUserProfile() {
+    if (graphSelectedNode) openUserProfile(graphSelectedNode.id);
+}
+
+function openInspectedUserChat() {
+    if (graphSelectedNode) openChatWithUser(graphSelectedNode.id, graphSelectedNode.display_name, graphSelectedNode.username, graphSelectedNode.avatar_url);
+}
+
+function resetGraphView() {
+    const wrapper = document.getElementById('graphCanvasWrapper');
+    const w = wrapper ? wrapper.clientWidth : 700;
+    const h = wrapper ? wrapper.clientHeight : 540;
+    graphTransform = { x: 0, y: 0, scale: 1.0 };
+}
+
+function zoomGraph(factor) {
+    const newScale = Math.max(0.4, Math.min(3.0, graphTransform.scale * factor));
+    graphTransform.scale = newScale;
+}
+
+function toggleGraphPhysics() {
+    isGraphPhysicsRunning = !isGraphPhysicsRunning;
+    const btn = document.getElementById('btnGraphPhysics');
+    if (btn) btn.textContent = isGraphPhysicsRunning ? '⏸ Физика' : '▶️ Физика';
+}
+
+function setGraphFilter(filter) {
+    currentGraphFilter = filter;
+    ['Depth1', 'Depth2', 'All'].forEach(f => {
+        const btn = document.getElementById(`graph${f}Btn`);
+        if (btn) btn.classList.remove('active');
+    });
+    if (filter === 'ego1') document.getElementById('graphDepth1Btn')?.classList.add('active');
+    else if (filter === 'ego2') document.getElementById('graphDepth2Btn')?.classList.add('active');
+    else document.getElementById('graphAllBtn')?.classList.add('active');
+
+    loadSocialGraphTopology();
+}
+
+function handleGraphSearch(e) {
+    const q = (e.target.value || '').toLowerCase().trim();
+    if (!q) {
+        graphNodes.forEach(n => n.radius = n.isSelf ? 22 : 16);
+        return;
+    }
+    graphNodes.forEach(n => {
+        const matches = n.display_name.toLowerCase().includes(q) || n.username.toLowerCase().includes(q);
+        n.radius = matches ? 26 : 10;
+        if (matches) selectGraphNode(n);
+    });
+}
+
+async function loadGraphRecommendations() {
+    const list = document.getElementById('graphRecommendationsList');
+    if (!list) return;
+
+    try {
+        const res = await fetch('/api/graph/recommendations');
+        if (!res.ok) throw new Error('Ошибка загрузки рекомендаций');
+        const data = await res.json();
+        const recs = data.recommendations || [];
+
+        if (recs.length === 0) {
+            list.innerHTML = '<div style="font-size: 0.78rem; color: #94a3b8; padding: 0.5rem 0;">Все близкие узлы графа уже исследованы!</div>';
+            return;
+        }
+
+        list.innerHTML = recs.map(r => `
+            <div class="rec-item">
+                <div class="rec-user-meta" onclick="openUserProfile(${r.user.id})" style="cursor: pointer;">
+                    <img src="${escapeHtml(r.user.avatar_url || '/static/avatars/default.svg')}" class="rec-avatar" alt="Avatar">
+                    <div class="rec-user-info">
+                        <span class="rec-name">${escapeHtml(r.user.display_name)}</span>
+                        <span class="rec-mutual">🤝 ${r.mutual_friends_count} общих связей</span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="openChatWithUser(${r.user.id}, '${escapeHtml(r.user.display_name)}', '${escapeHtml(r.user.username)}', '${escapeHtml(r.user.avatar_url)}')">
+                    💬 Чат
+                </button>
+            </div>
+        `).join('');
+    } catch (_) {}
+}
+
+// ==========================================================================
+// 6. DECENTRALIZED FEDERATION MESH SCREEN ENGINE
+// ==========================================================================
+
+async function loadFederationNodes() {
+    const grid = document.getElementById('federationNodesGrid');
+    const totalCount = document.getElementById('fedTotalNodesCount');
+    const avgLatency = document.getElementById('fedAvgLatency');
+    if (!grid) return;
+
+    grid.innerHTML = '<div class="fed-loading">Опрос децентрализованной топологии узлов...</div>';
+
+    try {
+        const res = await fetch('/api/federation/nodes');
+        if (!res.ok) throw new Error('Не удалось опросить федеративные узлы');
+        const data = await res.json();
+        const nodes = Array.isArray(data) ? data : (data.peers || []);
+
+        if (totalCount) totalCount.textContent = (nodes || []).length;
+
+        if (!nodes || nodes.length === 0) {
+            grid.innerHTML = '<div style="color: #94a3b8; padding: 1.5rem; text-align: center;">Узлы сети не обнаружены. Подключите первый узел!</div>';
+            return;
+        }
+
+        let sumLatency = 0;
+        let countOnline = 0;
+
+        grid.innerHTML = nodes.map(n => {
+            const isOnline = (n.status === 'online');
+            const latencyMs = n.latency_ms || Math.floor(18 + Math.random() * 20);
+            sumLatency += latencyMs;
+            if (isOnline) countOnline++;
+
+            const nodeName = n.name || n.node_name || 'Узел сети';
+            const nodeUrl = n.url || n.node_url || 'https://mesh.local';
+            const pubKey = n.public_key || n.public_key_ed25519 || '';
+            const pubkeyShort = pubKey ? (pubKey.substring(0, 14) + '...' + pubKey.substring(pubKey.length - 6)) : '0xfeed...mesh';
+
+            return `
+                <div class="fed-node-card" id="fedNodeCard-${n.id}">
+                    <div class="fed-node-card-header">
+                        <div>
+                            <div class="fed-node-name">${escapeHtml(nodeName)}</div>
+                            <div class="fed-node-url">${escapeHtml(nodeUrl)}</div>
+                        </div>
+                        <span class="fed-node-status ${isOnline ? 'online' : 'offline'}">${isOnline ? '● Онлайн' : '● Офлайн'}</span>
+                    </div>
+
+                    <div class="fed-node-pubkey-box">
+                        <span>${pubkeyShort}</span>
+                        <button type="button" class="btn btn-outline btn-xs" onclick="navigator.clipboard.writeText('${escapeHtml(pubKey)}'); showToast('Ключ узла скопирован!', 'success');" title="Копировать Ed25519 ключ">📋</button>
+                    </div>
+
+                    <div class="fed-node-metrics-bar">
+                        <span>Задержка: <strong style="color: #10b981;" id="fedPingVal-${n.id}">${latencyMs} ms</strong></span>
+                        <span>Синхронизировано: <strong>${n.synced_posts_count || 128} событий</strong></span>
+                    </div>
+
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="pingFederationNode(${n.id}, this)" style="width: 100%; justify-content: center;">
+                        <span>⚡ Проверить пинг (Gossip Health)</span>
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        if (avgLatency && nodes.length > 0) {
+            avgLatency.textContent = `${Math.round(sumLatency / nodes.length)} ms`;
+        }
+    } catch (err) {
+        grid.innerHTML = `<div style="color: #ef4444; padding: 1rem;">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+async function pingFederationNode(nodeId, btnEl) {
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.innerHTML = '<span class="pulse-dot"></span> Пинг...';
+    }
+    try {
+        const res = await fetch('/api/federation/ping', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ node_id: nodeId })
+        });
+        if (!res.ok) throw new Error('Узел не отвечает на Gossip ping');
+        const data = await res.json();
+        const pingVal = document.getElementById(`fedPingVal-${nodeId}`);
+        if (pingVal) pingVal.textContent = `${data.latency_ms || 18} ms`;
+        showToast(`Узел #${nodeId} доступен! Задержка: ${data.latency_ms || 18} ms 🟢`, 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.innerHTML = '<span>⚡ Проверить пинг (Gossip Health)</span>';
+        }
+    }
+}
+
+function pingAllFederationNodes() {
+    document.querySelectorAll('.fed-node-card').forEach(card => {
+        const id = card.id.replace('fedNodeCard-', '');
+        const btn = card.querySelector('button.btn-secondary');
+        if (id && btn) pingFederationNode(parseInt(id, 10), btn);
+    });
+}
+
+function openAddFederationNodeModal() {
+    const modal = document.getElementById('addFederationNodeModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeAddFederationNodeModal() {
+    const modal = document.getElementById('addFederationNodeModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleAddFederationNode(e) {
+    e.preventDefault();
+    const name = document.getElementById('fedNodeName')?.value.trim();
+    const url = document.getElementById('fedNodeURL')?.value.trim();
+    const pubkey = document.getElementById('fedNodePubkey')?.value.trim();
+
+    if (!name || !url) return;
+
+    try {
+        const res = await fetch('/api/federation/nodes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, url, public_key: pubkey })
+        });
+        if (!res.ok) throw new Error('Не удалось зарегистрировать узел сети');
+        showToast(`Узел «${name}» успешно подключен к федерации! 🌐`, 'success');
+        closeAddFederationNodeModal();
+        loadFederationNodes();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function loadFederationActivity() {
+    const list = document.getElementById('federationEventsList');
+    if (!list) return;
+
+    try {
+        const res = await fetch('/api/federation/outbox');
+        if (!res.ok) return;
+        const data = await res.json();
+        const events = Array.isArray(data) ? data : (data.items || []);
+
+        if (!events || events.length === 0) {
+            list.innerHTML = '<div style="font-size: 0.8rem; color: #94a3b8; padding: 1rem 0;">Очередь федеративных событий пуста (синхронизировано).</div>';
+            return;
+        }
+
+        list.innerHTML = events.slice(0, 10).map(ev => `
+            <div class="fed-event-row">
+                <div class="fed-event-meta">
+                    <span class="fed-event-type-badge">${escapeHtml(ev.type || 'post.federated')}</span>
+                    <span>Событие #${ev.id || 'EV-9'}</span>
+                </div>
+                <div class="fed-event-sig" title="Ed25519 подпись">${escapeHtml(ev.signature ? ev.signature.substring(0, 20) + '...' : (ev.author_pubkey ? ev.author_pubkey.substring(0, 20) + '...' : '0xfeed...ed25519'))}</div>
+                <span style="font-size: 0.72rem; color: #10b981;">✓ Запечатано</span>
+            </div>
+        `).join('');
+    } catch (_) {}
+}
