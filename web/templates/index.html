@@ -1061,7 +1061,7 @@
 
             <div class="modal-actions-row" style="margin-top: 1.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
                 <button type="button" class="btn btn-outline btn-sm" onclick="closeEditProfileModal(); handleLogout();" style="border-color: rgba(244, 63, 94, 0.45); color: #f43f5e;" title="Выйти из аккаунта">
-                    <span>🚪 Выйти из аккаунта</span>
+                    <img src="/static/icons/logout.png" class="btn-icon-img" alt="Выйти"><span>Выйти из аккаунта</span>
                 </button>
                 <div style="display: flex; gap: 0.75rem;">
                     <button type="button" class="btn btn-secondary" onclick="closeEditProfileModal()">Отмена</button>
@@ -1094,38 +1094,38 @@
 
         <nav class="hud-nav">
             <button class="hud-nav-item active" id="tabNavFeed" onclick="navigateTo('feed')">
-                <span class="hud-nav-icon">🏠</span>
+                <span class="hud-nav-icon"><img src="/static/icons/feed.png" class="hud-nav-img" alt="Лента"></span>
                 <span class="hud-nav-label">Лента</span>
             </button>
             
             <button class="hud-nav-item" id="tabNavMessages" onclick="navigateTo('messages')">
-                <span class="hud-nav-icon">💬</span>
+                <span class="hud-nav-icon"><img src="/static/icons/messages.png" class="hud-nav-img" alt="Сообщения"></span>
                 <span class="hud-nav-label">Сообщения</span>
                 <span class="hud-nav-badge" id="hudMessagesBadge" style="{{if gt .UnreadMessagesCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadMessagesCount}}</span>
             </button>
             <button class="hud-nav-item" id="tabNavChannels" onclick="navigateTo('channels')">
-                <span class="hud-nav-icon">📢</span>
+                <span class="hud-nav-icon"><img src="/static/icons/channels.png" class="hud-nav-img" alt="Каналы"></span>
                 <span class="hud-nav-label">Каналы</span>
             </button>
             <button class="hud-nav-item" id="tabNavAchievements" onclick="navigateTo('achievements')">
-                <span class="hud-nav-icon">🏆</span>
+                <span class="hud-nav-icon"><img src="/static/icons/achievements.png" class="hud-nav-img" alt="Достижения"></span>
                 <span class="hud-nav-label">Достижения</span>
                 <span class="hud-nav-badge achieve-lvl-badge" id="hudNavLevelBadge" style="display: none;">1 ур.</span>
             </button>
             <button class="hud-nav-item" id="tabNavGifts" onclick="navigateTo('showcase')">
-                <span class="hud-nav-icon">🎁</span>
+                <span class="hud-nav-icon"><img src="/static/icons/gifts.png" class="hud-nav-img" alt="Подарки"></span>
                 <span class="hud-nav-label">Подарки</span>
             </button>
             <button class="hud-nav-item" id="tabNavGraph" onclick="navigateTo('graph')">
-                <span class="hud-nav-icon">🌐</span>
+                <span class="hud-nav-icon"><img src="/static/icons/graph.png" class="hud-nav-img" alt="Граф связей"></span>
                 <span class="hud-nav-label">Граф связей</span>
             </button>
             <button class="hud-nav-item" id="tabNavFederation" onclick="navigateTo('federation')">
-                <span class="hud-nav-icon">⚡</span>
+                <span class="hud-nav-icon"><img src="/static/icons/federation.png" class="hud-nav-img" alt="Федерация"></span>
                 <span class="hud-nav-label">Федерация</span>
             </button>
             <button class="hud-nav-item" id="tabNavProfile" onclick="navigateTo('my-profile')">
-                <span class="hud-nav-icon">👤</span>
+                <span class="hud-nav-icon"><img src="/static/icons/profile.png" class="hud-nav-img" alt="Профиль"></span>
                 <span class="hud-nav-label">Профиль</span>
             </button>
 
@@ -1150,7 +1150,7 @@
                     <span class="hud-user-handle">@{{.CurrentUser.Username}}</span>
                 </div>
                 <button class="hud-logout-btn" onclick="event.stopPropagation(); handleLogout();" title="Выйти из аккаунта">
-                    <span>🚪</span>
+                    <img src="/static/icons/logout.png" class="hud-logout-img" alt="Выйти">
                 </button>
             </div>
             {{else}}
@@ -1169,7 +1169,7 @@
         <!-- ВЕРХНЯЯ СТРОКА НАВИГАЦИИ И ПОИСКА -->
         <header class="top-sensor-bar">
             <div class="sensor-search-wrapper">
-                <span class="search-symbol" onclick="executeSearch()" style="cursor: pointer;" title="Искать">🔍</span>
+                <span class="search-symbol" onclick="executeSearch()" style="cursor: pointer;" title="Искать"><img src="/static/icons/search.png" class="header-search-img" alt="Поиск"></span>
                 <input type="text" id="searchInput" placeholder="Поиск записей, каналов, авторов, #тегов..." value="{{if .TagQuery}}{{.TagQuery}}{{else}}{{.SearchQuery}}{{end}}" onkeydown="if(event.key==='Enter') executeSearch()" autocomplete="off">
                 {{if or .SearchQuery .TagQuery}}
                 <button class="search-clear-btn" onclick="clearSearch()" title="Сбросить">✕</button>
@@ -1252,21 +1252,21 @@
 
                 <!-- Кнопка Уведомлений -->
                 <button class="header-icon-btn" onclick="toggleNotificationsPanel()" title="Уведомления">
-                    <span class="header-icon">🔔</span>
+                    <span class="header-icon"><img src="/static/icons/notifications.png" class="header-icon-img" alt="Уведомления"></span>
                     <span class="header-badge" id="headerNotifBadge" style="{{if gt .UnreadNotifsCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadNotifsCount}}</span>
                 </button>
 
                 <!-- Кнопка Сообщений -->
                 <button class="header-icon-btn" onclick="navigateTo('messages')" title="Сообщения">
-                    <span class="header-icon">💬</span>
+                    <span class="header-icon"><img src="/static/icons/messages.png" class="header-icon-img" alt="Сообщения"></span>
                     <span class="header-badge" id="headerMessagesBadge" style="{{if gt .UnreadMessagesCount 0}}display: inline-flex;{{else}}display: none;{{end}}">{{.UnreadMessagesCount}}</span>
                 </button>
 
                 <div class="telemetry-clock" id="telemetryClock">GoSocial</div>
 
                 {{if .IsAuthenticated}}
-                <button type="button" class="btn btn-secondary btn-sm header-logout-btn" onclick="handleLogout()" title="Выйти из аккаунта" style="margin-left: 0.5rem; display: inline-flex; align-items: center; gap: 5px; border-color: rgba(244, 63, 94, 0.4); color: #f43f5e; padding: 5px 12px; font-weight: 600;">
-                    <span>🚪</span>
+                <button type="button" class="btn btn-secondary btn-sm header-logout-btn" onclick="handleLogout()" title="Выйти из аккаунта" style="margin-left: 0.5rem; display: inline-flex; align-items: center; gap: 6px; border-color: rgba(244, 63, 94, 0.4); color: #f43f5e; padding: 5px 12px; font-weight: 600;">
+                    <img src="/static/icons/logout.png" class="header-logout-img" alt="Выйти">
                     <span>Выйти</span>
                 </button>
                 {{else}}
@@ -1393,7 +1393,7 @@
                                 <div class="composer-left-tools">
                                     <!-- Кнопка загрузки файла с диска -->
                                     <button type="button" class="tool-btn btn-attach-disk" onclick="document.getElementById('composerFileInput').click()" title="Загрузить фото или файл с компьютера">
-                                        <span>📷 Фото / Файл</span>
+                                        <img src="/static/icons/photo.png" class="btn-icon-img" alt="Фото"><span>Фото / Файл</span>
                                     </button>
                                     <input type="file" id="composerFileInput" style="display: none;" accept="image/*,.pdf,.doc,.docx,.txt,.zip" onchange="handleComposerFileUpload(event)">
 
@@ -1756,7 +1756,8 @@
                             <span class="tab-badge" id="badgeProfPosts">0</span>
                         </button>
                         <button class="tab-btn" id="profTabBtnGifts" onclick="switchProfileTab('gifts')">
-                            <span>🎁 Подарки</span>
+                            <img src="/static/icons/gifts.png" class="btn-icon-img" alt="Подарки">
+                            <span>Подарки</span>
                             <span class="tab-badge" id="badgeProfGifts">0</span>
                         </button>
                         <button class="tab-btn" id="profTabBtnNetwork" onclick="switchProfileTab('network')">
@@ -1865,7 +1866,7 @@
                                     <div class="composer-left-tools">
                                         <!-- Кнопка загрузки фото с диска -->
                                         <button type="button" class="tool-btn btn-attach-disk" onclick="document.getElementById('profFileInput').click()" title="Загрузить фото с компьютера">
-                                            <span>📷 Фото</span>
+                                            <img src="/static/icons/photo.png" class="btn-icon-img" alt="Фото"><span>Фото</span>
                                         </button>
                                         <input type="file" id="profFileInput" style="display: none;" accept="image/*,.jpg,.jpeg,.png,.webp,.gif" onchange="handleProfComposerFileUpload(event)">
 
@@ -1984,10 +1985,12 @@
                         <!-- Переключатель категорий диалогов: Личные / Каналы -->
                         <div class="chat-scope-tabs">
                             <button type="button" class="chat-scope-tab active" id="chatScopeDirect" onclick="switchChatScope('direct')">
-                                <span>💬 Личные</span>
+                                <img src="/static/icons/messages.png" class="btn-icon-img" alt="Личные">
+                                <span>Личные</span>
                             </button>
                             <button type="button" class="chat-scope-tab" id="chatScopeChannels" onclick="switchChatScope('channels')">
-                                <span>📢 Каналы</span>
+                                <img src="/static/icons/channels.png" class="btn-icon-img" alt="Каналы">
+                                <span>Каналы</span>
                                 <span class="chat-scope-badge" id="chatScopeChannelsBadge" style="display: none;">0</span>
                             </button>
                         </div>
@@ -2042,7 +2045,7 @@
                                         <span id="chatSoundIcon">🔊</span>
                                     </button>
                                     <button type="button" class="btn btn-secondary btn-sm" id="btnToggleChatSearch" onclick="toggleChatSearch()" title="Поиск в этом диалоге">
-                                        <span>🔍</span>
+                                        <img src="/static/icons/search.png" class="btn-icon-img" alt="Поиск">
                                     </button>
                                     <button type="button" class="btn btn-secondary btn-sm" id="btnToggleMsgSelect" onclick="toggleChatSelectionMode()" title="Выделить сообщения для групповых действий">
                                         <span>Выбрать</span>
@@ -2056,7 +2059,7 @@
                             <!-- Инлайн-поиск по диалогу -->
                             <div id="chatSearchInDialogBar" class="chat-search-in-dialog-bar" style="display: none;">
                                 <div class="chat-search-field-wrap">
-                                    <span class="search-icon">🔍</span>
+                                    <span class="search-icon"><img src="/static/icons/search.png" class="search-symbol-img" alt="Поиск"></span>
                                     <input type="text" id="chatSearchInDialogInput" placeholder="Поиск сообщений в переписке..." oninput="handleChatSearchInDialog(event)">
                                 </div>
                                 <button type="button" class="btn btn-secondary btn-sm" onclick="toggleChatSearch()" title="Закрыть поиск">✕</button>
@@ -2165,7 +2168,7 @@
 
                     <!-- Поиск каналов -->
                     <div class="channels-search-bar">
-                        <span class="channels-search-icon">🔍</span>
+                        <span class="channels-search-icon"><img src="/static/icons/search.png" class="search-symbol-img" alt="Поиск"></span>
                         <input type="text" id="channelsSearchInput" placeholder="Поиск каналов по названию, описанию или @юзернейму..." oninput="handleChannelsSearch(event)">
                     </div>
 
@@ -2340,7 +2343,7 @@
                             <div class="composer-actions-bar">
                                 <div class="composer-actions-left">
                                     <button type="button" class="composer-action-pill" onclick="document.getElementById('channelComposerFileInput').click()">
-                                        <span class="pill-icon">📷</span> Фото
+                                        <img src="/static/icons/photo.png" class="btn-icon-img" alt="Фото"> <span>Фото</span>
                                     </button>
                                     <button type="button" class="composer-action-pill" onclick="toggleChannelComposerMusicBox()">
                                         <span class="pill-icon">🎵</span> Музыка
@@ -2607,7 +2610,7 @@
                     <!-- Панель управления графом -->
                     <div class="graph-toolbar">
                         <div class="graph-search-box">
-                            <span class="graph-search-icon">🔍</span>
+                            <span class="graph-search-icon"><img src="/static/icons/search.png" class="search-symbol-img" alt="Поиск"></span>
                             <input type="text" id="graphSearchInput" placeholder="Поиск пользователя в графе..." oninput="handleGraphSearch(event)">
                         </div>
                         <div class="graph-filter-modes">

@@ -305,23 +305,50 @@ input:focus, textarea:focus, select:focus {
     color: var(--text-secondary);
     font-weight: 600;
     font-size: 0.95rem;
-    transition: all 0.15s ease;
+    border: 1px solid transparent;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
+    cursor: pointer;
 }
 
 .hud-nav-item:hover {
-    background-color: var(--bg-surface);
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.12) 0%, rgba(18, 24, 38, 0.85) 100%);
     color: var(--text-pure);
+    border-color: rgba(0, 240, 255, 0.38);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4), inset 0 0 12px rgba(0, 240, 255, 0.08);
+    transform: translateX(4px);
+}
+
+.hud-nav-item:hover .hud-nav-img {
+    transform: scale(1.18) rotate(3deg);
+    filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.85)) brightness(1.25);
+}
+
+.hud-nav-item:hover .hud-nav-label {
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+.hud-nav-item:active {
+    transform: translateX(2px) scale(0.98);
 }
 
 .hud-nav-item.active {
-    background-color: var(--bg-surface);
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.16) 0%, rgba(18, 24, 38, 0.95) 100%);
     color: var(--text-pure);
-    box-shadow: inset 3px 0 0 var(--accent-primary);
+    border-color: rgba(0, 240, 255, 0.45);
+    box-shadow: inset 3px 0 0 var(--accent-primary), 0 0 15px rgba(0, 240, 255, 0.15);
+}
+
+.hud-nav-item.active .hud-nav-img {
+    filter: drop-shadow(0 0 6px var(--accent-primary)) brightness(1.18);
 }
 
 .hud-nav-icon {
     font-size: 1.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .hud-nav-label {
@@ -554,21 +581,37 @@ input:focus, textarea:focus, select:focus {
     height: 40px;
     border-radius: 50%;
     background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-secondary);
-    transition: all 0.15s ease;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
 }
 
 .header-icon-btn:hover {
     background-color: var(--bg-surface-hover);
     color: var(--text-pure);
-    transform: translateY(-1px);
+    border-color: rgba(0, 240, 255, 0.6);
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.35), inset 0 0 6px rgba(0, 240, 255, 0.15);
+    transform: translateY(-2px) scale(1.06);
+}
+
+.header-icon-btn:hover .header-icon-img {
+    transform: scale(1.2) rotate(-4deg);
+    filter: drop-shadow(0 0 8px var(--accent-primary)) brightness(1.3);
+}
+
+.header-icon-btn:active {
+    transform: translateY(0) scale(0.96);
 }
 
 .header-icon {
     font-size: 1.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .header-badge {
@@ -8712,4 +8755,245 @@ input:checked + .toggle-slider:before {
     letter-spacing: 2px;
 }
 
+/* ==========================================================================
+   Cyberpunk Custom Icons & Button Hover Micro-Interactions
+   ========================================================================== */
+
+/* HUD Sidebar Navigation Icons */
+.hud-nav-img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    vertical-align: middle;
+    display: inline-block;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+}
+
+/* Header Action Icons */
+.header-icon-img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    vertical-align: middle;
+    display: inline-block;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+}
+
+/* Header & Dialog Search Icons */
+.header-search-img {
+    width: 17px;
+    height: 17px;
+    object-fit: contain;
+    vertical-align: middle;
+    display: inline-block;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+}
+
+.search-symbol {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.25s ease;
+}
+
+.search-symbol:hover {
+    transform: scale(1.12);
+}
+
+.search-symbol:hover .header-search-img,
+.sensor-search-wrapper:hover .header-search-img,
+.sensor-search-wrapper:focus-within .header-search-img {
+    transform: scale(1.22) rotate(5deg);
+    filter: drop-shadow(0 0 8px var(--accent-primary)) brightness(1.3);
+}
+
+.search-symbol-img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    vertical-align: middle;
+    display: inline-block;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+}
+
+.chat-search-field-wrap:hover .search-symbol-img,
+.chat-search-field-wrap:focus-within .search-symbol-img,
+.channels-search-bar:hover .search-symbol-img,
+.channels-search-bar:focus-within .search-symbol-img,
+.graph-search-box:hover .search-symbol-img,
+.graph-search-box:focus-within .search-symbol-img {
+    transform: scale(1.2) rotate(4deg);
+    filter: drop-shadow(0 0 6px var(--accent-primary)) brightness(1.25);
+}
+
+/* Logout Icons & Buttons (Neon Crimson / Rose Glow) */
+.hud-logout-img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    vertical-align: middle;
+    display: inline-block;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+}
+
+.header-logout-img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    vertical-align: middle;
+    display: inline-block;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+}
+
+.hud-logout-btn {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hud-logout-btn:hover {
+    transform: scale(1.12);
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.45);
+    border-color: #f43f5e;
+}
+
+.hud-logout-btn:hover .hud-logout-img {
+    transform: scale(1.22) rotate(-5deg);
+    filter: drop-shadow(0 0 6px #f43f5e) brightness(1.3);
+}
+
+.header-logout-btn {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.header-logout-btn:hover {
+    transform: translateY(-2px) scale(1.04);
+    border-color: #f43f5e !important;
+    background: rgba(244, 63, 94, 0.16) !important;
+    box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
+    color: #ffffff !important;
+}
+
+.header-logout-btn:hover .header-logout-img {
+    transform: scale(1.22) rotate(-5deg);
+    filter: drop-shadow(0 0 6px #f43f5e) brightness(1.3);
+}
+
+.btn-logout-action {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-logout-action:hover {
+    transform: translateY(-2px) scale(1.03);
+    border-color: #f43f5e !important;
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
+}
+
+.btn-logout-action:hover .btn-icon-img {
+    transform: scale(1.22) rotate(-5deg);
+    filter: drop-shadow(0 0 6px #f43f5e) brightness(1.3);
+}
+
+/* Button Inline Icons & Micro-Interactions */
+.btn-icon-img {
+    width: 17px;
+    height: 17px;
+    object-fit: contain;
+    vertical-align: middle;
+    display: inline-block;
+    margin-right: 6px;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+}
+
+/* Photo / Media Attachment Buttons */
+.btn-attach-disk {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-flex;
+    align-items: center;
+}
+
+.btn-attach-disk:hover {
+    transform: translateY(-2px) scale(1.03);
+    border-color: rgba(0, 240, 255, 0.5) !important;
+    box-shadow: 0 0 14px rgba(0, 240, 255, 0.3);
+    color: #ffffff !important;
+}
+
+.btn-attach-disk:hover .btn-icon-img {
+    transform: scale(1.22) rotate(4deg);
+    filter: drop-shadow(0 0 8px var(--accent-primary)) brightness(1.3);
+}
+
+.composer-action-pill {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-flex;
+    align-items: center;
+}
+
+.composer-action-pill:hover {
+    transform: translateY(-2px) scale(1.04);
+    border-color: rgba(0, 240, 255, 0.5);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+}
+
+.composer-action-pill:hover .btn-icon-img {
+    transform: scale(1.2) rotate(4deg);
+    filter: drop-shadow(0 0 8px var(--accent-primary)) brightness(1.3);
+}
+
+/* Section Tabs Micro-Interactions */
+.tab-btn {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tab-btn:hover {
+    transform: translateY(-1px);
+    border-color: rgba(0, 240, 255, 0.4);
+}
+
+.tab-btn:hover .btn-icon-img {
+    transform: scale(1.2) rotate(3deg);
+    filter: drop-shadow(0 0 6px var(--accent-primary)) brightness(1.25);
+}
+
+/* Chat Scope Tabs (Direct / Channels) */
+.chat-scope-tab {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chat-scope-tab:hover {
+    transform: translateY(-1px);
+    border-color: rgba(0, 240, 255, 0.4);
+}
+
+.chat-scope-tab:hover .btn-icon-img {
+    transform: scale(1.2) rotate(3deg);
+    filter: drop-shadow(0 0 6px var(--accent-primary)) brightness(1.25);
+}
+
+/* In-Dialog Search Toggle Button */
+#btnToggleChatSearch {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#btnToggleChatSearch:hover {
+    transform: translateY(-1px) scale(1.05);
+    border-color: rgba(0, 240, 255, 0.5);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+}
+
+#btnToggleChatSearch:hover .btn-icon-img {
+    transform: scale(1.22) rotate(4deg);
+    filter: drop-shadow(0 0 6px var(--accent-primary)) brightness(1.3);
+    margin-right: 0;
+}
 
