@@ -35,11 +35,26 @@ type Handler struct {
 	remoteGraphClient *graph.RemoteClient
 	hub             *events.Hub
 	tmpl            *template.Template
+	storyRepo       *repository.StoryRepository
+	collectionRepo  *repository.CollectionRepository
+	blockRepo       *repository.BlockRepository
 }
 
 // SetRemoteGraphClient подключает удаленный gRPC микросервис графа и ранжирования.
 func (h *Handler) SetRemoteGraphClient(client *graph.RemoteClient) {
 	h.remoteGraphClient = client
+}
+
+func (h *Handler) SetStoryRepo(r *repository.StoryRepository) {
+	h.storyRepo = r
+}
+
+func (h *Handler) SetCollectionRepo(r *repository.CollectionRepository) {
+	h.collectionRepo = r
+}
+
+func (h *Handler) SetBlockRepo(r *repository.BlockRepository) {
+	h.blockRepo = r
 }
 
 func NewHandler(
@@ -67,6 +82,15 @@ func NewHandler(
 		tmpl = template.Must(template.New("index.html").Parse("<!DOCTYPE html><html><body>{{.CurrentUser.Username}}</body></html>"))
 	}
 
+	var storyRepo *repository.StoryRepository
+	var collectionRepo *repository.CollectionRepository
+	var blockRepo *repository.BlockRepository
+	if userRepo != nil && userRepo.DB() != nil {
+		storyRepo = repository.NewStoryRepository(userRepo.DB())
+		collectionRepo = repository.NewCollectionRepository(userRepo.DB())
+		blockRepo = repository.NewBlockRepository(userRepo.DB())
+	}
+
 	return &Handler{
 		userRepo:        userRepo,
 		postRepo:        postRepo,
@@ -83,6 +107,9 @@ func NewHandler(
 		federationSvc:   federationSvc,
 		hub:             hub,
 		tmpl:            tmpl,
+		storyRepo:       storyRepo,
+		collectionRepo:  collectionRepo,
+		blockRepo:       blockRepo,
 	}, nil
 }
 

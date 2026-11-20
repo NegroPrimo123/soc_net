@@ -543,7 +543,7 @@ func (h *Handler) SendChannelMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cID := channelID
-	msg, err := h.messageRepo.SendMessage(authUser.ID, receiverID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist, &cID, isFromChannel, req.PollID, req.IsEncrypted, req.Ciphertext, req.Nonce, req.SenderPubKey, req.ReceiverPubKey, req.KeyFingerprint)
+	msg, err := h.messageRepo.SendMessage(authUser.ID, receiverID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist, &cID, isFromChannel, req.PollID, req.IsEncrypted, req.Ciphertext, req.Nonce, req.SenderPubKey, req.ReceiverPubKey, req.KeyFingerprint, nil, false, "", 0)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

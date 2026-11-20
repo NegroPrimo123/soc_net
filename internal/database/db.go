@@ -514,6 +514,85 @@ func migrate(db *sql.DB) error {
 		return fmt.Errorf("failed to apply crypto/federation migrations: %w", err)
 	}
 
+	newFeaturesMigrations := `
+	-- =========================================================
+	-- ВРЕМЕННЫЕ ИСТОРИИ (STORIES, 24H)
+	-- =========================================================
+	CREATE TABLE IF NOT EXISTS stories (
+		id SERIAL PRIMARY KEY,
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		media_url TEXT DEFAULT '',
+		caption TEXT DEFAULT '',
+		bg_gradient VARCHAR(150) DEFAULT 'linear-gradient(135deg, #00f0ff 0%, #3b82f6 100%)',
+		views_count INT DEFAULT 0,
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '24 hours')
+	);
+	CREATE INDEX IF NOT EXISTS idx_stories_user_id ON stories(user_id);
+	CREATE INDEX IF NOT EXISTS idx_stories_expires_at ON stories(expires_at DESC);
+
+	CREATE TABLE IF NOT EXISTS story_views (
+		story_id INT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		viewed_at TIMESTAMPTZ DEFAULT NOW(),
+		PRIMARY KEY (story_id, user_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_story_views_user ON story_views(user_id);
+
+	-- =========================================================
+	-- РАСШИРЕНИЯ СООБЩЕНИЙ (ОТЛОЖЕННЫЕ, СКРЫТЫЕ, ИСЧЕЗАЮЩИЕ)
+	-- =========================================================
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ DEFAULT NULL;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS hidden_hint VARCHAR(255) DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS self_destruct_seconds INT DEFAULT 0;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ DEFAULT NULL;
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_destroyed BOOLEAN DEFAULT FALSE;
+	CREATE INDEX IF NOT EXISTS idx_messages_scheduled ON messages(scheduled_at);
+	CREATE INDEX IF NOT EXISTS idx_messages_self_destruct ON messages(self_destruct_seconds, read_at) WHERE self_destruct_seconds > 0;
+
+	-- =========================================================
+	-- ЧЕРНЫЙ СПИСОК (USER BLACKLIST / BLOCKS)
+	-- =========================================================
+	CREATE TABLE IF NOT EXISTS user_blocks (
+		blocker_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		blocked_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		PRIMARY KEY (blocker_id, blocked_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_user_blocks_blocker ON user_blocks(blocker_id);
+	CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_id);
+
+	-- =========================================================
+	-- КОЛЛЕКЦИИ / ПОДБОРКИ (PINTEREST-LIKE BOARDS)
+	-- =========================================================
+	CREATE TABLE IF NOT EXISTS post_collections (
+		id SERIAL PRIMARY KEY,
+		user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		title VARCHAR(120) NOT NULL,
+		description TEXT DEFAULT '',
+		cover_url TEXT DEFAULT '',
+		is_public BOOLEAN DEFAULT TRUE,
+		posts_count INT DEFAULT 0,
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		updated_at TIMESTAMPTZ DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_post_collections_user ON post_collections(user_id, created_at DESC);
+
+	CREATE TABLE IF NOT EXISTS collection_posts (
+		collection_id INT NOT NULL REFERENCES post_collections(id) ON DELETE CASCADE,
+		post_id INT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+		added_at TIMESTAMPTZ DEFAULT NOW(),
+		PRIMARY KEY (collection_id, post_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_collection_posts_col ON collection_posts(collection_id, added_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_collection_posts_post ON collection_posts(post_id);
+	`
+	_, err = db.Exec(newFeaturesMigrations)
+	if err != nil {
+		return fmt.Errorf("failed to apply new features migrations: %w", err)
+	}
+
 	log.Println("Database schema migrations applied successfully.")
 	return nil
 }

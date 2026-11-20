@@ -24,7 +24,7 @@ func NewMessageRepository(db *sql.DB) *MessageRepository {
 
 }
 
-func (r *MessageRepository) SendMessage(senderID, receiverID int, content, audioURL, audioTitle, audioArtist string, channelID *int, isFromChannel bool, pollID *int, isEncrypted bool, ciphertext, nonce, senderPubKey, receiverPubKey, keyFingerprint string) (*models.Message, error) {
+func (r *MessageRepository) SendMessage(senderID, receiverID int, content, audioURL, audioTitle, audioArtist string, channelID *int, isFromChannel bool, pollID *int, isEncrypted bool, ciphertext, nonce, senderPubKey, receiverPubKey, keyFingerprint string, scheduledAt *time.Time, isHidden bool, hiddenHint string, selfDestructSeconds int) (*models.Message, error) {
 	if channelID == nil && senderID == receiverID {
 		return nil, fmt.Errorf("нельзя отправить сообщение самому себе")
 	}
@@ -43,16 +43,40 @@ func (r *MessageRepository) SendMessage(senderID, receiverID int, content, audio
 		if err != nil || !exists {
 			return nil, fmt.Errorf("получатель не найден")
 		}
+
+		// Проверка черного списка
+		var isBlocked bool
+		err = r.db.QueryRow(`
+			SELECT EXISTS(
+				SELECT 1 FROM user_blocks 
+				WHERE (blocker_id = $1 AND blocked_id = $2)
+				   OR (blocker_id = $2 AND blocked_id = $1)
+			)
+		`, senderID, receiverID).Scan(&isBlocked)
+		if err == nil && isBlocked {
+			return nil, fmt.Errorf("пользователь находится в черном списке")
+		}
 	}
 
 	query := `
-	INSERT INTO messages (sender_id, receiver_id, content, audio_url, audio_title, audio_artist, channel_id, is_from_channel, poll_id, is_read, is_encrypted, ciphertext, nonce, sender_pubkey, receiver_pubkey, key_fingerprint, created_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, FALSE, $10, $11, $12, $13, $14, $15, NOW())
+	INSERT INTO messages (
+		sender_id, receiver_id, content, audio_url, audio_title, audio_artist, 
+		channel_id, is_from_channel, poll_id, is_read, is_encrypted, ciphertext, 
+		nonce, sender_pubkey, receiver_pubkey, key_fingerprint, 
+		scheduled_at, is_hidden, hidden_hint, self_destruct_seconds, is_destroyed, created_at
+	)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, FALSE, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, FALSE, NOW())
 	RETURNING id, created_at
 	`
 	var msgID int
 	var createdAt time.Time
-	err := r.db.QueryRow(query, senderID, receiverID, content, audioURL, audioTitle, audioArtist, channelID, isFromChannel, pollID, isEncrypted, ciphertext, nonce, senderPubKey, receiverPubKey, keyFingerprint).Scan(&msgID, &createdAt)
+	err := r.db.QueryRow(
+		query, 
+		senderID, receiverID, content, audioURL, audioTitle, audioArtist, 
+		channelID, isFromChannel, pollID, isEncrypted, ciphertext, nonce, 
+		senderPubKey, receiverPubKey, keyFingerprint,
+		scheduledAt, isHidden, hiddenHint, selfDestructSeconds,
+	).Scan(&msgID, &createdAt)
 	if err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
 	}
@@ -66,6 +90,7 @@ func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 		m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
 		m.channel_id, COALESCE(m.is_from_channel, FALSE), m.poll_id,
 		COALESCE(m.is_encrypted, FALSE), COALESCE(m.ciphertext, ''), COALESCE(m.nonce, ''), COALESCE(m.sender_pubkey, ''), COALESCE(m.receiver_pubkey, ''), COALESCE(m.key_fingerprint, ''),
+		m.scheduled_at, COALESCE(m.is_hidden, FALSE), COALESCE(m.hidden_hint, ''), COALESCE(m.self_destruct_seconds, 0), m.read_at, COALESCE(m.is_destroyed, FALSE),
 		s.id, s.username, s.display_name, s.avatar_url, s.bio,
 		rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio,
 		COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, '')
@@ -84,6 +109,7 @@ func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 		&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.AudioURL, &m.AudioTitle, &m.AudioArtist, &m.IsRead, &m.IsEdited, &m.CreatedAt,
 		&m.ChannelID, &m.IsFromChannel, &m.PollID,
 		&m.IsEncrypted, &m.Ciphertext, &m.Nonce, &m.SenderPubKey, &m.ReceiverPubKey, &m.KeyFingerprint,
+		&m.ScheduledAt, &m.IsHidden, &m.HiddenHint, &m.SelfDestructSeconds, &m.ReadAt, &m.IsDestroyed,
 		&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
 		&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
 		&chName, &chHandle, &chAvatar,
@@ -125,12 +151,19 @@ func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 }
 
 func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limit int) ([]models.Message, error) {
-
 	if limit <= 0 {
-
 		limit = 100
-
 	}
+
+	// Автоматическое самоуничтожение прочитанных временных сообщений по истечении таймера
+	_, _ = r.db.Exec(`
+		UPDATE messages
+		SET is_destroyed = TRUE, content = '💥 Сообщение уничтожено'
+		WHERE self_destruct_seconds > 0 
+		  AND read_at IS NOT NULL 
+		  AND is_destroyed = FALSE
+		  AND (read_at + (self_destruct_seconds * INTERVAL '1 second')) < NOW()
+	`)
 
 	query := `
 	SELECT * FROM (
@@ -138,6 +171,7 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 			m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
 			m.channel_id, COALESCE(m.is_from_channel, FALSE), m.poll_id,
 			COALESCE(m.is_encrypted, FALSE), COALESCE(m.ciphertext, ''), COALESCE(m.nonce, ''), COALESCE(m.sender_pubkey, ''), COALESCE(m.receiver_pubkey, ''), COALESCE(m.key_fingerprint, ''),
+			m.scheduled_at, COALESCE(m.is_hidden, FALSE), COALESCE(m.hidden_hint, ''), COALESCE(m.self_destruct_seconds, 0), m.read_at, COALESCE(m.is_destroyed, FALSE),
 			s.id, s.username, s.display_name, s.avatar_url, s.bio,
 			rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio
 		FROM messages m
@@ -146,6 +180,7 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 		WHERE ((m.sender_id = $1 AND m.receiver_id = $2 AND COALESCE(m.deleted_for_sender, FALSE) = FALSE)
 		   OR  (m.sender_id = $2 AND m.receiver_id = $1 AND COALESCE(m.deleted_for_receiver, FALSE) = FALSE))
 		   AND m.channel_id IS NULL
+		   AND (m.scheduled_at IS NULL OR m.scheduled_at <= NOW())
 		ORDER BY m.created_at DESC
 		LIMIT $3
 	) sub
@@ -153,34 +188,27 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 	`
 
 	rows, err := r.db.Query(query, currentUserID, otherUserID, limit)
-
 	if err != nil {
-
 		return nil, fmt.Errorf("query conversation: %w", err)
-
 	}
-
 	defer rows.Close()
 
 	var messages []models.Message
 	var msgIDs []int
 
 	for rows.Next() {
-
 		var m models.Message
-
 		var s, rc models.User
 
 		if err := rows.Scan(
 			&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.AudioURL, &m.AudioTitle, &m.AudioArtist, &m.IsRead, &m.IsEdited, &m.CreatedAt,
 			&m.ChannelID, &m.IsFromChannel, &m.PollID,
 			&m.IsEncrypted, &m.Ciphertext, &m.Nonce, &m.SenderPubKey, &m.ReceiverPubKey, &m.KeyFingerprint,
+			&m.ScheduledAt, &m.IsHidden, &m.HiddenHint, &m.SelfDestructSeconds, &m.ReadAt, &m.IsDestroyed,
 			&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
 			&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
 		); err != nil {
-
 			return nil, fmt.Errorf("scan message: %w", err)
-
 		}
 
 		m.Sender = &s
@@ -206,21 +234,14 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 }
 
 func (r *MessageRepository) MarkAsRead(currentUserID, senderID int) error {
-
 	query := `
-
 	UPDATE messages
-
-	SET is_read = TRUE
-
+	SET is_read = TRUE,
+	    read_at = COALESCE(read_at, NOW())
 	WHERE receiver_id = $1 AND sender_id = $2 AND is_read = FALSE
-
 	`
-
 	_, err := r.db.Exec(query, currentUserID, senderID)
-
 	return err
-
 }
 
 func (r *MessageRepository) MarkChannelMessagesAsRead(channelID, subscriberID, currentUserID int) error {
@@ -760,5 +781,55 @@ func (r *MessageRepository) GetChannelConversation(channelID, subscriberID, curr
 	}
 
 	r.attachPollsToMessages(messages, currentUserID)
+	return messages, nil
+}
+
+// GetScheduledMessages возвращает отложенные сообщения, отправленные текущим пользователем собеседнику, которые еще не наступили.
+func (r *MessageRepository) GetScheduledMessages(senderID, receiverID int) ([]models.Message, error) {
+	query := `
+	SELECT 
+		m.id, m.sender_id, m.receiver_id, m.content, COALESCE(m.audio_url, ''), COALESCE(m.audio_title, ''), COALESCE(m.audio_artist, ''), m.is_read, COALESCE(m.is_edited, FALSE), m.created_at,
+		m.channel_id, COALESCE(m.is_from_channel, FALSE), m.poll_id,
+		COALESCE(m.is_encrypted, FALSE), COALESCE(m.ciphertext, ''), COALESCE(m.nonce, ''), COALESCE(m.sender_pubkey, ''), COALESCE(m.receiver_pubkey, ''), COALESCE(m.key_fingerprint, ''),
+		m.scheduled_at, COALESCE(m.is_hidden, FALSE), COALESCE(m.hidden_hint, ''), COALESCE(m.self_destruct_seconds, 0), m.read_at, COALESCE(m.is_destroyed, FALSE),
+		s.id, s.username, s.display_name, s.avatar_url, s.bio,
+		rc.id, rc.username, rc.display_name, rc.avatar_url, rc.bio
+	FROM messages m
+	JOIN users s ON s.id = m.sender_id
+	JOIN users rc ON rc.id = m.receiver_id
+	WHERE m.sender_id = $1 AND m.receiver_id = $2 
+	  AND m.scheduled_at IS NOT NULL AND m.scheduled_at > NOW() 
+	  AND m.channel_id IS NULL
+	ORDER BY m.scheduled_at ASC
+	`
+	rows, err := r.db.Query(query, senderID, receiverID)
+	if err != nil {
+		return nil, fmt.Errorf("query scheduled messages: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []models.Message
+	for rows.Next() {
+		var m models.Message
+		var s, rc models.User
+		if err := rows.Scan(
+			&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.AudioURL, &m.AudioTitle, &m.AudioArtist, &m.IsRead, &m.IsEdited, &m.CreatedAt,
+			&m.ChannelID, &m.IsFromChannel, &m.PollID,
+			&m.IsEncrypted, &m.Ciphertext, &m.Nonce, &m.SenderPubKey, &m.ReceiverPubKey, &m.KeyFingerprint,
+			&m.ScheduledAt, &m.IsHidden, &m.HiddenHint, &m.SelfDestructSeconds, &m.ReadAt, &m.IsDestroyed,
+			&s.ID, &s.Username, &s.DisplayName, &s.AvatarURL, &s.Bio,
+			&rc.ID, &rc.Username, &rc.DisplayName, &rc.AvatarURL, &rc.Bio,
+		); err != nil {
+			return nil, fmt.Errorf("scan scheduled message: %w", err)
+		}
+		m.Sender = &s
+		m.Receiver = &rc
+		m.Reactions = []models.MessageReaction{}
+		messages = append(messages, m)
+	}
+
+	if messages == nil {
+		messages = []models.Message{}
+	}
 	return messages, nil
 }
