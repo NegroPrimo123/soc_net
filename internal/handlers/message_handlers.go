@@ -321,6 +321,35 @@ func (h *Handler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// DestroyMessage немедленно самоуничтожает временное сообщение.
+func (h *Handler) DestroyMessage(w http.ResponseWriter, r *http.Request) {
+	currentUser := h.getUserFromRequest(r)
+	if currentUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "не авторизован"})
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 3 {
+			idStr = parts[2]
+		}
+	}
+	msgID, err := strconv.Atoi(idStr)
+	if err != nil || msgID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "неверный ID сообщения"})
+		return
+	}
+
+	if err := h.messageRepo.DestroyMessage(msgID, currentUser.ID); err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{"success": true, "status": "destroyed"})
+}
+
 func (h *Handler) BatchDeleteMessages(w http.ResponseWriter, r *http.Request) {
 	currentUser := h.getUserFromRequest(r)
 	if currentUser == nil {

@@ -150,6 +150,17 @@ func (r *MessageRepository) GetMessageByID(msgID int) (*models.Message, error) {
 	return &m, nil
 }
 
+// DestroyMessage окончательно самоуничтожает временное сообщение.
+func (r *MessageRepository) DestroyMessage(messageID, userID int) error {
+	query := `
+		UPDATE messages
+		SET is_destroyed = TRUE, content = '💥 Сообщение уничтожено'
+		WHERE id = $1 AND (sender_id = $2 OR receiver_id = $2)
+	`
+	_, err := r.db.Exec(query, messageID, userID)
+	return err
+}
+
 func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limit int) ([]models.Message, error) {
 	if limit <= 0 {
 		limit = 100
@@ -160,9 +171,11 @@ func (r *MessageRepository) GetConversation(currentUserID, otherUserID int, limi
 		UPDATE messages
 		SET is_destroyed = TRUE, content = '💥 Сообщение уничтожено'
 		WHERE self_destruct_seconds > 0 
-		  AND read_at IS NOT NULL 
 		  AND is_destroyed = FALSE
-		  AND (read_at + (self_destruct_seconds * INTERVAL '1 second')) < NOW()
+		  AND (
+		      (read_at IS NOT NULL AND (read_at + (self_destruct_seconds * INTERVAL '1 second')) <= NOW())
+		      OR (created_at + ((self_destruct_seconds + 30) * INTERVAL '1 second')) <= NOW()
+		  )
 	`)
 
 	query := `

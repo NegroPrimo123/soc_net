@@ -30,9 +30,23 @@ func (r *StoryRepository) CreateStory(userID int, req *models.CreateStoryRequest
 
 	expiresAt := time.Now().Add(time.Duration(durationHours) * time.Hour)
 
+	fontFamily := req.FontFamily
+	if fontFamily == "" {
+		fontFamily = "cyber"
+	}
+	textAlign := req.TextAlign
+	if textAlign == "" {
+		textAlign = "center"
+	}
+	textColor := req.TextColor
+	if textColor == "" {
+		textColor = "#ffffff"
+	}
+	sticker := req.Sticker
+
 	query := `
-		INSERT INTO stories (user_id, media_url, caption, bg_gradient, views_count, created_at, expires_at)
-		VALUES ($1, $2, $3, $4, 0, NOW(), $5)
+		INSERT INTO stories (user_id, media_url, caption, bg_gradient, font_family, text_align, text_color, sticker, views_count, created_at, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, NOW(), $9)
 		RETURNING id, created_at, expires_at
 	`
 	var story models.Story
@@ -40,8 +54,12 @@ func (r *StoryRepository) CreateStory(userID int, req *models.CreateStoryRequest
 	story.MediaURL = req.MediaURL
 	story.Caption = req.Caption
 	story.BgGradient = bgGradient
+	story.FontFamily = fontFamily
+	story.TextAlign = textAlign
+	story.TextColor = textColor
+	story.Sticker = sticker
 
-	err := r.db.QueryRow(query, userID, req.MediaURL, req.Caption, bgGradient, expiresAt).
+	err := r.db.QueryRow(query, userID, req.MediaURL, req.Caption, bgGradient, fontFamily, textAlign, textColor, sticker, expiresAt).
 		Scan(&story.ID, &story.CreatedAt, &story.ExpiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("create story: %w", err)
@@ -55,7 +73,9 @@ func (r *StoryRepository) GetStoryByID(storyID, viewerUserID int) (*models.Story
 	query := `
 		SELECT 
 			s.id, s.user_id, COALESCE(s.media_url, ''), COALESCE(s.caption, ''), 
-			COALESCE(s.bg_gradient, ''), s.views_count, s.created_at, s.expires_at,
+			COALESCE(s.bg_gradient, ''), COALESCE(s.font_family, 'cyber'),
+			COALESCE(s.text_align, 'center'), COALESCE(s.text_color, '#ffffff'),
+			COALESCE(s.sticker, ''), s.views_count, s.created_at, s.expires_at,
 			u.id, u.username, u.display_name, u.avatar_url,
 			EXISTS(SELECT 1 FROM story_views sv WHERE sv.story_id = s.id AND sv.user_id = $2) as is_viewed
 		FROM stories s
@@ -66,7 +86,8 @@ func (r *StoryRepository) GetStoryByID(storyID, viewerUserID int) (*models.Story
 	var u models.User
 	err := r.db.QueryRow(query, storyID, viewerUserID).Scan(
 		&st.ID, &st.UserID, &st.MediaURL, &st.Caption,
-		&st.BgGradient, &st.ViewsCount, &st.CreatedAt, &st.ExpiresAt,
+		&st.BgGradient, &st.FontFamily, &st.TextAlign, &st.TextColor, &st.Sticker,
+		&st.ViewsCount, &st.CreatedAt, &st.ExpiresAt,
 		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL,
 		&st.IsViewed,
 	)
@@ -82,7 +103,9 @@ func (r *StoryRepository) GetActiveStories(viewerUserID int) ([]models.StoryGrou
 	query := `
 		SELECT 
 			s.id, s.user_id, COALESCE(s.media_url, ''), COALESCE(s.caption, ''), 
-			COALESCE(s.bg_gradient, ''), s.views_count, s.created_at, s.expires_at,
+			COALESCE(s.bg_gradient, ''), COALESCE(s.font_family, 'cyber'),
+			COALESCE(s.text_align, 'center'), COALESCE(s.text_color, '#ffffff'),
+			COALESCE(s.sticker, ''), s.views_count, s.created_at, s.expires_at,
 			u.id, u.username, u.display_name, u.avatar_url,
 			EXISTS(SELECT 1 FROM story_views sv WHERE sv.story_id = s.id AND sv.user_id = $1) as is_viewed
 		FROM stories s
@@ -105,7 +128,8 @@ func (r *StoryRepository) GetActiveStories(viewerUserID int) ([]models.StoryGrou
 		var u models.User
 		if err := rows.Scan(
 			&st.ID, &st.UserID, &st.MediaURL, &st.Caption,
-			&st.BgGradient, &st.ViewsCount, &st.CreatedAt, &st.ExpiresAt,
+			&st.BgGradient, &st.FontFamily, &st.TextAlign, &st.TextColor, &st.Sticker,
+			&st.ViewsCount, &st.CreatedAt, &st.ExpiresAt,
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL,
 			&st.IsViewed,
 		); err != nil {

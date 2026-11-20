@@ -709,6 +709,10 @@ type Story struct {
 	MediaURL   string    `json:"media_url"`
 	Caption    string    `json:"caption"`
 	BgGradient string    `json:"bg_gradient"`
+	FontFamily string    `json:"font_family"`
+	TextAlign  string    `json:"text_align"`
+	TextColor  string    `json:"text_color"`
+	Sticker    string    `json:"sticker"`
 	ViewsCount int       `json:"views_count"`
 	CreatedAt  time.Time `json:"created_at"`
 	ExpiresAt  time.Time `json:"expires_at"`
@@ -727,6 +731,10 @@ type CreateStoryRequest struct {
 	MediaURL      string `json:"media_url"`
 	Caption       string `json:"caption"`
 	BgGradient    string `json:"bg_gradient"`
+	FontFamily    string `json:"font_family,omitempty"`
+	TextAlign     string `json:"text_align,omitempty"`
+	TextColor     string `json:"text_color,omitempty"`
+	Sticker       string `json:"sticker,omitempty"`
 	DurationHours int    `json:"duration_hours,omitempty"`
 }
 

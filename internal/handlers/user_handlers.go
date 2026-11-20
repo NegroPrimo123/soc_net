@@ -75,6 +75,33 @@ func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Проверка черного списка: если пользователь заблокирован, отдаем пустой профиль
+	var isBlockedByTarget, isBlockedByMe bool
+	if currentUserID > 0 && currentUserID != profileUserID && h.blockRepo != nil {
+		isBlockedByTarget, _ = h.blockRepo.IsUserBlocked(profileUserID, currentUserID)
+		isBlockedByMe, _ = h.blockRepo.IsUserBlocked(currentUserID, profileUserID)
+	}
+
+	if isBlockedByTarget || isBlockedByMe {
+		censoredUser := models.User{
+			ID:          targetUser.ID,
+			Username:    targetUser.Username,
+			DisplayName: "Пользователь ограничил доступ",
+			AvatarURL:   "/static/avatars/default.svg",
+			Bio:         "Профиль скрыт настройками приватности или блокировкой.",
+		}
+		respondJSON(w, http.StatusOK, ProfileDataResponse{
+			User:        censoredUser,
+			Posts:       []models.Post{},
+			Gifts:       []models.Gift{},
+			Followers:   []models.User{},
+			Following:   []models.User{},
+			IsOwner:     false,
+			IsFollowing: false,
+		})
+		return
+	}
+
 	// Синхронизируем актуальный уровень и опыт пользователя для мгновенного корректного отображения в профиле
 	if achieveData, achErr := h.achievementRepo.GetAchievements(profileUserID); achErr == nil && achieveData != nil {
 		targetUser.ExperiencePoints = achieveData.TotalPointsEarned

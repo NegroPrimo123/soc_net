@@ -64,6 +64,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/messages/{id}/edit", h.UpdateMessage)
 	mux.HandleFunc("DELETE /api/messages/{id}", h.DeleteMessage)
 	mux.HandleFunc("POST /api/messages/{id}/delete", h.DeleteMessage)
+	mux.HandleFunc("POST /api/messages/{id}/destroy", h.DestroyMessage)
 	mux.HandleFunc("POST /api/messages/batch-delete", h.BatchDeleteMessages)
 	mux.HandleFunc("POST /api/messages/{id}/reactions", h.ToggleMessageReaction)
 

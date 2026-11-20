@@ -530,6 +530,10 @@ func migrate(db *sql.DB) error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_stories_user_id ON stories(user_id);
 	CREATE INDEX IF NOT EXISTS idx_stories_expires_at ON stories(expires_at DESC);
+	ALTER TABLE stories ADD COLUMN IF NOT EXISTS font_family VARCHAR(50) DEFAULT 'cyber';
+	ALTER TABLE stories ADD COLUMN IF NOT EXISTS text_align VARCHAR(20) DEFAULT 'center';
+	ALTER TABLE stories ADD COLUMN IF NOT EXISTS text_color VARCHAR(30) DEFAULT '#ffffff';
+	ALTER TABLE stories ADD COLUMN IF NOT EXISTS sticker VARCHAR(30) DEFAULT '';
 
 	CREATE TABLE IF NOT EXISTS story_views (
 		story_id INT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
