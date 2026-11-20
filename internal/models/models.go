@@ -704,20 +704,25 @@ type DegreesOfSeparationResponse struct {
 // ВРЕМЕННЫЕ ИСТОРИИ (STORIES, 24H)
 // =========================================================
 type Story struct {
-	ID         int       `json:"id"`
-	UserID     int       `json:"user_id"`
-	MediaURL   string    `json:"media_url"`
-	Caption    string    `json:"caption"`
-	BgGradient string    `json:"bg_gradient"`
-	FontFamily string    `json:"font_family"`
-	TextAlign  string    `json:"text_align"`
-	TextColor  string    `json:"text_color"`
-	Sticker    string    `json:"sticker"`
-	ViewsCount int       `json:"views_count"`
-	CreatedAt  time.Time `json:"created_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	User       *User     `json:"user,omitempty"`
-	IsViewed   bool      `json:"is_viewed"`
+	ID              int       `json:"id"`
+	UserID          int       `json:"user_id"`
+	MediaURL        string    `json:"media_url"`
+	Caption         string    `json:"caption"`
+	BgGradient      string    `json:"bg_gradient"`
+	FontFamily      string    `json:"font_family"`
+	TextAlign       string    `json:"text_align"`
+	TextColor       string    `json:"text_color"`
+	Sticker         string    `json:"sticker"`
+	TextPosition    string    `json:"text_position"`
+	StickerPosition string    `json:"sticker_position"`
+	TextStyle       string    `json:"text_style"`
+	TextSize        string    `json:"text_size"`
+	StickerSize     string    `json:"sticker_size"`
+	ViewsCount      int       `json:"views_count"`
+	CreatedAt       time.Time `json:"created_at"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	User            *User     `json:"user,omitempty"`
+	IsViewed        bool      `json:"is_viewed"`
 }
 
 type StoryGroup struct {
@@ -729,14 +734,19 @@ type StoryGroup struct {
 }
 
 type CreateStoryRequest struct {
-	MediaURL      string `json:"media_url"`
-	Caption       string `json:"caption"`
-	BgGradient    string `json:"bg_gradient"`
-	FontFamily    string `json:"font_family,omitempty"`
-	TextAlign     string `json:"text_align,omitempty"`
-	TextColor     string `json:"text_color,omitempty"`
-	Sticker       string `json:"sticker,omitempty"`
-	DurationHours int    `json:"duration_hours,omitempty"`
+	MediaURL        string `json:"media_url"`
+	Caption         string `json:"caption"`
+	BgGradient      string `json:"bg_gradient"`
+	FontFamily      string `json:"font_family,omitempty"`
+	TextAlign       string `json:"text_align,omitempty"`
+	TextColor       string `json:"text_color,omitempty"`
+	Sticker         string `json:"sticker,omitempty"`
+	TextPosition    string `json:"text_position,omitempty"`
+	StickerPosition string `json:"sticker_position,omitempty"`
+	TextStyle       string `json:"text_style,omitempty"`
+	TextSize        string `json:"text_size,omitempty"`
+	StickerSize     string `json:"sticker_size,omitempty"`
+	DurationHours   int    `json:"duration_hours,omitempty"`
 }
 
 // =========================================================

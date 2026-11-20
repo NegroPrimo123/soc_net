@@ -10139,48 +10139,88 @@ input:checked + .toggle-slider:before {
 }
 
 /* ==========================================================================
-   FEATURE: ПРЕВЬЮ ВИДЕО YOUTUBE В ЧАТЕ
+   FEATURE: МУЛЬТИПЛАТФОРМЕННЫЕ ПРЕВЬЮ ССЫЛОК В ЧАТЕ (RICH LINK PREVIEWS)
    ========================================================================== */
-.chat-yt-preview {
+.chat-rich-preview, .chat-yt-preview {
     margin-top: 8px;
     display: flex;
     flex-direction: column;
     max-width: 380px;
     background: #090d16;
-    border: 1px solid rgba(255, 0, 68, 0.35);
-    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
     overflow: hidden;
     cursor: pointer;
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
 }
 
-.chat-yt-preview:hover {
-    border-color: #ff0044;
-    box-shadow: 0 8px 28px rgba(255, 0, 68, 0.35);
+.chat-rich-preview:hover, .chat-yt-preview:hover {
     transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
 }
 
-.yt-thumb-box {
+/* Platform-specific Borders & Shadows */
+.platform-youtube:hover, .chat-yt-preview:hover { border-color: #ff0044; box-shadow: 0 8px 28px rgba(255, 0, 68, 0.35); }
+.platform-vk:hover { border-color: #2787f5; box-shadow: 0 8px 28px rgba(39, 135, 245, 0.35); }
+.platform-rutube:hover { border-color: #f43f5e; box-shadow: 0 8px 28px rgba(244, 63, 94, 0.35); }
+.platform-tiktok:hover { border-color: #00f0ff; box-shadow: 0 8px 28px rgba(0, 240, 255, 0.35); }
+.platform-twitch:hover { border-color: #a855f7; box-shadow: 0 8px 28px rgba(168, 85, 247, 0.35); }
+.platform-github:hover { border-color: #94a3b8; box-shadow: 0 8px 28px rgba(148, 163, 184, 0.3); }
+.platform-telegram:hover { border-color: #38bdf8; box-shadow: 0 8px 28px rgba(56, 189, 248, 0.35); }
+.platform-pinterest:hover { border-color: #e60023; box-shadow: 0 8px 28px rgba(230, 0, 35, 0.35); }
+
+.rich-thumb-box, .yt-thumb-box {
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
-    background: #000;
+    background: #040711;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.yt-thumb-img {
+.rich-thumb-placeholder {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(9, 13, 22, 0.95));
+}
+.vk-thumb { background: radial-gradient(circle at center, rgba(39, 135, 245, 0.18), transparent 70%), #0b1324; }
+.rutube-thumb { background: radial-gradient(circle at center, rgba(244, 63, 94, 0.18), transparent 70%), #1a080e; }
+.tiktok-thumb { background: radial-gradient(circle at center, rgba(0, 240, 255, 0.15), rgba(255, 0, 127, 0.1) 70%), #040711; }
+.twitch-thumb { background: radial-gradient(circle at center, rgba(168, 85, 247, 0.2), transparent 70%), #130a1e; }
+.github-thumb { background: radial-gradient(circle at center, rgba(255, 255, 255, 0.08), transparent 70%), #0d1117; }
+.tg-thumb { background: radial-gradient(circle at center, rgba(56, 189, 248, 0.2), transparent 70%), #081628; }
+.pin-thumb { background: radial-gradient(circle at center, rgba(230, 0, 35, 0.2), transparent 70%), #1c0508; }
+
+.rich-platform-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    transition: transform 0.25s ease;
+}
+
+.chat-rich-preview:hover .rich-platform-logo {
+    transform: scale(1.12);
+}
+
+.rich-thumb-img, .yt-thumb-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.3s ease;
 }
 
-.chat-yt-preview:hover .yt-thumb-img {
+.chat-rich-preview:hover .rich-thumb-img, .chat-yt-preview:hover .yt-thumb-img {
     transform: scale(1.05);
 }
 
-.yt-play-overlay {
+.rich-play-overlay, .yt-play-overlay {
     position: absolute;
     inset: 0;
     display: flex;
@@ -10190,11 +10230,11 @@ input:checked + .toggle-slider:before {
     transition: background 0.2s ease;
 }
 
-.chat-yt-preview:hover .yt-play-overlay {
+.chat-rich-preview:hover .rich-play-overlay, .chat-yt-preview:hover .yt-play-overlay {
     background: rgba(0, 0, 0, 0.15);
 }
 
-.yt-play-badge {
+.rich-play-badge, .yt-play-badge {
     width: 48px;
     height: 48px;
     border-radius: 50%;
@@ -10206,35 +10246,45 @@ input:checked + .toggle-slider:before {
     transition: transform 0.2s ease;
 }
 
-.chat-yt-preview:hover .yt-play-badge {
+.chat-rich-preview:hover .rich-play-badge, .chat-yt-preview:hover .yt-play-badge {
     transform: scale(1.12);
 }
 
-.yt-info {
+.rich-info, .yt-info {
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    background: rgba(15, 23, 42, 0.95);
+    background: rgba(13, 18, 30, 0.98);
 }
 
-.yt-badge {
+.rich-badge, .yt-badge {
     display: inline-flex;
     align-items: center;
     gap: 5px;
     font-size: 0.7rem;
     font-weight: 800;
-    color: #ff3366;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.yt-red-dot {
-    color: #ff0044;
-    font-size: 0.8rem;
-}
+.platform-badge-yt { color: #ff3366; }
+.platform-badge-vk { color: #38bdf8; }
+.platform-badge-rt { color: #fb7185; }
+.platform-badge-tt { color: #00f0ff; }
+.platform-badge-twitch { color: #c084fc; }
+.platform-badge-gh { color: #cbd5e1; }
+.platform-badge-tg { color: #38bdf8; }
+.platform-badge-pin { color: #f87171; }
 
-.yt-title {
+.badge-dot { font-size: 0.8rem; }
+.dot-red { color: #ff0044; }
+.dot-blue { color: #2787f5; }
+.dot-cyan { color: #00f0ff; }
+.dot-purple { color: #a855f7; }
+.dot-gray { color: #94a3b8; }
+
+.rich-title, .yt-title {
     font-size: 0.88rem;
     font-weight: 700;
     color: #ffffff;
@@ -10243,7 +10293,7 @@ input:checked + .toggle-slider:before {
     text-overflow: ellipsis;
 }
 
-.yt-link-row {
+.rich-link-row, .yt-link-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -10251,7 +10301,7 @@ input:checked + .toggle-slider:before {
     color: var(--text-dim);
 }
 
-.yt-open-icon {
+.rich-open-icon, .yt-open-icon {
     color: var(--accent-neon);
     font-weight: 700;
 }
@@ -10391,6 +10441,125 @@ input:checked + .toggle-slider:before {
     filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.8));
     animation: floatSticker 3s infinite ease-in-out;
     pointer-events: none;
+    transition: all 0.25s ease;
+}
+
+/* Custom Text Positioning in Stories */
+.story-text-pos-top {
+    top: 76px !important;
+    bottom: auto !important;
+}
+.story-text-pos-middle {
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    bottom: auto !important;
+}
+.story-text-pos-bottom {
+    bottom: 64px !important;
+    top: auto !important;
+}
+
+/* Custom Text Styling */
+.story-text-style-pill {
+    background: rgba(13, 17, 23, 0.75) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 14px !important;
+    padding: 8px 16px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+}
+.story-text-style-clean {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 4px 8px !important;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95), 0 0 16px rgba(0, 0, 0, 0.8) !important;
+}
+.story-text-style-neon {
+    background: rgba(0, 240, 255, 0.14) !important;
+    backdrop-filter: blur(8px) !important;
+    border: 1px solid rgba(0, 240, 255, 0.6) !important;
+    border-radius: 12px !important;
+    padding: 8px 16px !important;
+    box-shadow: 0 0 22px rgba(0, 240, 255, 0.35) !important;
+}
+
+/* Custom Text Sizing */
+.story-text-size-md { font-size: 0.95rem !important; }
+.story-text-size-lg { font-size: 1.3rem !important; font-weight: 800 !important; }
+.story-text-size-xl { font-size: 1.65rem !important; font-weight: 900 !important; letter-spacing: 0.5px !important; }
+
+/* Custom Sticker Positioning */
+.story-sticker-pos-top-left {
+    top: 72px !important;
+    left: 20px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+}
+.story-sticker-pos-top-center {
+    top: 72px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    right: auto !important;
+    bottom: auto !important;
+}
+.story-sticker-pos-top-right {
+    top: 72px !important;
+    right: 20px !important;
+    left: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+}
+.story-sticker-pos-center {
+    top: 48% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    right: auto !important;
+    bottom: auto !important;
+}
+.story-sticker-pos-bottom-left {
+    bottom: 80px !important;
+    left: 20px !important;
+    top: auto !important;
+    right: auto !important;
+    transform: none !important;
+}
+.story-sticker-pos-bottom-right {
+    bottom: 80px !important;
+    right: 20px !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+}
+
+/* Custom Sticker Sizing */
+.story-sticker-size-md { font-size: 2.8rem !important; }
+.story-sticker-size-lg { font-size: 3.8rem !important; }
+.story-sticker-size-xl { font-size: 5rem !important; }
+
+/* Story Modal Customization Buttons */
+.story-pos-btn, .story-style-chip, .story-size-chip, .story-sticker-size-btn, .story-sticker-pos-btn {
+    padding: 3px 8px;
+    font-size: 0.72rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.story-pos-btn:hover, .story-style-chip:hover, .story-size-chip:hover, .story-sticker-size-btn:hover, .story-sticker-pos-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+}
+.story-pos-btn.active, .story-style-chip.active, .story-size-chip.active, .story-sticker-size-btn.active, .story-sticker-pos-btn.active {
+    background: rgba(0, 240, 255, 0.2);
+    border-color: #00f0ff;
+    color: #00f0ff;
+    font-weight: 700;
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
 }
 
 @keyframes floatSticker {

@@ -1034,7 +1034,7 @@ async function saveEditedPostModal() {
                 const newMusicHtml = `
                     <div class="post-music-card" id="post-music-${post.id}" data-music-url="${escapeHtml(post.music_url)}" data-music-title="${escapeHtml(pTitle)}" data-music-artist="${escapeHtml(pArtist)}">
                         <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(post.music_url)}', title: '${escapeHtml(pTitle)}', artist: '${escapeHtml(pArtist)}', elementId: 'post-music-${post.id}'}, event)" title="Воспроизвести">
-                            <span class="music-play-icon">▶️</span>
+                            <span class="music-play-icon">${CARD_PLAY_SVG}</span>
                         </button>
                         <div class="post-music-info">
                             <div class="post-music-title">${escapeHtml(pTitle)}</div>
@@ -2000,7 +2000,7 @@ function createPostElement(post) {
         postMusicHtml = `
             <div class="post-music-card" id="post-music-${post.id}" data-music-url="${escapeHtml(post.music_url)}" data-music-title="${escapeHtml(pTitle)}" data-music-artist="${escapeHtml(pArtist)}">
                 <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(post.music_url)}', title: '${escapeHtml(pTitle)}', artist: '${escapeHtml(pArtist)}', elementId: 'post-music-${post.id}'}, event)" title="Воспроизвести">
-                    <span class="music-play-icon">▶️</span>
+                    <span class="music-play-icon">${CARD_PLAY_SVG}</span>
                 </button>
                 <div class="post-music-info">
                     <div class="post-music-title">${escapeHtml(pTitle)}</div>
@@ -4880,6 +4880,11 @@ function handleIncomingNotification(payload) {
 let activeChatUserId = null;
 let activeInterlocutorData = null;
 let cachedConversations = [];
+let isChannelChatActive = false;
+let activeChannelChatId = null;
+let activeChannelSubscriberId = 0;
+let activeChannelIsCreator = false;
+let activeChannelData = null;
 
 async function loadConversations() {
     const listEl = document.getElementById('conversationsList');
@@ -4972,6 +4977,15 @@ function renderConversationsList(convs) {
 
 function filterConversations() {
     const q = (document.getElementById('chatSearchInput')?.value || '').toLowerCase().trim();
+    if (typeof currentChatScope !== 'undefined' && currentChatScope === 'channels') {
+        document.querySelectorAll('#conversationsList .conversation-item').forEach(item => {
+            const name = (item.querySelector('.conv-name')?.textContent || '').toLowerCase();
+            const preview = (item.querySelector('.conv-preview')?.textContent || '').toLowerCase();
+            const sub = (item.querySelector('div[style*="color: #38bdf8"]')?.textContent || '').toLowerCase();
+            item.style.display = (!q || name.includes(q) || preview.includes(q) || sub.includes(q)) ? 'flex' : 'none';
+        });
+        return;
+    }
     if (!q) {
         renderConversationsList(cachedConversations);
         return;
@@ -5051,6 +5065,14 @@ function updateChatHeader(user) {
 }
 
 function openInterlocutorProfile() {
+    if (isChannelChatActive && activeChannelChatId) {
+        if (activeChannelIsCreator && activeChannelSubscriberId) {
+            openUserProfile(activeChannelSubscriberId);
+        } else {
+            openChannelDetail(activeChannelChatId);
+        }
+        return;
+    }
     if (activeChatUserId) {
         openUserProfile(activeChatUserId);
     }
@@ -5799,37 +5821,223 @@ function formatChatMessageText(text) {
 
     escaped = escaped.replace(/\n/g, '<br>');
 
-    // Интерактивное превью видео YouTube при отправке ссылки в чат
+    // Интерактивное превью ссылок для нескольких платформ (YouTube, VK, Rutube, TikTok, Twitch, GitHub, Telegram, Pinterest)
+    const richPreviewCardsHtml = renderChatRichLinkCards(text);
+
+    return escaped + repostCardHtml + richPreviewCardsHtml;
+}
+
+function renderChatRichLinkCards(text) {
+    if (!text) return '';
+    let cardsHtml = '';
+
+    // 1. YouTube
     const ytRegex = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
     const ytMatch = text.match(ytRegex);
-    let ytCardHtml = '';
     if (ytMatch) {
         const videoId = ytMatch[1];
         const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
         const fullWatchUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        ytCardHtml = `
-            <div class="chat-yt-preview" onclick="window.open('${fullWatchUrl}', '_blank', 'noopener,noreferrer')" title="Смотреть видео на YouTube">
-                <div class="yt-thumb-box">
-                    <img src="${thumbUrl}" alt="YouTube Preview" class="yt-thumb-img" loading="lazy" onerror="this.src='/static/avatars/default.svg'">
-                    <div class="yt-play-overlay">
-                        <div class="yt-play-badge">
-                            <svg viewBox="0 0 24 24" width="22" height="22" fill="#ffffff"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        cardsHtml += `
+            <div class="chat-rich-preview platform-youtube" onclick="window.open('${fullWatchUrl}', '_blank', 'noopener,noreferrer')" title="Смотреть видео на YouTube">
+                <div class="rich-thumb-box">
+                    <img src="${thumbUrl}" alt="YouTube Preview" class="rich-thumb-img" loading="lazy" onerror="this.src='/static/avatars/default.svg'">
+                    <div class="rich-play-overlay">
+                        <div class="rich-play-badge yt-badge-icon">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="#ffffff"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                         </div>
                     </div>
                 </div>
-                <div class="yt-info">
-                    <div class="yt-badge"><span class="yt-red-dot">●</span> YouTube Video</div>
-                    <div class="yt-title">Смотреть видео на YouTube (${videoId})</div>
-                    <div class="yt-link-row">
+                <div class="rich-info">
+                    <div class="rich-badge platform-badge-yt"><span class="badge-dot dot-red">●</span> YouTube Video</div>
+                    <div class="rich-title">Смотреть видео на YouTube (${videoId})</div>
+                    <div class="rich-link-row">
                         <span>youtu.be/${videoId}</span>
-                        <span class="yt-open-icon">Смотреть ↗</span>
+                        <span class="rich-open-icon">Смотреть ↗</span>
                     </div>
                 </div>
             </div>
         `;
     }
 
-    return escaped + repostCardHtml + ytCardHtml;
+    // 2. VK Video / Clip
+    const vkRegex = /(?:https?:\/\/)?(?:www\.|m\.)?(?:vk\.com\/(?:video|clip)|vkvideo\.ru\/video)([-0-9_]+)/i;
+    const vkMatch = text.match(vkRegex);
+    if (vkMatch) {
+        const vkId = vkMatch[1];
+        const vkUrl = text.match(/https?:\/\/[^\s<]+/i)?.[0] || `https://vk.com/video${vkId}`;
+        cardsHtml += `
+            <div class="chat-rich-preview platform-vk" onclick="window.open('${vkUrl}', '_blank', 'noopener,noreferrer')" title="Смотреть на VK Видео">
+                <div class="rich-thumb-box rich-thumb-placeholder vk-thumb">
+                    <div class="rich-platform-logo">
+                        <svg viewBox="0 0 24 24" width="30" height="30" fill="#2787f5"><path d="M15.684 0H8.316C2.992 0 0 2.992 0 8.316v7.368C0 21.008 2.992 24 8.316 24h7.368C21.008 24 24 21.008 24 15.684V8.316C24 2.992 21.008 0 15.684 0zm3.692 17.106h-1.744c-.66 0-.862-.525-2.05-1.713-1.034-1.01-1.493-1.139-1.748-1.139-.356 0-.458.102-.458.593v1.642c0 .424-.136.685-1.254.685-1.847 0-3.898-1.12-5.34-3.203-2.17-3.085-2.763-5.407-2.763-5.882 0-.254.102-.491.593-.491h1.746c.44 0 .61.203.78.678.847 2.475 2.271 4.644 2.864 4.644.22 0 .322-.102.322-.661V10.75c-.068-1.186-.695-1.288-.695-1.712 0-.203.17-.407.441-.407h2.746c.373 0 .508.203.508.644v3.475c0 .373.17.508.271.508.22 0 .407-.135.814-.542 1.271-1.424 2.186-3.627 2.186-3.627.119-.254.34-.458.78-.458h1.745c.526 0 .644.271.526.644-.22 1.017-2.356 4.034-2.458 4.186-.237.356-.322.508 0 .932.237.339 1.017 1 1.542 1.61 1.017 1.136 1.797 2.085 2.017 2.746.22.661-.119.983-.712.983z"/></svg>
+                    </div>
+                </div>
+                <div class="rich-info">
+                    <div class="rich-badge platform-badge-vk"><span class="badge-dot dot-blue">●</span> VK Видео</div>
+                    <div class="rich-title">Видеозапись / Клип ВКонтакте</div>
+                    <div class="rich-link-row">
+                        <span>vk.com</span>
+                        <span class="rich-open-icon">Смотреть ↗</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 3. Rutube
+    const rtRegex = /(?:https?:\/\/)?(?:www\.)?rutube\.ru\/video\/([a-zA-Z0-9]+)/i;
+    const rtMatch = text.match(rtRegex);
+    if (rtMatch) {
+        const rtId = rtMatch[1];
+        const rtUrl = `https://rutube.ru/video/${rtId}/`;
+        cardsHtml += `
+            <div class="chat-rich-preview platform-rutube" onclick="window.open('${rtUrl}', '_blank', 'noopener,noreferrer')" title="Смотреть видео на Rutube">
+                <div class="rich-thumb-box rich-thumb-placeholder rutube-thumb">
+                    <div class="rich-platform-logo">
+                        <svg viewBox="0 0 24 24" width="28" height="28" fill="#f43f5e"><polygon points="6 4 18 12 6 20 6 4"></polygon></svg>
+                    </div>
+                </div>
+                <div class="rich-info">
+                    <div class="rich-badge platform-badge-rt"><span class="badge-dot dot-red">●</span> Rutube Video</div>
+                    <div class="rich-title">Смотреть видео на Rutube</div>
+                    <div class="rich-link-row">
+                        <span>rutube.ru</span>
+                        <span class="rich-open-icon">Смотреть ↗</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 4. TikTok
+    const ttRegex = /(?:https?:\/\/)?(?:www\.|vm\.)?tiktok\.com\/(@[^\/\s<]+\/video\/\d+|[a-zA-Z0-9]+)/i;
+    const ttMatch = text.match(ttRegex);
+    if (ttMatch) {
+        const ttId = ttMatch[1];
+        const ttUrl = text.match(/https?:\/\/[^\s<]+/i)?.[0] || `https://tiktok.com/${ttId}`;
+        cardsHtml += `
+            <div class="chat-rich-preview platform-tiktok" onclick="window.open('${ttUrl}', '_blank', 'noopener,noreferrer')" title="Смотреть видео в TikTok">
+                <div class="rich-thumb-box rich-thumb-placeholder tiktok-thumb">
+                    <div class="rich-platform-logo">
+                        <svg viewBox="0 0 24 24" width="26" height="26" fill="#00f0ff"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298-.002.595.042.88.13V9.4a6.33 6.33 0 0 0-1-.08A6.34 6.34 0 0 0 3 15.66a6.34 6.34 0 0 0 10.82 4.47v-7.14a8.16 8.16 0 0 0 5.77 2.3v-3.45a4.85 4.85 0 0 1-2-.66z"/></svg>
+                    </div>
+                </div>
+                <div class="rich-info">
+                    <div class="rich-badge platform-badge-tt"><span class="badge-dot dot-cyan">●</span> TikTok Clip</div>
+                    <div class="rich-title">Короткое видео в TikTok</div>
+                    <div class="rich-link-row">
+                        <span>tiktok.com</span>
+                        <span class="rich-open-icon">Смотреть ↗</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 5. Twitch
+    const twitchRegex = /(?:https?:\/\/)?(?:www\.)?twitch\.tv\/([a-zA-Z0-9_]+)/i;
+    const twitchMatch = text.match(twitchRegex);
+    if (twitchMatch && !ytMatch && !vkMatch) {
+        const channelName = twitchMatch[1];
+        const twitchUrl = `https://twitch.tv/${channelName}`;
+        cardsHtml += `
+            <div class="chat-rich-preview platform-twitch" onclick="window.open('${twitchUrl}', '_blank', 'noopener,noreferrer')" title="Смотреть стрим на Twitch">
+                <div class="rich-thumb-box rich-thumb-placeholder twitch-thumb">
+                    <div class="rich-platform-logo">
+                        <svg viewBox="0 0 24 24" width="28" height="28" fill="#a855f7"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
+                    </div>
+                </div>
+                <div class="rich-info">
+                    <div class="rich-badge platform-badge-twitch"><span class="badge-dot dot-purple">●</span> Twitch Stream</div>
+                    <div class="rich-title">Канал ${channelName} на Twitch</div>
+                    <div class="rich-link-row">
+                        <span>twitch.tv/${channelName}</span>
+                        <span class="rich-open-icon">Смотреть ↗</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 6. GitHub
+    const ghRegex = /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_.-]+)/i;
+    const ghMatch = text.match(ghRegex);
+    if (ghMatch) {
+        const owner = ghMatch[1];
+        const repo = ghMatch[2].replace(/\.git$/i, '');
+        const ghUrl = `https://github.com/${owner}/${repo}`;
+        cardsHtml += `
+            <div class="chat-rich-preview platform-github" onclick="window.open('${ghUrl}', '_blank', 'noopener,noreferrer')" title="Открыть репозиторий GitHub">
+                <div class="rich-thumb-box rich-thumb-placeholder github-thumb">
+                    <div class="rich-platform-logo">
+                        <svg viewBox="0 0 24 24" width="28" height="28" fill="#e2e8f0"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+                    </div>
+                </div>
+                <div class="rich-info">
+                    <div class="rich-badge platform-badge-gh"><span class="badge-dot dot-gray">●</span> GitHub Repository</div>
+                    <div class="rich-title">${owner} / ${repo}</div>
+                    <div class="rich-link-row">
+                        <span>github.com/${owner}/${repo}</span>
+                        <span class="rich-open-icon">Код ↗</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 7. Telegram
+    const tgRegex = /(?:https?:\/\/)?t\.me\/([a-zA-Z0-9_]+)(?:\/(\d+))?/i;
+    const tgMatch = text.match(tgRegex);
+    if (tgMatch && !ytMatch && !vkMatch && !rtMatch && !ghMatch) {
+        const channel = tgMatch[1];
+        const postNum = tgMatch[2];
+        const tgUrl = `https://t.me/${channel}${postNum ? '/' + postNum : ''}`;
+        cardsHtml += `
+            <div class="chat-rich-preview platform-telegram" onclick="window.open('${tgUrl}', '_blank', 'noopener,noreferrer')" title="Открыть в Telegram">
+                <div class="rich-thumb-box rich-thumb-placeholder tg-thumb">
+                    <div class="rich-platform-logo">
+                        <svg viewBox="0 0 24 24" width="28" height="28" fill="#38bdf8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+                    </div>
+                </div>
+                <div class="rich-info">
+                    <div class="rich-badge platform-badge-tg"><span class="badge-dot dot-cyan">●</span> Telegram ${postNum ? 'Post' : 'Channel'}</div>
+                    <div class="rich-title">Канал @${channel} ${postNum ? `#${postNum}` : ''}</div>
+                    <div class="rich-link-row">
+                        <span>t.me/${channel}</span>
+                        <span class="rich-open-icon">Открыть ↗</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 8. Pinterest
+    const pinRegex = /(?:https?:\/\/)?(?:www\.)?pinterest\.(?:com|ru)\/pin\/(\d+)/i;
+    const pinMatch = text.match(pinRegex);
+    if (pinMatch) {
+        const pinId = pinMatch[1];
+        const pinUrl = `https://pinterest.com/pin/${pinId}/`;
+        cardsHtml += `
+            <div class="chat-rich-preview platform-pinterest" onclick="window.open('${pinUrl}', '_blank', 'noopener,noreferrer')" title="Открыть пин на Pinterest">
+                <div class="rich-thumb-box rich-thumb-placeholder pin-thumb">
+                    <div class="rich-platform-logo">
+                        <svg viewBox="0 0 24 24" width="28" height="28" fill="#e60023"><path d="M12 0a12 12 0 0 0-4.37 23.18c-.06-.98-.12-2.48.02-3.55l.89-3.79s-.22-.45-.22-1.12c0-1.05.61-1.84 1.37-1.84.65 0 .96.49.96 1.07 0 .65-.41 1.63-.63 2.53-.18.76.38 1.38 1.13 1.38 1.35 0 2.39-1.42 2.39-3.48 0-1.82-1.31-3.09-3.18-3.09-2.33 0-3.69 1.74-3.69 3.54 0 .7.27 1.45.61 1.86.07.08.08.15.06.24l-.23.95c-.04.15-.13.18-.3.11-1.11-.52-1.81-2.14-1.81-3.45 0-2.81 2.04-5.38 5.88-5.38 3.09 0 5.48 2.2 5.48 5.14 0 3.07-1.93 5.53-4.62 5.53-.9 0-1.75-.47-2.04-1.02l-.56 2.12c-.2.78-.75 1.76-1.12 2.36A12 12 0 1 0 12 0z"/></svg>
+                    </div>
+                </div>
+                <div class="rich-info">
+                    <div class="rich-badge platform-badge-pin"><span class="badge-dot dot-red">●</span> Pinterest Pin</div>
+                    <div class="rich-title">Тематический пин на Pinterest</div>
+                    <div class="rich-link-row">
+                        <span>pinterest.com/pin/${pinId}</span>
+                        <span class="rich-open-icon">Смотреть ↗</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    return cardsHtml;
 }
 
 async function navigateToPost(postId, event) {
@@ -6012,7 +6220,7 @@ function buildChatMessageBubbleHtml(m, isOut) {
         audioHtml = `
             <div class="chat-audio-card" id="chat-audio-${m.id}" data-audio-url="${escapeHtml(audioUrl)}" data-audio-title="${escapeHtml(audioTitle)}" data-audio-artist="${escapeHtml(audioArtist)}">
                 <button type="button" class="chat-audio-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(audioUrl)}', title: '${escapeHtml(audioTitle)}', artist: '${escapeHtml(audioArtist)}', elementId: 'chat-audio-${m.id}'}, event)" title="Слушать аудио">
-                    <span class="chat-audio-icon">▶️</span>
+                    <span class="chat-audio-icon">${CARD_PLAY_SVG}</span>
                 </button>
                 <div class="chat-audio-info">
                     <div class="chat-audio-title">${escapeHtml(audioTitle)}</div>
@@ -6196,13 +6404,63 @@ async function handleSendMessage(e) {
 
     if (isSendingMessage) return; // Защита от двойного клика
 
+    const input = document.getElementById('chatMessageInput');
+    if (!input) return;
+
+    // Режим отправки сообщения в канале прямо из окна чата
+    if (isChannelChatActive && activeChannelChatId) {
+        let content = input.value.trim();
+        if (currentChatAttachmentUrl) {
+            content = content ? `${content}\n${currentChatAttachmentUrl}` : currentChatAttachmentUrl;
+        }
+
+        let audioUrl = pendingChatAudio ? pendingChatAudio.url : '';
+        let audioTitle = pendingChatAudio ? pendingChatAudio.title : '';
+        let audioArtist = pendingChatAudio ? pendingChatAudio.artist : '';
+
+        if (!content && !audioUrl) return;
+
+        const sendBtn = document.getElementById('chatSendBtn');
+        if (sendBtn) sendBtn.disabled = true;
+        isSendingMessage = true;
+
+        try {
+            const receiverId = activeChannelIsCreator ? activeChannelSubscriberId : 0;
+            const res = await fetch(`/api/channels/${activeChannelChatId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    receiver_id: receiverId,
+                    content: content,
+                    audio_url: audioUrl,
+                    audio_title: audioTitle,
+                    audio_artist: audioArtist
+                })
+            });
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || 'Ошибка отправки сообщения');
+            }
+            input.value = '';
+            autoResizeChatInput(input);
+            clearChatAudioAttachment();
+            clearChatFile();
+            await loadActiveChannelChatMessages();
+            loadUserChannelConversations();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            isSendingMessage = false;
+            if (sendBtn) sendBtn.disabled = false;
+            input.focus({ preventScroll: true });
+        }
+        return;
+    }
+
     if (!activeChatUserId) {
         showToast('Выберите собеседника', 'error');
         return;
     }
-
-    const input = document.getElementById('chatMessageInput');
-    if (!input) return;
 
     let content = input.value.trim();
     if (currentChatAttachmentUrl) {
@@ -6402,7 +6660,10 @@ function handleIncomingSSEMessage(msg) {
         return;
     }
 
-    if (activeChatUserId && (msg.sender_id === activeChatUserId || msg.receiver_id === activeChatUserId)) {
+    if (isChannelChatActive && activeChannelChatId && msg.channel_id === activeChannelChatId) {
+        appendChatMessageElement(msg);
+        scrollChatToBottom();
+    } else if (activeChatUserId && (msg.sender_id === activeChatUserId || msg.receiver_id === activeChatUserId)) {
         appendChatMessageElement(msg);
         scrollChatToBottom();
 
@@ -7325,6 +7586,8 @@ let pendingChatAudio = null;
 
 const HEADER_PLAY_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon" style="margin-left: 2px;"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
 const HEADER_PAUSE_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor"/></svg>';
+const CARD_PLAY_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-left:1px;"><path d="M8 5v14l11-7z"/></svg>';
+const CARD_PAUSE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="display:inline-block; vertical-align:middle;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
 
 class GlobalMusicPlayer {
     constructor() {
@@ -7630,7 +7893,7 @@ class GlobalMusicPlayer {
         if (heroPlayIcon && heroCard) {
             const heroUrl = heroCard.getAttribute('data-music-url');
             const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === heroUrl);
-            heroPlayIcon.textContent = isThisPlaying ? '⏸️' : '▶️';
+            heroPlayIcon.innerHTML = isThisPlaying ? CARD_PAUSE_SVG : CARD_PLAY_SVG;
             heroCard.classList.toggle('is-active-playing', isThisPlaying);
         }
 
@@ -7639,7 +7902,7 @@ class GlobalMusicPlayer {
             const url = card.getAttribute('data-music-url');
             const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === url);
             const icon = card.querySelector('.music-play-icon');
-            if (icon) icon.textContent = isThisPlaying ? '⏸️' : '▶️';
+            if (icon) icon.innerHTML = isThisPlaying ? CARD_PAUSE_SVG : CARD_PLAY_SVG;
             card.classList.toggle('is-active-playing', isThisPlaying);
         });
 
@@ -7648,8 +7911,17 @@ class GlobalMusicPlayer {
             const url = card.getAttribute('data-audio-url');
             const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === url);
             const icon = card.querySelector('.chat-audio-icon');
-            if (icon) icon.textContent = isThisPlaying ? '⏸️' : '▶️';
+            if (icon) icon.innerHTML = isThisPlaying ? CARD_PAUSE_SVG : CARD_PLAY_SVG;
             card.classList.toggle('is-active-playing', isThisPlaying);
+        });
+
+        // Синхронизация треков в модальном окне профиля
+        document.querySelectorAll('.profile-music-item').forEach(item => {
+            const url = item.getAttribute('data-music-url');
+            const isThisPlaying = (this.isPlaying && this.currentTrack && this.currentTrack.url === url);
+            const icon = item.querySelector('.profile-item-play-btn');
+            if (icon) icon.innerHTML = isThisPlaying ? CARD_PAUSE_SVG : CARD_PLAY_SVG;
+            item.classList.toggle('is-active-playing', isThisPlaying);
         });
     }
 }
@@ -8265,7 +8537,7 @@ function renderProfileMusicList(tracks, isOwner) {
                     ⠿
                 </div>` : ''}
                 <button type="button" class="profile-item-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(track.url)}', title: '${escapeHtml(track.title)}', artist: '${escapeHtml(track.artist)}', source: 'profile-modal'}, event)" title="Воспроизвести">
-                    <span>▶️</span>
+                    <span>${CARD_PLAY_SVG}</span>
                 </button>
                 <div class="profile-item-info">
                     <div class="profile-item-title-row">
@@ -9802,7 +10074,7 @@ function renderChannelStreamMessages(messages, isManagerView) {
         if (m.audio_url) {
             audioHtml = `
                 <div class="chat-audio-bubble" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 8px; margin-bottom: 4px;">
-                    <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(m.audio_url)}', title: '${escapeHtml(m.audio_title || 'Аудио')}', artist: '${escapeHtml(m.audio_artist || '')}'}, event)" title="Слушать">▶️</button>
+                    <button type="button" class="post-music-play-btn" onclick="window.musicPlayer.playTrack({url: '${escapeHtml(m.audio_url)}', title: '${escapeHtml(m.audio_title || 'Аудио')}', artist: '${escapeHtml(m.audio_artist || '')}'}, event)" title="Слушать">${CARD_PLAY_SVG}</button>
                     <div><strong>${escapeHtml(m.audio_title || 'Аудио')}</strong><div style="font-size: 0.72rem; color: var(--text-dim);">${escapeHtml(m.audio_artist || '')}</div></div>
                 </div>
             `;
@@ -9940,8 +10212,24 @@ function switchChatScope(scope) {
     if (cBtn) cBtn.classList.toggle('active', scope === 'channels');
 
     if (scope === 'direct') {
+        isChannelChatActive = false;
+        activeChannelChatId = null;
+        activeChannelSubscriberId = 0;
+        if (!activeChatUserId) {
+            const noSel = document.getElementById('chatNoSelection');
+            const activeWin = document.getElementById('chatActiveWindow');
+            if (noSel) noSel.style.display = 'flex';
+            if (activeWin) activeWin.style.display = 'none';
+        }
         loadConversations();
     } else {
+        activeChatUserId = null;
+        if (!isChannelChatActive) {
+            const noSel = document.getElementById('chatNoSelection');
+            const activeWin = document.getElementById('chatActiveWindow');
+            if (noSel) noSel.style.display = 'flex';
+            if (activeWin) activeWin.style.display = 'none';
+        }
         loadUserChannelConversations();
     }
 }
@@ -9970,16 +10258,30 @@ async function loadUserChannelConversations() {
             const ch = c.channel || {};
             const sub = c.subscriber || c.user || {};
             const isCreator = !!c.is_creator;
-            const title = isCreator ? `${ch.name} (От: ${sub.display_name || sub.username})` : ch.name;
-            const subtitle = isCreator ? `Подписчик: @${sub.username}` : `Канал ${ch.handle || ''}`;
-            const avatar = isCreator ? (sub.avatar_url || '/static/avatars/default_avatar.svg') : (ch.avatar_url || '/static/avatars/default_channel.svg');
+            const subId = sub.id || c.user_id || 0;
+            const subName = sub.display_name || sub.username || 'Подписчик';
+            const subUsername = sub.username || '';
+            const channelName = ch.name || 'Канал';
+            const channelAvatar = ch.avatar_url || '/static/avatars/default_channel.svg';
+            const subAvatar = sub.avatar_url || '/static/avatars/default_avatar.svg';
+
+            // ИСПРАВЛЕНИЕ: если текущий пользователь является создателем/админом канала,
+            // то в списке собеседников крупно показываем имя подписчика, а не повторяем имя своего канала!
+            const title = isCreator ? subName : channelName;
+            const subtitle = isCreator ? `📢 ${channelName} • @${subUsername}` : `📢 Канал @${ch.handle || ''}`;
+            const avatar = isCreator ? subAvatar : channelAvatar;
             const lastText = c.last_text || (c.last_message ? (c.last_message.content || 'Вложение') : 'Вложение');
             const timeText = c.last_message ? formatTime(c.last_message.created_at) : '';
+            const isActive = isChannelChatActive && (activeChannelChatId === ch.id) && (!isCreator || activeChannelSubscriberId === subId);
 
             return `
-                <div class="conversation-item" onclick="openChannelMessagesView(${ch.id})">
+                <div class="conversation-item ${isActive ? 'active' : ''}" 
+                     data-channel-id="${ch.id}" 
+                     data-sub-id="${subId}"
+                     onclick="openChannelConversationInMainChat(${ch.id}, ${subId}, '${escapeHtml(subName)}', '${escapeHtml(subUsername)}', '${escapeHtml(subAvatar)}', '${escapeHtml(channelName)}', '${escapeHtml(channelAvatar)}', ${isCreator})">
                     <div class="conv-avatar-wrap">
                         <img src="${escapeHtml(avatar)}" alt="Avatar" class="conv-avatar">
+                        <span class="chat-online-dot"></span>
                     </div>
                     <div class="conv-info">
                         <div class="conv-top-line">
@@ -9990,13 +10292,96 @@ async function loadUserChannelConversations() {
                             <span class="conv-preview">${escapeHtml(lastText)}</span>
                             ${c.unread_count > 0 ? `<span class="conv-unread-badge">${c.unread_count}</span>` : ''}
                         </div>
-                        <div style="font-size: 0.72rem; color: #38bdf8; margin-top: 2px;">${escapeHtml(subtitle)}</div>
+                        <div style="font-size: 0.72rem; color: #38bdf8; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(subtitle)}</div>
                     </div>
                 </div>
             `;
         }).join('');
     } catch (err) {
         listEl.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+async function openChannelConversationInMainChat(channelId, subId, subName, subUsername, subAvatar, channelName, channelAvatar, isCreator) {
+    if (!window.IS_AUTHENTICATED && !window.CURRENT_USER_ID) {
+        openAuthModal('login');
+        showToast('Войдите для доступа к чату', 'error');
+        return;
+    }
+
+    isChannelChatActive = true;
+    activeChannelChatId = channelId;
+    activeChannelSubscriberId = subId;
+    activeChannelIsCreator = isCreator;
+    activeChatUserId = null;
+
+    // Подсветка активного диалога в сайдбаре без перехода на другую страницу
+    document.querySelectorAll('#conversationsList .conversation-item').forEach(item => {
+        const itemChId = parseInt(item.dataset.channelId, 10);
+        const itemSubId = parseInt(item.dataset.subId, 10);
+        const matches = (itemChId === channelId) && (!isCreator || itemSubId === subId);
+        item.classList.toggle('active', matches);
+    });
+
+    const noSel = document.getElementById('chatNoSelection');
+    const activeWin = document.getElementById('chatActiveWindow');
+    if (noSel) noSel.style.display = 'none';
+    if (activeWin) activeWin.style.display = 'flex';
+
+    const avatarEl = document.getElementById('chatInterlocutorAvatar');
+    const nameEl = document.getElementById('chatInterlocutorName');
+    const handleEl = document.getElementById('chatInterlocutorHandle');
+
+    if (isCreator) {
+        activeInterlocutorData = { id: subId, display_name: subName, username: subUsername, avatar_url: subAvatar };
+        if (avatarEl) avatarEl.src = subAvatar || '/static/avatars/default_avatar.svg';
+        if (nameEl) nameEl.textContent = subName;
+        if (handleEl) handleEl.textContent = `📢 ${channelName} • @${subUsername}`;
+    } else {
+        activeInterlocutorData = { id: 0, display_name: channelName, username: channelName, avatar_url: channelAvatar };
+        if (avatarEl) avatarEl.src = channelAvatar || '/static/avatars/default_channel.svg';
+        if (nameEl) nameEl.textContent = channelName;
+        if (handleEl) handleEl.textContent = `📢 Официальный диалог с каналом`;
+    }
+
+    const input = document.getElementById('chatMessageInput');
+    if (input) {
+        input.placeholder = isCreator 
+            ? `Ответить пользователю @${subUsername} от имени канала "${channelName}"...` 
+            : `Написать сообщение каналу "${channelName}"...`;
+        input.focus({ preventScroll: true });
+    }
+
+    await loadActiveChannelChatMessages();
+}
+
+async function loadActiveChannelChatMessages() {
+    if (!activeChannelChatId) return;
+    const container = document.getElementById('chatMessagesContainer');
+    if (!container) return;
+    container.innerHTML = '<div class="chat-empty-hint">Загрузка переписки...</div>';
+
+    try {
+        const url = activeChannelIsCreator 
+            ? `/api/channels/${activeChannelChatId}/messages?subscriber_id=${activeChannelSubscriberId}`
+            : `/api/channels/${activeChannelChatId}/messages`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений канала');
+        let msgs = await res.json();
+        container.innerHTML = '';
+        lastRenderedChatDate = null;
+        if (!msgs || msgs.length === 0) {
+            container.innerHTML = `
+                <div class="chat-empty-hint">
+                    История диалога пуста. Напишите сообщение, чтобы начать общение.
+                </div>
+            `;
+            return;
+        }
+        msgs.forEach(m => appendChatMessageElement(m));
+        scrollChatToBottom();
+    } catch (err) {
+        container.innerHTML = `<div class="chat-empty-hint">${escapeHtml(err.message)}</div>`;
     }
 }
 
@@ -11340,6 +11725,11 @@ let selectedStoryFont = 'cyber';
 let selectedStoryAlign = 'center';
 let selectedStoryTextColor = '#ffffff';
 let selectedStorySticker = '';
+let selectedStoryTextPos = 'bottom';
+let selectedStoryTextStyle = 'pill';
+let selectedStoryTextSize = 'md';
+let selectedStoryStickerPos = 'top-right';
+let selectedStoryStickerSize = 'md';
 
 function setStoryFont(fontKey) {
     selectedStoryFont = fontKey || 'cyber';
@@ -11369,6 +11759,48 @@ function setStorySticker(stickerEmoji) {
     selectedStorySticker = (selectedStorySticker === stickerEmoji) ? '' : stickerEmoji;
     document.querySelectorAll('.story-sticker-chip').forEach(chip => {
         chip.classList.toggle('active', (chip.dataset.sticker || '') === selectedStorySticker);
+    });
+    const posRow = document.getElementById('storyStickerPosRow');
+    if (posRow) posRow.style.display = selectedStorySticker ? 'flex' : 'none';
+    updateStoryPreview();
+}
+
+function setStoryTextPos(posKey) {
+    selectedStoryTextPos = posKey || 'bottom';
+    document.querySelectorAll('.story-pos-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.textPos === selectedStoryTextPos);
+    });
+    updateStoryPreview();
+}
+
+function setStoryTextStyle(styleKey) {
+    selectedStoryTextStyle = styleKey || 'pill';
+    document.querySelectorAll('.story-style-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.style === selectedStoryTextStyle);
+    });
+    updateStoryPreview();
+}
+
+function setStoryTextSize(sizeKey) {
+    selectedStoryTextSize = sizeKey || 'md';
+    document.querySelectorAll('.story-size-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.size === selectedStoryTextSize);
+    });
+    updateStoryPreview();
+}
+
+function setStoryStickerPos(posKey) {
+    selectedStoryStickerPos = posKey || 'top-right';
+    document.querySelectorAll('.story-sticker-pos-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.stickerPos === selectedStoryStickerPos);
+    });
+    updateStoryPreview();
+}
+
+function setStoryStickerSize(sizeKey) {
+    selectedStoryStickerSize = sizeKey || 'md';
+    document.querySelectorAll('.story-sticker-size-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.stickerSize === selectedStoryStickerSize);
     });
     updateStoryPreview();
 }
@@ -11548,7 +11980,10 @@ function updateStoryPreview() {
 
     if (previewCaption) {
         previewCaption.textContent = caption || 'Ваша история';
-        previewCaption.className = `story-font-${selectedStoryFont}`;
+        const posClass = `story-text-pos-${selectedStoryTextPos}`;
+        const styleClass = `story-text-style-${selectedStoryTextStyle}`;
+        const sizeClass = `story-text-size-${selectedStoryTextSize}`;
+        previewCaption.className = `story-font-${selectedStoryFont} ${posClass} ${styleClass} ${sizeClass}`;
         previewCaption.style.textAlign = selectedStoryAlign;
         previewCaption.style.color = selectedStoryTextColor;
     }
@@ -11556,6 +11991,9 @@ function updateStoryPreview() {
     if (previewSticker) {
         if (selectedStorySticker) {
             previewSticker.textContent = selectedStorySticker;
+            const stickerPosClass = `story-sticker-pos-${selectedStoryStickerPos}`;
+            const stickerSizeClass = `story-sticker-size-${selectedStoryStickerSize}`;
+            previewSticker.className = `story-floating-sticker ${stickerPosClass} ${stickerSizeClass}`;
             previewSticker.style.display = 'block';
         } else {
             previewSticker.style.display = 'none';
@@ -11600,6 +12038,11 @@ async function submitCreateStory(e) {
             text_align: selectedStoryAlign,
             text_color: selectedStoryTextColor,
             sticker: selectedStorySticker,
+            text_position: selectedStoryTextPos,
+            sticker_position: selectedStoryStickerPos,
+            text_style: selectedStoryTextStyle,
+            text_size: selectedStoryTextSize,
+            sticker_size: selectedStoryStickerSize,
             duration_hours: 24
         };
 
@@ -11739,7 +12182,10 @@ function renderCurrentStoryViewer() {
     if (captionEl) {
         captionEl.textContent = story.caption || '';
         captionEl.style.display = story.caption ? 'block' : 'none';
-        captionEl.className = 'story-caption-overlay story-font-' + (story.font_family || 'cyber');
+        const posClass = `story-text-pos-${story.text_position || 'bottom'}`;
+        const styleClass = `story-text-style-${story.text_style || 'pill'}`;
+        const sizeClass = `story-text-size-${story.text_size || 'md'}`;
+        captionEl.className = `story-caption-overlay story-font-${story.font_family || 'cyber'} ${posClass} ${styleClass} ${sizeClass}`;
         captionEl.style.textAlign = story.text_align || 'center';
         captionEl.style.color = story.text_color || '#ffffff';
     }
@@ -11754,6 +12200,9 @@ function renderCurrentStoryViewer() {
     }
     if (story.sticker) {
         stickerEl.textContent = story.sticker;
+        const stickerPosClass = `story-sticker-pos-${story.sticker_position || 'top-right'}`;
+        const stickerSizeClass = `story-sticker-size-${story.sticker_size || 'md'}`;
+        stickerEl.className = `story-floating-sticker ${stickerPosClass} ${stickerSizeClass}`;
         stickerEl.style.display = 'block';
     } else {
         stickerEl.style.display = 'none';

@@ -44,9 +44,30 @@ func (r *StoryRepository) CreateStory(userID int, req *models.CreateStoryRequest
 	}
 	sticker := req.Sticker
 
+	textPosition := req.TextPosition
+	if textPosition == "" {
+		textPosition = "bottom"
+	}
+	stickerPosition := req.StickerPosition
+	if stickerPosition == "" {
+		stickerPosition = "top-right"
+	}
+	textStyle := req.TextStyle
+	if textStyle == "" {
+		textStyle = "pill"
+	}
+	textSize := req.TextSize
+	if textSize == "" {
+		textSize = "md"
+	}
+	stickerSize := req.StickerSize
+	if stickerSize == "" {
+		stickerSize = "md"
+	}
+
 	query := `
-		INSERT INTO stories (user_id, media_url, caption, bg_gradient, font_family, text_align, text_color, sticker, views_count, created_at, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, NOW(), $9)
+		INSERT INTO stories (user_id, media_url, caption, bg_gradient, font_family, text_align, text_color, sticker, text_position, sticker_position, text_style, text_size, sticker_size, views_count, created_at, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 0, NOW(), $14)
 		RETURNING id, created_at, expires_at
 	`
 	var story models.Story
@@ -58,8 +79,13 @@ func (r *StoryRepository) CreateStory(userID int, req *models.CreateStoryRequest
 	story.TextAlign = textAlign
 	story.TextColor = textColor
 	story.Sticker = sticker
+	story.TextPosition = textPosition
+	story.StickerPosition = stickerPosition
+	story.TextStyle = textStyle
+	story.TextSize = textSize
+	story.StickerSize = stickerSize
 
-	err := r.db.QueryRow(query, userID, req.MediaURL, req.Caption, bgGradient, fontFamily, textAlign, textColor, sticker, expiresAt).
+	err := r.db.QueryRow(query, userID, req.MediaURL, req.Caption, bgGradient, fontFamily, textAlign, textColor, sticker, textPosition, stickerPosition, textStyle, textSize, stickerSize, expiresAt).
 		Scan(&story.ID, &story.CreatedAt, &story.ExpiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("create story: %w", err)
@@ -75,7 +101,10 @@ func (r *StoryRepository) GetStoryByID(storyID, viewerUserID int) (*models.Story
 			s.id, s.user_id, COALESCE(s.media_url, ''), COALESCE(s.caption, ''), 
 			COALESCE(s.bg_gradient, ''), COALESCE(s.font_family, 'cyber'),
 			COALESCE(s.text_align, 'center'), COALESCE(s.text_color, '#ffffff'),
-			COALESCE(s.sticker, ''), s.views_count, s.created_at, s.expires_at,
+			COALESCE(s.sticker, ''), 
+			COALESCE(s.text_position, 'bottom'), COALESCE(s.sticker_position, 'top-right'),
+			COALESCE(s.text_style, 'pill'), COALESCE(s.text_size, 'md'), COALESCE(s.sticker_size, 'md'),
+			s.views_count, s.created_at, s.expires_at,
 			u.id, u.username, u.display_name, u.avatar_url,
 			EXISTS(SELECT 1 FROM story_views sv WHERE sv.story_id = s.id AND sv.user_id = $2) as is_viewed
 		FROM stories s
@@ -87,6 +116,7 @@ func (r *StoryRepository) GetStoryByID(storyID, viewerUserID int) (*models.Story
 	err := r.db.QueryRow(query, storyID, viewerUserID).Scan(
 		&st.ID, &st.UserID, &st.MediaURL, &st.Caption,
 		&st.BgGradient, &st.FontFamily, &st.TextAlign, &st.TextColor, &st.Sticker,
+		&st.TextPosition, &st.StickerPosition, &st.TextStyle, &st.TextSize, &st.StickerSize,
 		&st.ViewsCount, &st.CreatedAt, &st.ExpiresAt,
 		&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL,
 		&st.IsViewed,
@@ -105,7 +135,10 @@ func (r *StoryRepository) GetActiveStories(viewerUserID int) ([]models.StoryGrou
 			s.id, s.user_id, COALESCE(s.media_url, ''), COALESCE(s.caption, ''), 
 			COALESCE(s.bg_gradient, ''), COALESCE(s.font_family, 'cyber'),
 			COALESCE(s.text_align, 'center'), COALESCE(s.text_color, '#ffffff'),
-			COALESCE(s.sticker, ''), s.views_count, s.created_at, s.expires_at,
+			COALESCE(s.sticker, ''),
+			COALESCE(s.text_position, 'bottom'), COALESCE(s.sticker_position, 'top-right'),
+			COALESCE(s.text_style, 'pill'), COALESCE(s.text_size, 'md'), COALESCE(s.sticker_size, 'md'),
+			s.views_count, s.created_at, s.expires_at,
 			u.id, u.username, u.display_name, u.avatar_url,
 			EXISTS(SELECT 1 FROM story_views sv WHERE sv.story_id = s.id AND sv.user_id = $1) as is_viewed
 		FROM stories s
@@ -129,6 +162,7 @@ func (r *StoryRepository) GetActiveStories(viewerUserID int) ([]models.StoryGrou
 		if err := rows.Scan(
 			&st.ID, &st.UserID, &st.MediaURL, &st.Caption,
 			&st.BgGradient, &st.FontFamily, &st.TextAlign, &st.TextColor, &st.Sticker,
+			&st.TextPosition, &st.StickerPosition, &st.TextStyle, &st.TextSize, &st.StickerSize,
 			&st.ViewsCount, &st.CreatedAt, &st.ExpiresAt,
 			&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL,
 			&st.IsViewed,
