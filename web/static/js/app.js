@@ -4927,7 +4927,21 @@ function renderConversationsList(convs) {
         item.className = 'conversation-item' + (c.user.id === activeChatUserId ? ' active' : '');
         item.dataset.userId = c.user.id;
 
-        const previewText = c.last_message ? escapeHtml(c.last_message.content) : '<span style="opacity: 0.6; font-style: italic;">Нажмите, чтобы открыть чат</span>';
+        let previewText = '<span style="opacity: 0.6; font-style: italic;">Нажмите, чтобы открыть чат</span>';
+        if (c.last_message) {
+            const isMe = (c.last_message.sender_id === window.CURRENT_USER_ID);
+            const prefix = isMe ? '<span class="conv-prefix-you">Вы: </span>' : '';
+            let rawContent = c.last_message.content || '';
+            if (c.last_message.is_hidden) {
+                rawContent = '🔒 [Скрытое сообщение]';
+            } else if (c.last_message.audio_url || /\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(rawContent)) {
+                rawContent = '🎵 [Аудиофайл]';
+            } else if (/\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(rawContent)) {
+                rawContent = '📷 [Фото]';
+            }
+            previewText = prefix + escapeHtml(rawContent);
+        }
+
         const timeText = c.last_message ? formatTime(c.last_message.created_at) : '';
         const unreadBadge = c.unread_count > 0 ? `<span class="conv-unread-badge">${c.unread_count}</span>` : '';
 
@@ -5543,6 +5557,7 @@ function startEditChatMessage(msgId) {
         input.value = rawText;
         input.focus();
         input.select();
+        autoResizeChatInput(input);
     }
 
     // Обработка аудиофайла в режиме редактирования:
@@ -5558,7 +5573,10 @@ function cancelEditChatMessage() {
     const banner = document.getElementById('chatEditBanner');
     const input = document.getElementById('chatMessageInput');
     if (banner) banner.style.display = 'none';
-    if (input) input.value = '';
+    if (input) {
+        input.value = '';
+        autoResizeChatInput(input);
+    }
     clearChatFile();
     clearChatAudioAttachment();
 }
@@ -6124,7 +6142,7 @@ function appendChatMessageElement(m) {
 
     setChatMessageRowData(row, m, isOut);
 
-    const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
+    const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status read" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
     const editedBadge = m.is_edited ? '<span class="chat-bubble-edited" title="Отредактировано">• (ред.)</span>' : '';
 
     const contentHtml = buildChatMessageBubbleHtml(m, isOut);
@@ -6135,8 +6153,15 @@ function appendChatMessageElement(m) {
         </div>
     `;
 
+    const avatarHtml = (!isOut && activeInterlocutorData && activeInterlocutorData.avatar_url) ? `
+        <div class="chat-msg-avatar-wrap" onclick="openInterlocutorProfile()" title="${escapeHtml(activeInterlocutorData.display_name || 'Собеседник')}">
+            <img src="${escapeHtml(activeInterlocutorData.avatar_url)}" alt="avatar" class="chat-msg-avatar">
+        </div>
+    ` : '';
+
     row.innerHTML = `
         ${selectCol}
+        ${avatarHtml}
         <div class="chat-bubble-wrapper">
             <div class="chat-bubble ${isOut ? 'out' : 'in'}">
                 <div class="chat-bubble-content">${contentHtml}</div>
@@ -6283,6 +6308,7 @@ async function handleSendMessage(e) {
             msg.content = content;
         }
         input.value = '';
+        autoResizeChatInput(input);
         clearChatFile();
         clearChatAudioAttachment();
         clearChatActiveModes();
@@ -11961,9 +11987,122 @@ function openScheduleModalFromMenu() {
     openScheduleMessageModal();
 }
 
+function handleChatInputKeydown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage(e);
+    }
+}
+
+function autoResizeChatInput(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    const newHeight = Math.min(el.scrollHeight, 140);
+    el.style.height = Math.max(38, newHeight) + 'px';
+}
+
+function toggleChatHeaderMoreMenu(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    const menu = document.getElementById('chatHeaderMoreDropdown');
+    if (!menu) return;
+    const isShown = (menu.style.display !== 'none');
+    if (isShown) {
+        menu.style.display = 'none';
+    } else {
+        updateChatMoreDropdownBlockBtn();
+        const fpBtn = document.getElementById('btnE2EEFingerprint');
+        if (fpBtn) {
+            fpBtn.style.display = currentChatE2EEEnabled ? 'flex' : 'none';
+        }
+        menu.style.display = 'flex';
+    }
+}
+
+function closeChatHeaderMoreMenu() {
+    const menu = document.getElementById('chatHeaderMoreDropdown');
+    if (menu) menu.style.display = 'none';
+}
+
+function updateChatMoreDropdownBlockBtn() {
+    const btn = document.getElementById('btnBlockFromChat');
+    const btnText = document.getElementById('btnBlockFromChatText');
+    if (!btn || !btnText) return;
+    if (profileBlockStatus && profileBlockStatus.is_blocked_by_me) {
+        btnText.textContent = 'Разблокировать собеседника';
+        btn.classList.remove('text-warning');
+        btn.classList.add('text-success');
+    } else {
+        btnText.textContent = 'В черный список';
+        btn.classList.remove('text-success');
+        btn.classList.add('text-warning');
+    }
+}
+
+async function toggleBlockFromChat() {
+    if (!activeChatUserId) return;
+    const isBlocked = !!(profileBlockStatus && profileBlockStatus.is_blocked_by_me);
+    const action = isBlocked ? 'unblock' : 'block';
+    const actionLabel = isBlocked ? 'Разблокировать' : 'Заблокировать';
+
+    if (!confirm(`Вы действительно хотите ${actionLabel.toLowerCase()} этого пользователя?`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/users/${activeChatUserId}/${action}`, { method: 'POST' });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.error || `Не удалось ${actionLabel.toLowerCase()} пользователя`, 'error');
+            return;
+        }
+        showToast(isBlocked ? 'Пользователь разблокирован' : 'Пользователь добавлен в черный список', 'info');
+        await checkChatBlockStatus(activeChatUserId);
+        updateChatMoreDropdownBlockBtn();
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function confirmClearActiveChat() {
+    if (!activeChatUserId) return;
+    const rows = document.querySelectorAll('#chatMessagesContainer .chat-bubble-row');
+    if (rows.length === 0) {
+        showToast('История переписки уже пуста', 'info');
+        return;
+    }
+    if (!confirm('Вы уверены, что хотите удалить сообщения в этом диалоге?')) {
+        return;
+    }
+    const ids = [];
+    rows.forEach(r => {
+        const mid = parseInt(r.getAttribute('data-msg-id'), 10);
+        if (mid) ids.push(mid);
+    });
+    if (ids.length === 0) return;
+
+    try {
+        const res = await fetch('/api/messages/batch-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message_ids: ids, for_everyone: false })
+        });
+        if (!res.ok) throw new Error('Не удалось очистить диалог');
+        showToast('История диалога очищена', 'info');
+        loadChatMessages(activeChatUserId);
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#chatSendWrapper')) {
         closeChatSendOptionsMenu();
+    }
+    if (!e.target.closest('.chat-head-more-wrap')) {
+        closeChatHeaderMoreMenu();
     }
 });
 
@@ -12226,6 +12365,7 @@ async function checkChatBlockStatus(userId) {
         const res = await fetch(`/api/users/${userId}/block-status`);
         if (!res.ok) return;
         const data = await res.json();
+        profileBlockStatus = data;
 
         if (data.is_blocked) {
             if (banner) banner.style.display = 'flex';
@@ -12236,6 +12376,7 @@ async function checkChatBlockStatus(userId) {
             if (input) input.disabled = false;
             if (sendBtn) sendBtn.disabled = false;
         }
+        updateChatMoreDropdownBlockBtn();
     } catch (_) {}
 }
 
