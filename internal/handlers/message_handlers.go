@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"social-network/internal/events"
 	"social-network/internal/models"
@@ -52,8 +53,14 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
 	targetIDStr := r.PathValue("userId")
 	if targetIDStr == "" {
+		targetIDStr = r.URL.Query().Get("with_user_id")
+		if targetIDStr == "" {
+			targetIDStr = r.URL.Query().Get("user_id")
+		}
+	}
+	if targetIDStr == "" {
 		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-		if len(parts) >= 3 {
+		if len(parts) >= 3 && parts[2] != "scheduled" {
 			targetIDStr = parts[2]
 		}
 	}
@@ -113,14 +120,21 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	msg, err := h.messageRepo.SendMessage(currentUser.ID, req.ReceiverID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist, req.ChannelID, req.IsFromChannel, req.PollID, req.IsEncrypted, req.Ciphertext, req.Nonce, req.SenderPubKey, req.ReceiverPubKey, req.KeyFingerprint)
+	msg, err := h.messageRepo.SendMessage(
+		currentUser.ID, req.ReceiverID, req.Content, req.AudioURL, req.AudioTitle, req.AudioArtist, 
+		req.ChannelID, req.IsFromChannel, req.PollID, req.IsEncrypted, req.Ciphertext, req.Nonce, 
+		req.SenderPubKey, req.ReceiverPubKey, req.KeyFingerprint,
+		req.ScheduledAt, req.IsHidden, req.HiddenHint, req.SelfDestructSeconds,
+	)
 	if err != nil {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
-	// Создаем уведомление получателю о новом личном сообщении
-	if h.notifRepo != nil {
+	isScheduledFuture := req.ScheduledAt != nil && req.ScheduledAt.After(time.Now())
+
+	// Создаем уведомление получателю о новом личном сообщении (только если не отложено в будущее)
+	if !isScheduledFuture && h.notifRepo != nil {
 		notifText := req.Content
 		if notifText == "" && req.AudioURL != "" {
 			notifText = "🎵 " + req.AudioTitle
@@ -140,12 +154,49 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Рассылка real-time события через SSE
-	if h.hub != nil {
+	// Рассылка real-time события через SSE (только если не отложено)
+	if !isScheduledFuture && h.hub != nil {
 		h.hub.Broadcast(events.EventNewMessage, msg)
 	}
 
 	respondJSON(w, http.StatusCreated, msg)
+}
+
+// GetScheduledMessages возвращает запланированные сообщения для выбранного диалога.
+func (h *Handler) GetScheduledMessages(w http.ResponseWriter, r *http.Request) {
+	currentUser := h.getUserFromRequest(r)
+	if currentUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "не авторизован"})
+		return
+	}
+
+	targetIDStr := r.PathValue("userId")
+	if targetIDStr == "" {
+		targetIDStr = r.URL.Query().Get("with_user_id")
+		if targetIDStr == "" {
+			targetIDStr = r.URL.Query().Get("user_id")
+		}
+	}
+	if targetIDStr == "" {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 3 && parts[2] != "scheduled" {
+			targetIDStr = parts[2]
+		}
+	}
+
+	otherUserID, err := strconv.Atoi(targetIDStr)
+	if err != nil || otherUserID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "неверный ID пользователя"})
+		return
+	}
+
+	messages, err := h.messageRepo.GetScheduledMessages(currentUser.ID, otherUserID)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, messages)
 }
 
 func (h *Handler) GetUnreadMessagesCount(w http.ResponseWriter, r *http.Request) {
@@ -268,6 +319,35 @@ func (h *Handler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 		"message_id":   msgID,
 		"for_everyone": forEveryone,
 	})
+}
+
+// DestroyMessage немедленно самоуничтожает временное сообщение.
+func (h *Handler) DestroyMessage(w http.ResponseWriter, r *http.Request) {
+	currentUser := h.getUserFromRequest(r)
+	if currentUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "не авторизован"})
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 3 {
+			idStr = parts[2]
+		}
+	}
+	msgID, err := strconv.Atoi(idStr)
+	if err != nil || msgID <= 0 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "неверный ID сообщения"})
+		return
+	}
+
+	if err := h.messageRepo.DestroyMessage(msgID, currentUser.ID); err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{"success": true, "status": "destroyed"})
 }
 
 func (h *Handler) BatchDeleteMessages(w http.ResponseWriter, r *http.Request) {

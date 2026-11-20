@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     formatAllPostContents();
     initSSE();
     initFeedInfiniteScroll();
+    loadStories();
 
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('auth') === 'login') openAuthModal('login');
@@ -17,12 +18,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendGiftParam = urlParams.get('send_gift');
     const giftDetailParam = urlParams.get('gift_detail');
     const postParam = urlParams.get('post');
+    const collectionParam = urlParams.get('collection');
+
+    if (collectionParam) {
+        setTimeout(() => openCollectionView(parseInt(collectionParam, 10)), 350);
+    }
     if (postParam) {
         setTimeout(() => navigateToPost(parseInt(postParam, 10)), 350);
     }
 
+    let hasNavigated = false;
     if (viewParam === 'showcase') {
         navigateTo('showcase');
+        hasNavigated = true;
     } else if (viewParam === 'messages') {
         navigateTo('messages');
         const chatWith = urlParams.get('chat_with');
@@ -36,15 +44,65 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, 300);
         }
+        hasNavigated = true;
     } else if (viewParam === 'my-profile') {
         navigateTo('my-profile');
+        hasNavigated = true;
     } else if (viewParam === 'graph') {
         navigateTo('graph');
+        hasNavigated = true;
     } else if (viewParam === 'federation') {
         navigateTo('federation');
+        hasNavigated = true;
+    } else if (viewParam === 'channels') {
+        navigateTo('channels');
+        hasNavigated = true;
+    } else if (viewParam === 'channel-messages') {
+        const chanId = parseInt(urlParams.get('channel') || userParam, 10);
+        if (chanId) navigateTo('channel-messages', chanId);
+        hasNavigated = true;
+    } else if (viewParam === 'achievements') {
+        const uid = parseInt(userParam || window.CURRENT_USER_ID, 10);
+        navigateTo('achievements', uid);
+        hasNavigated = true;
     } else if (userParam || viewParam === 'profile') {
         const uid = parseInt(userParam || window.CURRENT_USER_ID, 10);
         navigateTo('profile', uid);
+        hasNavigated = true;
+    } else if (viewParam === 'feed') {
+        navigateTo('feed');
+        hasNavigated = true;
+    }
+
+    // Сохранение и восстановление локации пользователя после перезагрузки страницы (SPA Persistence)
+    if (!hasNavigated && !postParam && !collectionParam && !sendGiftParam && !giftDetailParam) {
+        try {
+            const savedLoc = JSON.parse(localStorage.getItem('gosocial_last_location') || 'null');
+            if (savedLoc && savedLoc.view && savedLoc.view !== 'feed') {
+                if (savedLoc.view === 'messages') {
+                    navigateTo('messages');
+                    if (savedLoc.chatWith) {
+                        setTimeout(() => openChatWithUser(parseInt(savedLoc.chatWith, 10)), 300);
+                    }
+                } else if (savedLoc.view === 'profile' || savedLoc.view === 'my-profile') {
+                    navigateTo(savedLoc.view, savedLoc.userId);
+                } else if (savedLoc.view === 'channels') {
+                    navigateTo('channels');
+                } else if (savedLoc.view === 'channel-messages' && savedLoc.userId) {
+                    navigateTo('channel-messages', savedLoc.userId);
+                } else if (savedLoc.view === 'showcase') {
+                    navigateTo('showcase');
+                } else if (savedLoc.view === 'graph') {
+                    navigateTo('graph');
+                } else if (savedLoc.view === 'federation') {
+                    navigateTo('federation');
+                } else if (savedLoc.view === 'achievements') {
+                    navigateTo('achievements', savedLoc.userId);
+                } else if (savedLoc.view === 'collection' && savedLoc.userId) {
+                    setTimeout(() => openCollectionView(parseInt(savedLoc.userId, 10)), 350);
+                }
+            }
+        } catch (_) {}
     }
 
     if (sendGiftParam) {
@@ -61,6 +119,13 @@ document.addEventListener('DOMContentLoaded', () => {
             closeGiftDetailModal();
             closeEditProfileModal();
             closeNotificationsPanel();
+            closeStoryViewer();
+            closeCreateStoryModal();
+            closeSaveToCollectionModal();
+            closeCreateCollectionModal();
+            closeScheduleMessageModal();
+            closeScheduledMessagesModal();
+            closeSelfDestructPicker();
         }
     });
 
@@ -1202,12 +1267,30 @@ function initChatContextMenu() {
         }
 
         menu.style.display = 'flex';
+        menu.style.visibility = 'hidden';
+        const rect = menu.getBoundingClientRect();
+        const menuWidth = rect.width || 200;
+        const menuHeight = rect.height || 260;
+        menu.style.visibility = 'visible';
+
         let x = e.clientX;
         let y = e.clientY;
-        const menuWidth = 190;
-        const menuHeight = 160;
-        if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
-        if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
+
+        // Если контекстное меню находится слишком низко и не влезает в экран, переворачиваем его вверх
+        if (y + menuHeight > window.innerHeight - 15) {
+            y = e.clientY - menuHeight;
+        }
+        if (y < 15) {
+            y = 15;
+        }
+
+        // Защита от выхода за правую и левую границу окна
+        if (x + menuWidth > window.innerWidth - 15) {
+            x = window.innerWidth - menuWidth - 15;
+        }
+        if (x < 15) {
+            x = 15;
+        }
 
         menu.style.left = `${x}px`;
         menu.style.top = `${y}px`;
@@ -2000,6 +2083,9 @@ function createPostElement(post) {
                 <button type="button" class="post-dropdown-item" onclick="openSharePostModal(${post.id})">
                     <span>Поделиться</span>
                 </button>
+                <button type="button" class="post-dropdown-item" onclick="openSaveToCollectionModal(${post.id})">
+                    <span>📌 В подборку</span>
+                </button>
             </div>
         </div>
     `;
@@ -2099,6 +2185,12 @@ function createPostElement(post) {
                     <circle cx="18" cy="19" r="3"></circle>
                     <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
                     <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                </svg>
+            </button>
+
+            <button class="action-btn bookmark-btn" onclick="openSaveToCollectionModal(${post.id})" title="Сохранить в подборку (Pinterest)">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
                 </svg>
             </button>
         </div>
@@ -2414,7 +2506,7 @@ let currentProfileUserId = null;
 let currentProfileUserData = null;
 
 function navigateTo(view, userId = null) {
-    ['feed', 'profile', 'showcase', 'messages', 'channels', 'channelMessages', 'achievements', 'socialGraph', 'federation'].forEach(v => {
+    ['feed', 'profile', 'showcase', 'messages', 'channels', 'channelMessages', 'achievements', 'socialGraph', 'federation', 'collection'].forEach(v => {
         const el = document.getElementById(`${v}View`);
         if (el) {
             el.style.display = 'none';
@@ -2497,6 +2589,9 @@ function navigateTo(view, userId = null) {
         loadFederationNodes();
         loadFederationActivity();
         try { window.history.pushState({}, '', `/?view=federation`); } catch (_) {}
+    } else if (view === 'collection') {
+        const el = document.getElementById('collectionView');
+        if (el) { el.style.display = 'block'; el.classList.add('active'); }
     }
 
     if (view === 'profile') {
@@ -2526,8 +2621,16 @@ function navigateTo(view, userId = null) {
         switchChatScope('direct');
         window.history.pushState({}, '', '/?view=messages');
     } else {
-        window.history.pushState({}, '', '/');
+        window.history.pushState({}, '', '/?view=feed');
     }
+
+    try {
+        localStorage.setItem('gosocial_last_location', JSON.stringify({
+            view: view,
+            userId: userId || null,
+            chatWith: (view === 'messages' ? activeChatUserId : null)
+        }));
+    } catch (_) {}
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2553,6 +2656,68 @@ async function loadUserProfile(userId) {
 
 function renderUserProfile(data) {
     const user = data.user;
+
+    // Пользователь в черном списке: профиль полностью скрыт и пуст
+    const isBlocked = (user && (
+        user.display_name === 'Пользователь ограничил доступ' ||
+        (user.bio && user.bio.includes('Профиль скрыт'))
+    ));
+
+    if (isBlocked) {
+        document.getElementById('profileBreadcrumbUser').textContent = `@${user.username}`;
+        document.getElementById('heroDisplayName').textContent = 'Пользователь ограничил доступ';
+        document.getElementById('heroUsername').textContent = `@${user.username}`;
+        document.getElementById('heroBio').textContent = 'Профиль скрыт настройками приватности или блокировкой.';
+        document.getElementById('heroAvatar').src = '/static/avatars/default.svg';
+
+        const heroCard = document.getElementById('profileHeroCard');
+        if (heroCard) {
+            heroCard.style.removeProperty('--profile-accent');
+            heroCard.classList.remove('has-custom-accent');
+        }
+        const banner = document.getElementById('heroBanner');
+        if (banner) banner.style.backgroundImage = 'linear-gradient(135deg, #111827 0%, #0b0f19 50%, #1e293b 100%)';
+        const bannerOverlay = document.getElementById('heroBannerOverlay');
+        if (bannerOverlay) bannerOverlay.className = 'hero-banner-overlay bg-effect-none';
+
+        const rankBadge = document.getElementById('heroRankBadge');
+        if (rankBadge) rankBadge.style.display = 'none';
+        const statusContainer = document.getElementById('heroStatusContainer');
+        if (statusContainer) statusContainer.style.display = 'none';
+        const skillsContainer = document.getElementById('heroSkillsContainer');
+        if (skillsContainer) skillsContainer.style.display = 'none';
+        const musicWrap = document.getElementById('heroMusicPlayerWrap');
+        if (musicWrap) musicWrap.style.display = 'none';
+        const socialContainer = document.getElementById('heroSocialContainer');
+        if (socialContainer) socialContainer.style.display = 'none';
+        const heroLevelBadge = document.getElementById('heroLevelBadge');
+        if (heroLevelBadge) heroLevelBadge.style.display = 'none';
+
+        document.getElementById('heroStatPosts').textContent = '0';
+        document.getElementById('heroStatGifts').textContent = '🎁 0';
+        document.getElementById('heroStatFollowers').textContent = '0';
+        document.getElementById('heroStatFollowing').textContent = '0';
+        if (document.getElementById('heroStatLevel')) document.getElementById('heroStatLevel').textContent = '—';
+        if (document.getElementById('heroStatXP')) document.getElementById('heroStatXP').textContent = '0 XP';
+
+        const actionsBox = document.getElementById('heroActionsContainer');
+        if (actionsBox) {
+            actionsBox.innerHTML = `
+                <button class="btn btn-outline btn-sm text-danger" onclick="toggleBlockUser(${user.id})">
+                    <span>🚫 Управление блокировкой</span>
+                </button>
+            `;
+        }
+        const profComposer = document.getElementById('profComposerCard');
+        if (profComposer) profComposer.style.display = 'none';
+        const blTab = document.getElementById('profTabBtnBlacklist');
+        if (blTab) blTab.style.display = 'none';
+
+        renderProfilePosts([]);
+        renderProfileGifts([]);
+        renderProfileNetwork([], []);
+        return;
+    }
 
     document.getElementById('profileBreadcrumbUser').textContent = `@${user.username}`;
     document.getElementById('heroDisplayName').textContent = user.display_name;
@@ -2801,10 +2966,19 @@ function renderUserProfile(data) {
                     <button type="button" class="profile-dropdown-item" onclick="copyProfileLink(${user.id}); closeProfileOptionsMenu();">
                         <span>📋 Скопировать ссылку</span>
                     </button>
+                    <div class="profile-dropdown-divider"></div>
+                    <button type="button" class="profile-dropdown-item text-danger" id="btnBlockUserDropdown" onclick="toggleBlockUser(${user.id}); closeProfileOptionsMenu();">
+                        <span>🚫 В черный список</span>
+                    </button>
                 </div>
             </div>
         `;
+        fetchBlockStatusForProfile(user.id);
     }
+
+    const blTab = document.getElementById('profTabBtnBlacklist');
+    if (blTab) blTab.style.display = data.is_owner ? 'inline-flex' : 'none';
+    fetchUserCollectionsCount(user.id);
 
     handleIthaquaProfileSetup(user, data.is_owner);
 
@@ -2927,7 +3101,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 function switchProfileTab(tabName) {
-    ['Posts', 'Gifts', 'Network', 'IdentityV'].forEach(t => {
+    ['Posts', 'Gifts', 'Network', 'IdentityV', 'Collections', 'Blacklist'].forEach(t => {
         const btn = document.getElementById(`profTabBtn${t}`);
         const pane = document.getElementById(`profTabContent${t}`);
         const card = document.getElementById(`statCard${t}`);
@@ -2937,6 +3111,12 @@ function switchProfileTab(tabName) {
         if (pane) pane.style.display = isCurrent ? 'block' : 'none';
         if (card) card.classList.toggle('active', isCurrent);
     });
+
+    if (tabName.toLowerCase() === 'collections') {
+        loadUserCollections(currentProfileUserId || window.CURRENT_USER_ID);
+    } else if (tabName.toLowerCase() === 'blacklist') {
+        loadBlacklist();
+    }
 }
 
 function renderProfilePosts(posts) {
@@ -4747,7 +4927,21 @@ function renderConversationsList(convs) {
         item.className = 'conversation-item' + (c.user.id === activeChatUserId ? ' active' : '');
         item.dataset.userId = c.user.id;
 
-        const previewText = c.last_message ? escapeHtml(c.last_message.content) : '<span style="opacity: 0.6; font-style: italic;">Нажмите, чтобы открыть чат</span>';
+        let previewText = '<span style="opacity: 0.6; font-style: italic;">Нажмите, чтобы открыть чат</span>';
+        if (c.last_message) {
+            const isMe = (c.last_message.sender_id === window.CURRENT_USER_ID);
+            const prefix = isMe ? '<span class="conv-prefix-you">Вы: </span>' : '';
+            let rawContent = c.last_message.content || '';
+            if (c.last_message.is_hidden) {
+                rawContent = '🔒 [Скрытое сообщение]';
+            } else if (c.last_message.audio_url || /\.(mp3|wav|ogg|m4a|aac|flac)($|\?)/i.test(rawContent)) {
+                rawContent = '🎵 [Аудиофайл]';
+            } else if (/\.(jpeg|jpg|gif|png|webp)($|\?)/i.test(rawContent)) {
+                rawContent = '📷 [Фото]';
+            }
+            previewText = prefix + escapeHtml(rawContent);
+        }
+
         const timeText = c.last_message ? formatTime(c.last_message.created_at) : '';
         const unreadBadge = c.unread_count > 0 ? `<span class="conv-unread-badge">${c.unread_count}</span>` : '';
 
@@ -4800,6 +4994,13 @@ async function openChatWithUser(userId, displayName = null, username = null, ava
 
     navigateTo('messages');
     activeChatUserId = userId;
+    try {
+        window.history.replaceState({}, '', `/?view=messages&chat_with=${userId}`);
+        localStorage.setItem('gosocial_last_location', JSON.stringify({
+            view: 'messages',
+            chatWith: userId
+        }));
+    } catch (_) {}
 
     document.querySelectorAll('.conversation-item').forEach(item => {
         item.classList.toggle('active', parseInt(item.dataset.userId, 10) === userId);
@@ -4832,6 +5033,8 @@ async function openChatWithUser(userId, displayName = null, username = null, ava
 
     await loadChatMessages(userId);
     fetchCryptoKeysForChat(userId);
+    checkChatBlockStatus(userId);
+    loadChatScheduledCount(userId);
     const input = document.getElementById('chatMessageInput');
     if (input) input.focus({ preventScroll: true });
 }
@@ -5354,6 +5557,7 @@ function startEditChatMessage(msgId) {
         input.value = rawText;
         input.focus();
         input.select();
+        autoResizeChatInput(input);
     }
 
     // Обработка аудиофайла в режиме редактирования:
@@ -5369,7 +5573,10 @@ function cancelEditChatMessage() {
     const banner = document.getElementById('chatEditBanner');
     const input = document.getElementById('chatMessageInput');
     if (banner) banner.style.display = 'none';
-    if (input) input.value = '';
+    if (input) {
+        input.value = '';
+        autoResizeChatInput(input);
+    }
     clearChatFile();
     clearChatAudioAttachment();
 }
@@ -5591,7 +5798,38 @@ function formatChatMessageText(text) {
     });
 
     escaped = escaped.replace(/\n/g, '<br>');
-    return escaped + repostCardHtml;
+
+    // Интерактивное превью видео YouTube при отправке ссылки в чат
+    const ytRegex = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
+    const ytMatch = text.match(ytRegex);
+    let ytCardHtml = '';
+    if (ytMatch) {
+        const videoId = ytMatch[1];
+        const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+        const fullWatchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        ytCardHtml = `
+            <div class="chat-yt-preview" onclick="window.open('${fullWatchUrl}', '_blank', 'noopener,noreferrer')" title="Смотреть видео на YouTube">
+                <div class="yt-thumb-box">
+                    <img src="${thumbUrl}" alt="YouTube Preview" class="yt-thumb-img" loading="lazy" onerror="this.src='/static/avatars/default.svg'">
+                    <div class="yt-play-overlay">
+                        <div class="yt-play-badge">
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="#ffffff"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="yt-info">
+                    <div class="yt-badge"><span class="yt-red-dot">●</span> YouTube Video</div>
+                    <div class="yt-title">Смотреть видео на YouTube (${videoId})</div>
+                    <div class="yt-link-row">
+                        <span>youtu.be/${videoId}</span>
+                        <span class="yt-open-icon">Смотреть ↗</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    return escaped + repostCardHtml + ytCardHtml;
 }
 
 async function navigateToPost(postId, event) {
@@ -5730,6 +5968,10 @@ async function webCryptoDecryptMessage(ciphertextBase64, nonceBase64, senderKey,
 }
 
 function buildChatMessageBubbleHtml(m, isOut) {
+    if (m.is_destroyed) {
+        return `<div class="chat-destroyed-msg"><span class="destroyed-icon">⏳</span> <span>Сообщение удалено</span></div>`;
+    }
+
     if (m.is_encrypted) {
         const fingerprintText = m.key_fingerprint ? ` | Отпечаток: ${escapeHtml(m.key_fingerprint)}` : '';
         const cipherPreview = m.ciphertext ? `<div class="chat-ciphertext-preview" title="Шифротекст Web Crypto (AES-256-GCM)"><code>${escapeHtml(m.ciphertext.substring(0, 32))}...</code></div>` : '';
@@ -5802,6 +6044,30 @@ function buildChatMessageBubbleHtml(m, isOut) {
         const pollWidgetHtml = renderPollWidget(m.poll);
         contentHtml = (contentHtml ? contentHtml + '<div style="margin-top: 6px;"></div>' : '') + pollWidgetHtml;
     }
+
+    if (m.is_hidden) {
+        contentHtml = `
+            <div class="chat-hidden-msg" onclick="revealHiddenMessage(this, ${m.id})" title="Нажмите, чтобы прочитать">
+                <div class="chat-hidden-cover">
+                    <span class="chat-hidden-icon">🔒</span>
+                    <span class="chat-hidden-hint">${escapeHtml(m.hidden_hint || 'Скрытое сообщение')}</span>
+                    <span class="chat-hidden-action">⚡ Открыть</span>
+                </div>
+                <div class="chat-hidden-content" style="display: none;">${contentHtml}</div>
+            </div>
+        `;
+    }
+
+    if (m.self_destruct_seconds > 0 && !m.is_destroyed) {
+        const timerPill = `
+            <div class="chat-ephemeral-badge" id="ephemeral-timer-${m.id}" data-seconds="${m.self_destruct_seconds}">
+                <span>⏳</span> <span class="countdown-val">${m.self_destruct_seconds}с</span>
+            </div>
+        `;
+        contentHtml = timerPill + contentHtml;
+        scheduleEphemeralDestruction(m);
+    }
+
     return contentHtml;
 }
 
@@ -5873,7 +6139,7 @@ function appendChatMessageElement(m) {
 
     setChatMessageRowData(row, m, isOut);
 
-    const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
+    const statusCheck = isOut ? (m.is_read ? '<span class="chat-bubble-status read" title="Прочитано">✓✓</span>' : '<span class="chat-bubble-status" title="Доставлено">✓</span>') : '';
     const editedBadge = m.is_edited ? '<span class="chat-bubble-edited" title="Отредактировано">• (ред.)</span>' : '';
 
     const contentHtml = buildChatMessageBubbleHtml(m, isOut);
@@ -5884,8 +6150,15 @@ function appendChatMessageElement(m) {
         </div>
     `;
 
+    const avatarHtml = (!isOut && activeInterlocutorData && activeInterlocutorData.avatar_url) ? `
+        <div class="chat-msg-avatar-wrap" onclick="openInterlocutorProfile()" title="${escapeHtml(activeInterlocutorData.display_name || 'Собеседник')}">
+            <img src="${escapeHtml(activeInterlocutorData.avatar_url)}" alt="avatar" class="chat-msg-avatar">
+        </div>
+    ` : '';
+
     row.innerHTML = `
         ${selectCol}
+        ${avatarHtml}
         <div class="chat-bubble-wrapper">
             <div class="chat-bubble ${isOut ? 'out' : 'in'}">
                 <div class="chat-bubble-content">${contentHtml}</div>
@@ -5998,6 +6271,8 @@ async function handleSendMessage(e) {
             nonce = encRes.nonce;
         }
 
+        const isScheduledFuture = chatScheduledAt && (new Date(chatScheduledAt) > new Date());
+
         const res = await fetch('/api/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -6012,7 +6287,11 @@ async function handleSendMessage(e) {
                 nonce: nonce,
                 sender_pubkey: senderPubkey,
                 receiver_pubkey: receiverPubkey,
-                key_fingerprint: keyFingerprint
+                key_fingerprint: keyFingerprint,
+                scheduled_at: chatScheduledAt,
+                is_hidden: chatIsHidden,
+                hidden_hint: chatHiddenHint,
+                self_destruct_seconds: chatSelfDestructSeconds
             })
         });
 
@@ -6026,14 +6305,21 @@ async function handleSendMessage(e) {
             msg.content = content;
         }
         input.value = '';
+        autoResizeChatInput(input);
         clearChatFile();
         clearChatAudioAttachment();
+        clearChatActiveModes();
 
         playChatSoundFx('send');
 
-        // Добавляем сообщение в интерфейс отправителя сразу
-        appendChatMessageElement(msg);
-        scrollChatToBottom();
+        if (isScheduledFuture) {
+            showToast('⏱️ Сообщение запланировано в очередь отправки', 'success');
+            loadChatScheduledCount(activeChatUserId);
+        } else {
+            // Добавляем сообщение в интерфейс отправителя сразу
+            appendChatMessageElement(msg);
+            scrollChatToBottom();
+        }
 
         loadConversations();
     } catch (err) {
@@ -11020,3 +11306,1661 @@ async function loadFederationActivity() {
         `).join('');
     } catch (_) {}
 }
+
+// ==========================================================================
+// FEATURE 1: ВРЕМЕННЫЕ ИСТОРИИ (EPHEMERAL STORIES 24H)
+// ==========================================================================
+let cachedStoriesGroups = [];
+let activeStoryGroup = null;
+let activeStoryIndex = 0;
+let storyTimer = null;
+let storyProgressAnim = null;
+let storyPaused = false;
+let storyTimeRemaining = 5000;
+let storyStartTime = 0;
+const STORY_DURATION_MS = 5000;
+
+const STORY_GRADIENTS = {
+    cyber_cyan: 'linear-gradient(135deg, #091e3a, #00f0ff)',
+    synthwave: 'linear-gradient(135deg, #2b0840, #ff007f)',
+    tokyo: 'linear-gradient(135deg, #0f172a, #3b82f6)',
+    matrix: 'linear-gradient(135deg, #022c22, #10b981)',
+    solar: 'linear-gradient(135deg, #451a03, #f59e0b)',
+    crimson_glitch: 'linear-gradient(135deg, #3b0712, #ef4444)',
+    obsidian_gold: 'linear-gradient(135deg, #18181b, #eab308)',
+    vapor_sunset: 'linear-gradient(135deg, #311042, #f43f5e)',
+    emerald_matrix: 'linear-gradient(135deg, #064e3b, #34d399)',
+    aurora_borealis: 'linear-gradient(135deg, #042f2e, #8b5cf6)',
+    mono_carbon: 'linear-gradient(135deg, #111827, #64748b)'
+};
+
+let selectedStoryGradient = 'cyber_cyan';
+let selectedStoryType = 'media';
+let selectedStoryFont = 'cyber';
+let selectedStoryAlign = 'center';
+let selectedStoryTextColor = '#ffffff';
+let selectedStorySticker = '';
+
+function setStoryFont(fontKey) {
+    selectedStoryFont = fontKey || 'cyber';
+    document.querySelectorAll('.story-opt-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.dataset.font === selectedStoryFont);
+    });
+    updateStoryPreview();
+}
+
+function setStoryAlign(alignKey) {
+    selectedStoryAlign = alignKey || 'center';
+    document.querySelectorAll('.story-align-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.align === selectedStoryAlign);
+    });
+    updateStoryPreview();
+}
+
+function setStoryTextColor(colorHex) {
+    selectedStoryTextColor = colorHex || '#ffffff';
+    document.querySelectorAll('.story-color-dot').forEach(dot => {
+        dot.classList.toggle('active', dot.dataset.color === selectedStoryTextColor);
+    });
+    updateStoryPreview();
+}
+
+function setStorySticker(stickerEmoji) {
+    selectedStorySticker = (selectedStorySticker === stickerEmoji) ? '' : stickerEmoji;
+    document.querySelectorAll('.story-sticker-chip').forEach(chip => {
+        chip.classList.toggle('active', (chip.dataset.sticker || '') === selectedStorySticker);
+    });
+    updateStoryPreview();
+}
+
+async function loadStories() {
+    const listEl = document.getElementById('storiesItemsList');
+    if (!listEl) return;
+
+    try {
+        const res = await fetch('/api/stories');
+        if (!res.ok) return;
+        const groups = await res.json();
+        cachedStoriesGroups = groups || [];
+
+        renderStoriesRail(cachedStoriesGroups);
+    } catch (e) {
+        console.warn('Load stories error:', e);
+    }
+}
+
+function renderStoriesRail(groups) {
+    const listEl = document.getElementById('storiesItemsList');
+    const myAddCard = document.getElementById('storyItemMyAdd');
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    const myId = window.CURRENT_USER_ID;
+    const myGroup = groups.find(g => (g.user_id || (g.user && g.user.id)) === myId);
+
+    if (myAddCard) {
+        if (myGroup && myGroup.stories && myGroup.stories.length > 0) {
+            myAddCard.classList.remove('story-item-add');
+            myAddCard.classList.add('story-item-has-stories');
+            myAddCard.onclick = () => openStoryViewer(myId);
+            const label = myAddCard.querySelector('.story-user-label');
+            if (label) label.textContent = 'Моя история';
+            const ring = myAddCard.querySelector('.story-avatar-ring');
+            if (ring) {
+                ring.classList.remove('ring-add');
+                if (myGroup.has_unviewed) {
+                    ring.classList.remove('all-viewed');
+                } else {
+                    ring.classList.add('all-viewed');
+                }
+            }
+            const badge = myAddCard.querySelector('.story-add-badge');
+            if (badge) {
+                badge.onclick = (e) => {
+                    e.stopPropagation();
+                    openCreateStoryModal();
+                };
+                badge.title = 'Опубликовать еще одну историю';
+            }
+        } else {
+            myAddCard.classList.add('story-item-add');
+            myAddCard.classList.remove('story-item-has-stories');
+            myAddCard.onclick = openCreateStoryModal;
+            const label = myAddCard.querySelector('.story-user-label');
+            if (label) label.textContent = 'Ваша история';
+            const ring = myAddCard.querySelector('.story-avatar-ring');
+            if (ring) {
+                ring.classList.add('ring-add');
+                ring.classList.remove('all-viewed');
+            }
+            const badge = myAddCard.querySelector('.story-add-badge');
+            if (badge) {
+                badge.onclick = null;
+                badge.title = 'Опубликовать историю';
+            }
+        }
+    }
+
+    groups.forEach(g => {
+        const uid = g.user_id || (g.user && g.user.id);
+        if (uid === myId) return; // своя история уже отображается в myAddCard
+        const item = document.createElement('div');
+        item.className = 'story-item';
+        item.onclick = () => openStoryViewer(uid);
+
+        const ringClass = g.has_unviewed ? '' : 'all-viewed';
+        const storiesCount = (g.stories && g.stories.length > 1) ? `<span class="story-multi-badge">${g.stories.length}</span>` : '';
+
+        item.innerHTML = `
+            <div class="story-avatar-ring ${ringClass}">
+                <img src="${escapeHtml(g.user.avatar_url || '/static/avatars/default.svg')}" alt="${escapeHtml(g.user.display_name)}" class="story-avatar-img">
+                ${storiesCount}
+            </div>
+            <span class="story-user-label">${escapeHtml(g.user.display_name || g.user.username)}</span>
+        `;
+        listEl.appendChild(item);
+    });
+}
+
+function openCreateStoryModal() {
+    const modal = document.getElementById('modalCreateStory');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    switchStoryType('media');
+    selectStoryGradient('cyber_cyan');
+    setStoryFont('cyber');
+    setStoryAlign('center');
+    setStoryTextColor('#ffffff');
+    setStorySticker('');
+    const mediaInput = document.getElementById('storyMediaUrl');
+    const captionInput = document.getElementById('storyCaptionInput');
+    if (mediaInput) mediaInput.value = '';
+    if (captionInput) captionInput.value = '';
+    updateStoryPreview();
+}
+
+function closeCreateStoryModal() {
+    const modal = document.getElementById('modalCreateStory');
+    if (modal) modal.style.display = 'none';
+}
+
+function switchStoryType(type) {
+    selectedStoryType = type;
+    const mediaBox = document.getElementById('storyMediaBox');
+    const gradBox = document.getElementById('storyGradientBox');
+    const mediaBtn = document.getElementById('storyTypeMediaBtn');
+    const textBtn = document.getElementById('storyTypeTextBtn');
+
+    if (mediaBox && gradBox) {
+        if (type === 'media') {
+            mediaBox.style.display = 'block';
+            gradBox.style.display = 'none';
+            if (mediaBtn) mediaBtn.classList.add('active');
+            if (textBtn) textBtn.classList.remove('active');
+        } else {
+            mediaBox.style.display = 'none';
+            gradBox.style.display = 'block';
+            if (mediaBtn) mediaBtn.classList.remove('active');
+            if (textBtn) textBtn.classList.add('active');
+        }
+    }
+    updateStoryPreview();
+}
+
+function selectStoryGradient(gradKey) {
+    selectedStoryGradient = gradKey;
+    document.querySelectorAll('.gradient-thumb').forEach(thumb => {
+        thumb.style.borderColor = (thumb.dataset.grad === gradKey) ? '#fff' : 'transparent';
+    });
+    updateStoryPreview();
+}
+
+async function handleStoryFileUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (!res.ok) throw new Error('Ошибка загрузки файла');
+        const data = await res.json();
+        const urlInput = document.getElementById('storyMediaUrl');
+        if (urlInput) {
+            urlInput.value = data.url;
+            updateStoryPreview();
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function updateStoryPreview() {
+    const mini = document.getElementById('storyMiniPreview');
+    const previewImg = document.getElementById('storyPreviewImg');
+    const previewCaption = document.getElementById('storyPreviewCaption');
+    const previewSticker = document.getElementById('storyPreviewSticker');
+    const mediaUrl = (document.getElementById('storyMediaUrl') ? document.getElementById('storyMediaUrl').value.trim() : '');
+    const caption = (document.getElementById('storyCaptionInput') ? document.getElementById('storyCaptionInput').value.trim() : '');
+
+    if (!mini) return;
+
+    if (previewCaption) {
+        previewCaption.textContent = caption || 'Ваша история';
+        previewCaption.className = `story-font-${selectedStoryFont}`;
+        previewCaption.style.textAlign = selectedStoryAlign;
+        previewCaption.style.color = selectedStoryTextColor;
+    }
+
+    if (previewSticker) {
+        if (selectedStorySticker) {
+            previewSticker.textContent = selectedStorySticker;
+            previewSticker.style.display = 'block';
+        } else {
+            previewSticker.style.display = 'none';
+        }
+    }
+
+    if (selectedStoryType === 'media' && mediaUrl) {
+        if (previewImg) {
+            previewImg.src = mediaUrl;
+            previewImg.style.display = 'block';
+        }
+        mini.style.background = '#0d1117';
+    } else {
+        if (previewImg) previewImg.style.display = 'none';
+        mini.style.background = STORY_GRADIENTS[selectedStoryGradient] || STORY_GRADIENTS.cyber_cyan;
+    }
+}
+
+async function submitCreateStory(e) {
+    if (e) e.preventDefault();
+    const btn = document.getElementById('btnPublishStory');
+    const mediaUrl = (document.getElementById('storyMediaUrl') ? document.getElementById('storyMediaUrl').value.trim() : '');
+    const caption = (document.getElementById('storyCaptionInput') ? document.getElementById('storyCaptionInput').value.trim() : '');
+
+    if (selectedStoryType === 'media' && !mediaUrl && !caption) {
+        showToast('Загрузите фото или добавьте подпись', 'error');
+        return;
+    }
+    if (selectedStoryType === 'text' && !caption) {
+        showToast('Введите текст истории', 'error');
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+
+    try {
+        const payload = {
+            media_url: selectedStoryType === 'media' ? mediaUrl : '',
+            caption: caption,
+            bg_gradient: selectedStoryType === 'text' ? (STORY_GRADIENTS[selectedStoryGradient] || '') : '',
+            font_family: selectedStoryFont,
+            text_align: selectedStoryAlign,
+            text_color: selectedStoryTextColor,
+            sticker: selectedStorySticker,
+            duration_hours: 24
+        };
+
+        const res = await fetch('/api/stories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка публикации истории');
+        }
+
+        showToast('История опубликована на 24 часа! ⚡', 'success');
+        closeCreateStoryModal();
+        await loadStories();
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// Fullscreen Story Viewer
+function openStoryViewer(userId, startIndex = 0) {
+    activeStoryGroup = cachedStoriesGroups.find(g => (g.user_id || (g.user && g.user.id)) === userId);
+    if (!activeStoryGroup || !activeStoryGroup.stories || activeStoryGroup.stories.length === 0) {
+        showToast('Истории пользователя недоступны', 'error');
+        return;
+    }
+
+    if (startIndex === 0 && activeStoryGroup.stories.length > 1) {
+        const firstUnviewed = activeStoryGroup.stories.findIndex(s => !s.is_viewed);
+        activeStoryIndex = (firstUnviewed !== -1) ? firstUnviewed : 0;
+    } else {
+        activeStoryIndex = startIndex;
+    }
+
+    const modal = document.getElementById('modalStoryViewer');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    renderCurrentStoryViewer();
+}
+
+function closeStoryViewer() {
+    clearTimeout(storyTimer);
+    activeStoryGroup = null;
+    const modal = document.getElementById('modalStoryViewer');
+    if (modal) modal.style.display = 'none';
+}
+
+function handleStoryViewerOverlayClick(e) {
+    if (e.target.id === 'modalStoryViewer') {
+        closeStoryViewer();
+    }
+}
+
+function renderCurrentStoryViewer() {
+    clearTimeout(storyTimer);
+    if (!activeStoryGroup || !activeStoryGroup.stories || activeStoryGroup.stories.length === 0) {
+        closeStoryViewer();
+        return;
+    }
+
+    const myActiveUid = activeStoryGroup.user_id || (activeStoryGroup.user && activeStoryGroup.user.id);
+    const currentGroupIdx = cachedStoriesGroups.findIndex(g => (g.user_id || (g.user && g.user.id)) === myActiveUid);
+
+    if (activeStoryIndex < 0) {
+        if (currentGroupIdx > 0) {
+            const prevGrp = cachedStoriesGroups[currentGroupIdx - 1];
+            const prevUid = prevGrp.user_id || (prevGrp.user && prevGrp.user.id);
+            openStoryViewer(prevUid, Math.max(0, prevGrp.stories.length - 1));
+            return;
+        } else {
+            activeStoryIndex = 0;
+        }
+    }
+    if (activeStoryIndex >= activeStoryGroup.stories.length) {
+        // переходим к следующему пользователю в карусели
+        if (currentGroupIdx !== -1 && currentGroupIdx + 1 < cachedStoriesGroups.length) {
+            const nextGrp = cachedStoriesGroups[currentGroupIdx + 1];
+            const nextUid = nextGrp.user_id || (nextGrp.user && nextGrp.user.id);
+            openStoryViewer(nextUid, 0);
+            return;
+        } else {
+            closeStoryViewer();
+            return;
+        }
+    }
+
+    const story = activeStoryGroup.stories[activeStoryIndex];
+    const user = activeStoryGroup.user;
+    const isOwner = (story.user_id === window.CURRENT_USER_ID);
+
+    // Сегменты прогресс-бара
+    const pBar = document.getElementById('storyProgressBar');
+    if (pBar) {
+        pBar.innerHTML = activeStoryGroup.stories.map((st, i) => {
+            const isCompleted = (i < activeStoryIndex) ? 'completed' : '';
+            return `<div class="story-progress-segment ${isCompleted}" id="storySeg-${i}"><div class="story-progress-fill" style="width: ${i < activeStoryIndex ? '100%' : '0%'}"></div></div>`;
+        }).join('');
+    }
+
+    // Автор и время
+    const avatar = document.getElementById('storyViewerAvatar');
+    const name = document.getElementById('storyViewerName');
+    const time = document.getElementById('storyViewerTime');
+    if (avatar) avatar.src = user.avatar_url || '/static/avatars/default.svg';
+    if (name) name.textContent = user.display_name || user.username;
+    if (time) time.textContent = formatFullDate(story.created_at);
+
+    // Кнопка удаления для автора
+    const delBtn = document.getElementById('btnDeleteCurrentStory');
+    if (delBtn) delBtn.style.display = isOwner ? 'inline-flex' : 'none';
+
+    // Тело истории (картинка или градиент)
+    const imgEl = document.getElementById('storyViewerImage');
+    const gradEl = document.getElementById('storyViewerGradientBg');
+    const captionEl = document.getElementById('storyViewerCaption');
+
+    if (story.media_url) {
+        if (imgEl) {
+            imgEl.src = story.media_url;
+            imgEl.style.display = 'block';
+        }
+        if (gradEl) gradEl.style.display = 'none';
+    } else {
+        if (imgEl) imgEl.style.display = 'none';
+        if (gradEl) {
+            gradEl.style.display = 'block';
+            gradEl.style.background = story.bg_gradient || STORY_GRADIENTS.cyber_cyan;
+        }
+    }
+
+    if (captionEl) {
+        captionEl.textContent = story.caption || '';
+        captionEl.style.display = story.caption ? 'block' : 'none';
+        captionEl.className = 'story-caption-overlay story-font-' + (story.font_family || 'cyber');
+        captionEl.style.textAlign = story.text_align || 'center';
+        captionEl.style.color = story.text_color || '#ffffff';
+    }
+
+    let stickerEl = document.getElementById('storyViewerSticker');
+    if (!stickerEl) {
+        stickerEl = document.createElement('div');
+        stickerEl.id = 'storyViewerSticker';
+        stickerEl.className = 'story-floating-sticker';
+        const bodyStage = document.getElementById('storyStageBody');
+        if (bodyStage) bodyStage.appendChild(stickerEl);
+    }
+    if (story.sticker) {
+        stickerEl.textContent = story.sticker;
+        stickerEl.style.display = 'block';
+    } else {
+        stickerEl.style.display = 'none';
+    }
+
+    // Просмотры (для автора)
+    const viewsPill = document.getElementById('storyViewsPill');
+    const viewsCount = document.getElementById('storyViewsCount');
+    if (viewsPill && viewsCount) {
+        if (isOwner) {
+            viewsPill.style.display = 'inline-flex';
+            viewsCount.textContent = story.views_count || 0;
+        } else {
+            viewsPill.style.display = 'none';
+        }
+    }
+
+    // Отмечаем просмотр на сервере
+    if (!isOwner && !story.is_viewed) {
+        fetch(`/api/stories/${story.id}/view`, { method: 'POST' }).catch(() => {});
+        story.is_viewed = true;
+    }
+
+    // Запуск анимации заполнения текущего сегмента
+    startStoryProgressTimer(STORY_DURATION_MS);
+}
+
+function startStoryProgressTimer(durationMs) {
+    clearTimeout(storyTimer);
+    storyStartTime = Date.now();
+    storyTimeRemaining = durationMs;
+
+    const currentSegFill = document.querySelector(`#storySeg-${activeStoryIndex} .story-progress-fill`);
+    if (currentSegFill) {
+        currentSegFill.style.transition = 'none';
+        currentSegFill.style.width = '0%';
+        void currentSegFill.offsetWidth; // Force synchronous reflow!
+        currentSegFill.style.transition = `width ${durationMs}ms linear`;
+        currentSegFill.style.width = '100%';
+    }
+
+    storyTimer = setTimeout(() => {
+        navigateStory(1);
+    }, durationMs);
+}
+
+function navigateStory(dir) {
+    clearTimeout(storyTimer);
+    activeStoryIndex += dir;
+    renderCurrentStoryViewer();
+}
+
+async function deleteCurrentStory(e) {
+    if (e) e.stopPropagation();
+    if (!activeStoryGroup || !activeStoryGroup.stories) return;
+    const story = activeStoryGroup.stories[activeStoryIndex];
+    if (!story) return;
+
+    if (!confirm('Удалить эту историю?')) return;
+
+    try {
+        const res = await fetch(`/api/stories/${story.id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Ошибка удаления истории');
+
+        showToast('История удалена', 'success');
+        activeStoryGroup.stories.splice(activeStoryIndex, 1);
+        if (activeStoryGroup.stories.length === 0) {
+            closeStoryViewer();
+        } else {
+            if (activeStoryIndex >= activeStoryGroup.stories.length) {
+                activeStoryIndex = activeStoryGroup.stories.length - 1;
+            }
+            renderCurrentStoryViewer();
+        }
+        await loadStories();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function openStoryViewersModal(e) {
+    if (e) e.stopPropagation();
+    if (!activeStoryGroup || !activeStoryGroup.stories) return;
+    const story = activeStoryGroup.stories[activeStoryIndex];
+    if (!story) return;
+
+    clearTimeout(storyTimer); // ставим на паузу
+
+    const modal = document.getElementById('modalStoryViewers');
+    const list = document.getElementById('storyViewersList');
+    const total = document.getElementById('storyViewersTotal');
+    if (!modal || !list) return;
+
+    modal.style.display = 'flex';
+    list.innerHTML = '<div class="chat-empty-hint">Загрузка просмотров...</div>';
+
+    try {
+        const res = await fetch(`/api/stories/${story.id}`);
+        if (!res.ok) throw new Error('Не удалось получить просмотры');
+        const data = await res.json();
+        const viewers = data.viewers || [];
+
+        if (total) total.textContent = viewers.length;
+
+        if (viewers.length === 0) {
+            list.innerHTML = '<div class="chat-empty-hint">Пока никто не посмотрел эту историю</div>';
+            return;
+        }
+
+        list.innerHTML = viewers.map(v => `
+            <div class="blacklist-user-item" style="padding: 8px 12px; cursor: pointer;" onclick="openUserProfile(${v.user.id}); closeStoryViewersModal(); closeStoryViewer();">
+                <div class="blacklist-user-meta">
+                    <img src="${escapeHtml(v.user.avatar_url || '/static/avatars/default.svg')}" alt="avatar" class="blacklist-avatar" style="width: 36px; height: 36px;">
+                    <div>
+                        <div class="blacklist-user-name" style="font-size: 0.88rem;">${escapeHtml(v.user.display_name)}</div>
+                        <div class="blacklist-user-handle" style="font-size: 0.75rem;">@${escapeHtml(v.user.username)}</div>
+                    </div>
+                </div>
+                <span style="font-size: 0.72rem; color: var(--text-dim);">${formatFullDate(v.viewed_at)}</span>
+            </div>
+        `).join('');
+    } catch (err) {
+        list.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function closeStoryViewersModal() {
+    const modal = document.getElementById('modalStoryViewers');
+    if (modal) modal.style.display = 'none';
+    // возобновляем просмотр
+    startStoryProgressTimer(3000);
+}
+
+function openStoryAuthorProfile(e) {
+    if (e) e.stopPropagation();
+    if (activeStoryGroup && activeStoryGroup.user) {
+        closeStoryViewer();
+        openUserProfile(activeStoryGroup.user.id);
+    }
+}
+
+// ==========================================================================
+// FEATURE 2: СООБЩЕНИЯ В ОПРЕДЕЛЕННЫЙ ПЕРИОД ВРЕМЕНИ (SCHEDULED MESSAGES)
+// FEATURE 3: СКРЫТЫЕ СООБЩЕНИЯ (SPOILER / DECRYPT GLITCH)
+// FEATURE 4: ВРЕМЕННЫЕ И САМОУНИЧТОЖАЮЩИЕСЯ СООБЩЕНИЯ (EPHEMERAL / DESTROY)
+// ==========================================================================
+let chatScheduledAt = null;
+let chatIsHidden = false;
+let chatHiddenHint = '';
+let chatSelfDestructSeconds = 0;
+
+function updateChatActiveModesUI() {
+    const bar = document.getElementById('chatActiveModesBar');
+    const chipsContainer = document.getElementById('chatActiveModeChips');
+    syncSendOptionsMenuState();
+    if (!bar || !chipsContainer) return;
+
+    const chips = [];
+
+    if (chatIsHidden) {
+        chips.push(`
+            <span class="mode-chip chip-spoiler">
+                <span>🔒 Скрытое (спойлер)</span>
+                <span class="mode-chip-remove" onclick="toggleChatSpoilerMode()">✕</span>
+            </span>
+        `);
+    }
+
+    if (chatSelfDestructSeconds > 0) {
+        chips.push(`
+            <span class="mode-chip chip-timer">
+                <span>⏳ Исчезнет: ${chatSelfDestructSeconds}с</span>
+                <span class="mode-chip-remove" onclick="setSelfDestructTimer(0)">✕</span>
+            </span>
+        `);
+    }
+
+    if (chatScheduledAt) {
+        const timeStr = new Date(chatScheduledAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+        chips.push(`
+            <span class="mode-chip chip-schedule">
+                <span>⏱️ Отправка: ${timeStr}</span>
+                <span class="mode-chip-remove" onclick="clearScheduledMode()">✕</span>
+            </span>
+        `);
+    }
+
+    if (chips.length > 0) {
+        chipsContainer.innerHTML = chips.join('');
+        bar.style.display = 'flex';
+    } else {
+        chipsContainer.innerHTML = '';
+        bar.style.display = 'none';
+    }
+}
+
+function clearChatActiveModes() {
+    chatScheduledAt = null;
+    chatIsHidden = false;
+    chatHiddenHint = '';
+    chatSelfDestructSeconds = 0;
+    updateChatActiveModesUI();
+}
+
+// Меню опций отправки по правому клику мыши на кнопку 'Отправить'
+function handleSendBtnContextMenu(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    toggleChatSendOptionsMenu();
+}
+
+function toggleChatSendOptionsMenu() {
+    const menu = document.getElementById('chatSendOptionsMenu');
+    if (!menu) return;
+    if (menu.style.display === 'flex') {
+        menu.style.display = 'none';
+    } else {
+        menu.style.display = 'flex';
+        syncSendOptionsMenuState();
+    }
+}
+
+function closeChatSendOptionsMenu() {
+    const menu = document.getElementById('chatSendOptionsMenu');
+    if (menu) menu.style.display = 'none';
+}
+
+function syncSendOptionsMenuState() {
+    const toggle = document.getElementById('sendOptSpoilerToggle');
+    if (toggle) {
+        toggle.textContent = chatIsHidden ? 'ВКЛ' : 'ВЫКЛ';
+        toggle.classList.toggle('active', chatIsHidden);
+    }
+    const chips = document.getElementById('sendDestructChips');
+    if (chips) {
+        chips.querySelectorAll('.destruct-chip').forEach(btn => {
+            const sec = parseInt(btn.dataset.sec || '0', 10);
+            btn.classList.toggle('active', sec === chatSelfDestructSeconds);
+        });
+    }
+    const badge = document.getElementById('chatSendOptionsBadge');
+    if (badge) {
+        const hasActiveOpt = chatIsHidden || chatSelfDestructSeconds > 0 || (chatScheduledAt && new Date(chatScheduledAt) > new Date());
+        badge.style.display = hasActiveOpt ? 'flex' : 'none';
+    }
+}
+
+function toggleChatSpoilerFromMenu() {
+    chatIsHidden = !chatIsHidden;
+    if (chatIsHidden) {
+        chatHiddenHint = 'Скрытое кибер-сообщение';
+    }
+    syncSendOptionsMenuState();
+    updateChatActiveModesUI();
+}
+
+function setSelfDestructFromMenu(seconds) {
+    chatSelfDestructSeconds = seconds;
+    syncSendOptionsMenuState();
+    updateChatActiveModesUI();
+}
+
+function openScheduleModalFromMenu() {
+    closeChatSendOptionsMenu();
+    openScheduleMessageModal();
+}
+
+function handleChatInputKeydown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage(e);
+    }
+}
+
+function autoResizeChatInput(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    const newHeight = Math.min(el.scrollHeight, 140);
+    el.style.height = Math.max(24, newHeight) + 'px';
+}
+
+function toggleChatHeaderMoreMenu(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    const menu = document.getElementById('chatHeaderMoreDropdown');
+    if (!menu) return;
+    const isShown = (menu.style.display !== 'none');
+    if (isShown) {
+        menu.style.display = 'none';
+    } else {
+        updateChatMoreDropdownBlockBtn();
+        const fpBtn = document.getElementById('btnE2EEFingerprint');
+        if (fpBtn) {
+            fpBtn.style.display = currentChatE2EEEnabled ? 'flex' : 'none';
+        }
+        menu.style.display = 'flex';
+    }
+}
+
+function closeChatHeaderMoreMenu() {
+    const menu = document.getElementById('chatHeaderMoreDropdown');
+    if (menu) menu.style.display = 'none';
+}
+
+function updateChatMoreDropdownBlockBtn() {
+    const btn = document.getElementById('btnBlockFromChat');
+    const btnText = document.getElementById('btnBlockFromChatText');
+    if (!btn || !btnText) return;
+    if (profileBlockStatus && profileBlockStatus.is_blocked_by_me) {
+        btnText.textContent = 'Разблокировать собеседника';
+        btn.classList.remove('text-warning');
+        btn.classList.add('text-success');
+    } else {
+        btnText.textContent = 'В черный список';
+        btn.classList.remove('text-success');
+        btn.classList.add('text-warning');
+    }
+}
+
+async function toggleBlockFromChat() {
+    if (!activeChatUserId) return;
+    const isBlocked = !!(profileBlockStatus && profileBlockStatus.is_blocked_by_me);
+    const action = isBlocked ? 'unblock' : 'block';
+    const actionLabel = isBlocked ? 'Разблокировать' : 'Заблокировать';
+
+    if (!confirm(`Вы действительно хотите ${actionLabel.toLowerCase()} этого пользователя?`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/users/${activeChatUserId}/${action}`, { method: 'POST' });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.error || `Не удалось ${actionLabel.toLowerCase()} пользователя`, 'error');
+            return;
+        }
+        showToast(isBlocked ? 'Пользователь разблокирован' : 'Пользователь добавлен в черный список', 'info');
+        await checkChatBlockStatus(activeChatUserId);
+        updateChatMoreDropdownBlockBtn();
+    } catch (e) {
+        showToast('Ошибка сети', 'error');
+    }
+}
+
+async function confirmClearActiveChat() {
+    if (!activeChatUserId) return;
+    const rows = document.querySelectorAll('#chatMessagesContainer .chat-bubble-row');
+    if (rows.length === 0) {
+        showToast('История переписки уже пуста', 'info');
+        return;
+    }
+    if (!confirm('Вы уверены, что хотите удалить сообщения в этом диалоге?')) {
+        return;
+    }
+    const ids = [];
+    rows.forEach(r => {
+        const mid = parseInt(r.getAttribute('data-msg-id'), 10);
+        if (mid) ids.push(mid);
+    });
+    if (ids.length === 0) return;
+
+    try {
+        const res = await fetch('/api/messages/batch-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message_ids: ids, for_everyone: false })
+        });
+        if (!res.ok) throw new Error('Не удалось очистить диалог');
+        showToast('История диалога очищена', 'info');
+        loadChatMessages(activeChatUserId);
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#chatSendWrapper')) {
+        closeChatSendOptionsMenu();
+    }
+    if (!e.target.closest('.chat-head-more-wrap')) {
+        closeChatHeaderMoreMenu();
+    }
+});
+
+// Hidden messages
+function toggleChatSpoilerMode() {
+    chatIsHidden = !chatIsHidden;
+    if (chatIsHidden) {
+        chatHiddenHint = 'Скрытое кибер-сообщение';
+    }
+    updateChatActiveModesUI();
+}
+
+function revealHiddenMessage(el, messageId) {
+    if (!el) return;
+    const cover = el.querySelector('.chat-hidden-cover');
+    const content = el.querySelector('.chat-hidden-content');
+    if (cover && content) {
+        cover.style.display = 'none';
+        content.style.display = 'block';
+        content.classList.add('revealed');
+    }
+}
+
+// Self-destruct / Ephemeral messages
+function toggleSelfDestructPicker(e) {
+    if (e) e.stopPropagation();
+    toggleChatSendOptionsMenu();
+}
+
+function closeSelfDestructPicker() {
+    closeChatSendOptionsMenu();
+}
+
+function setSelfDestructTimer(seconds) {
+    chatSelfDestructSeconds = seconds;
+    syncSendOptionsMenuState();
+    updateChatActiveModesUI();
+}
+
+const activeDestructIntervals = {};
+
+function scheduleEphemeralDestruction(m) {
+    if (!m.self_destruct_seconds || m.is_destroyed) return;
+    if (activeDestructIntervals[m.id]) return;
+
+    let remaining = m.self_destruct_seconds;
+
+    // Вычисляем оставшееся время если уже было прочитано или создано
+    if (m.read_at) {
+        const readTime = new Date(m.read_at).getTime();
+        const elapsed = Math.floor((Date.now() - readTime) / 1000);
+        remaining = Math.max(0, m.self_destruct_seconds - elapsed);
+    }
+
+    const timerEl = document.getElementById(`ephemeral-timer-${m.id}`);
+    if (timerEl) {
+        const valSpan = timerEl.querySelector('.countdown-val');
+        if (valSpan) valSpan.textContent = `${remaining}с`;
+        if (remaining <= 5) timerEl.classList.add('urgent');
+    }
+
+    if (remaining <= 0) {
+        replaceWithDestroyedDOM(m.id);
+        return;
+    }
+
+    activeDestructIntervals[m.id] = setInterval(() => {
+        remaining -= 1;
+        const el = document.getElementById(`ephemeral-timer-${m.id}`);
+        if (el) {
+            const valSpan = el.querySelector('.countdown-val');
+            if (valSpan) valSpan.textContent = `${remaining}с`;
+            if (remaining <= 5) el.classList.add('urgent');
+        }
+        if (remaining <= 0) {
+            clearInterval(activeDestructIntervals[m.id]);
+            delete activeDestructIntervals[m.id];
+            replaceWithDestroyedDOM(m.id);
+        }
+    }, 1000);
+}
+
+function replaceWithDestroyedDOM(messageId) {
+    const row = document.getElementById(`chat-msg-${messageId}`);
+    if (row) {
+        const contentEl = row.querySelector('.chat-bubble-content');
+        if (contentEl) {
+            contentEl.innerHTML = `<div class="chat-destroyed-msg">💥 [ДАННЫЕ САМОУНИЧТОЖЕНЫ // VAPORIZED]</div>`;
+        }
+    }
+    // Сообщаем серверу перманентно уничтожить сообщение в PostgreSQL
+    if (messageId) {
+        fetch(`/api/messages/${messageId}/destroy`, { method: 'POST' }).catch(() => {});
+    }
+}
+
+// Scheduled Messages Modal & Logic
+function openScheduleMessageModal() {
+    const modal = document.getElementById('modalScheduleMessage');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    const input = document.getElementById('scheduleDatetimeInput');
+    if (input) {
+        // дефолт +30 минут от текущего времени
+        const d = new Date(Date.now() + 30 * 60 * 1000);
+        input.value = formatDatetimeLocal(d);
+    }
+}
+
+function closeScheduleMessageModal() {
+    const modal = document.getElementById('modalScheduleMessage');
+    if (modal) modal.style.display = 'none';
+}
+
+function formatDatetimeLocal(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function setScheduleOffsetMinutes(mins) {
+    const input = document.getElementById('scheduleDatetimeInput');
+    if (input) {
+        const d = new Date(Date.now() + mins * 60 * 1000);
+        input.value = formatDatetimeLocal(d);
+    }
+}
+
+function setSchedulePresetNextMorning() {
+    const input = document.getElementById('scheduleDatetimeInput');
+    if (input) {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        d.setHours(9, 0, 0, 0);
+        input.value = formatDatetimeLocal(d);
+    }
+}
+
+function setSchedulePresetNextEvening() {
+    const input = document.getElementById('scheduleDatetimeInput');
+    if (input) {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        d.setHours(18, 0, 0, 0);
+        input.value = formatDatetimeLocal(d);
+    }
+}
+
+function confirmScheduleMessage() {
+    const input = document.getElementById('scheduleDatetimeInput');
+    if (!input || !input.value) {
+        showToast('Выберите дату и время', 'error');
+        return;
+    }
+    const chosen = new Date(input.value);
+    if (chosen <= new Date()) {
+        showToast('Время отправки должно быть в будущем', 'error');
+        return;
+    }
+
+    chatScheduledAt = chosen.toISOString();
+    updateChatActiveModesUI();
+    closeScheduleMessageModal();
+    // Индикатор отправки отображается тихо в панели активных режимов без навязчивого тоста
+}
+
+function clearScheduledMode() {
+    chatScheduledAt = null;
+    updateChatActiveModesUI();
+    closeScheduleMessageModal();
+}
+
+async function loadChatScheduledCount(userId) {
+    const badge = document.getElementById('chatScheduledCountBadge');
+    if (!badge || !userId) return;
+
+    try {
+        const res = await fetch(`/api/messages/scheduled?with_user_id=${userId}`);
+        if (!res.ok) return;
+        const list = await res.json();
+        const count = list ? list.length : 0;
+
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'inline-flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (_) {}
+}
+
+async function openScheduledMessagesModal() {
+    if (!activeChatUserId) return;
+    const modal = document.getElementById('modalScheduledMessages');
+    const container = document.getElementById('scheduledMessagesList');
+    if (!modal || !container) return;
+
+    modal.style.display = 'flex';
+    container.innerHTML = '<div class="chat-empty-hint">Загрузка очереди...</div>';
+
+    try {
+        const res = await fetch(`/api/messages/scheduled?with_user_id=${activeChatUserId}`);
+        if (!res.ok) throw new Error('Ошибка загрузки очереди');
+        const list = await res.json();
+
+        if (!list || list.length === 0) {
+            container.innerHTML = '<div class="chat-empty-hint">В этом диалоге нет запланированных сообщений</div>';
+            return;
+        }
+
+        container.innerHTML = list.map(m => {
+            const timeStr = new Date(m.scheduled_at).toLocaleString('ru-RU');
+            return `
+                <div class="scheduled-msg-item" id="sched-msg-${m.id}">
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="scheduled-msg-time">⏱️ ${timeStr}</div>
+                        <div class="scheduled-msg-content">${escapeHtml(m.content || 'Медиа-вложение')}</div>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-xs text-danger" onclick="cancelScheduledMessage(${m.id})">Отменить</button>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        container.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function closeScheduledMessagesModal() {
+    const modal = document.getElementById('modalScheduledMessages');
+    if (modal) modal.style.display = 'none';
+}
+
+async function cancelScheduledMessage(msgId) {
+    if (!confirm('Отменить отправку этого сообщения?')) return;
+    try {
+        const res = await fetch(`/api/messages/${msgId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Не удалось отменить сообщение');
+        showToast('Сообщение отменено', 'success');
+        const item = document.getElementById(`sched-msg-${msgId}`);
+        if (item) item.remove();
+        if (activeChatUserId) loadChatScheduledCount(activeChatUserId);
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// ==========================================================================
+// FEATURE 5: ЧЕРНЫЙ СПИСОК (BLACKLIST / USER BLOCKING)
+// ==========================================================================
+let profileBlockStatus = { is_blocked_by_me: false, is_blocked_by_them: false, is_blocked: false };
+
+async function checkChatBlockStatus(userId) {
+    const banner = document.getElementById('chatBlockedBanner');
+    const input = document.getElementById('chatMessageInput');
+    const sendBtn = document.getElementById('chatSendBtn');
+
+    if (!userId) return;
+
+    try {
+        const res = await fetch(`/api/users/${userId}/block-status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        profileBlockStatus = data;
+
+        if (data.is_blocked) {
+            if (banner) banner.style.display = 'flex';
+            if (input) input.disabled = true;
+            if (sendBtn) sendBtn.disabled = true;
+        } else {
+            if (banner) banner.style.display = 'none';
+            if (input) input.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
+        }
+        updateChatMoreDropdownBlockBtn();
+    } catch (_) {}
+}
+
+async function fetchBlockStatusForProfile(userId) {
+    try {
+        const res = await fetch(`/api/users/${userId}/block-status`);
+        if (!res.ok) return;
+        profileBlockStatus = await res.json();
+
+        const btn = document.getElementById('btnBlockUserDropdown');
+        if (btn) {
+            if (profileBlockStatus.is_blocked_by_me) {
+                btn.innerHTML = '<span>Разблокировать пользователя</span>';
+                btn.classList.remove('text-danger');
+            } else {
+                btn.innerHTML = '<span>🚫 В черный список</span>';
+                btn.classList.add('text-danger');
+            }
+        }
+    } catch (_) {}
+}
+
+async function toggleBlockUser(userId) {
+    if (profileBlockStatus.is_blocked_by_me) {
+        await unblockUser(userId);
+    } else {
+        if (!confirm('Добавить пользователя в черный список? Он не сможет отправлять вам сообщения и комментировать записи.')) return;
+        await blockUser(userId);
+    }
+    fetchBlockStatusForProfile(userId);
+}
+
+async function blockUser(userId) {
+    try {
+        const res = await fetch('/api/blacklist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка добавления в черный список');
+        }
+        showToast('Пользователь добавлен в черный список 🚫', 'info');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function unblockUser(userId) {
+    try {
+        const res = await fetch(`/api/blacklist/${userId}`, { method: 'DELETE' });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка разблокировки');
+        }
+        showToast('Пользователь разблокирован', 'success');
+        if (currentProfileUserId === userId) {
+            fetchBlockStatusForProfile(userId);
+        }
+        loadBlacklist();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function loadBlacklist() {
+    const listEl = document.getElementById('profBlacklistList');
+    const emptyEl = document.getElementById('profBlacklistEmpty');
+    const badge = document.getElementById('badgeProfBlacklist');
+    if (!listEl) return;
+
+    listEl.innerHTML = '<div class="chat-empty-hint">Загрузка черного списка...</div>';
+
+    try {
+        const res = await fetch('/api/blacklist');
+        if (!res.ok) throw new Error('Ошибка загрузки черного списка');
+        const list = await res.json();
+
+        if (badge) badge.textContent = list ? list.length : 0;
+
+        if (!list || list.length === 0) {
+            listEl.innerHTML = '';
+            if (emptyEl) emptyEl.style.display = 'block';
+            return;
+        }
+
+        if (emptyEl) emptyEl.style.display = 'none';
+
+        listEl.innerHTML = list.map(b => `
+            <div class="blacklist-user-item">
+                <div class="blacklist-user-meta">
+                    <img src="${escapeHtml(b.blocked_user.avatar_url || '/static/avatars/default.svg')}" alt="avatar" class="blacklist-avatar">
+                    <div>
+                        <div class="blacklist-user-name">${escapeHtml(b.blocked_user.display_name)}</div>
+                        <div class="blacklist-user-handle">@${escapeHtml(b.blocked_user.username)}</div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="unblockUser(${b.blocked_user_id})">Разблокировать</button>
+            </div>
+        `).join('');
+    } catch (err) {
+        listEl.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+// ==========================================================================
+// FEATURE 6: КОЛЛЕКЦИИ / ПОДБОРКИ ПОСТОВ (PINTEREST BOARDS & PINS)
+// ==========================================================================
+let currentOpenCollectionId = null;
+
+async function fetchUserCollectionsCount(userId) {
+    const badge = document.getElementById('badgeProfCollections');
+    if (!badge || !userId) return;
+
+    try {
+        const res = await fetch(`/api/users/${userId}/collections`);
+        if (!res.ok) return;
+        const list = await res.json();
+        badge.textContent = list ? list.length : 0;
+    } catch (_) {}
+}
+
+async function loadUserCollections(userId) {
+    const grid = document.getElementById('profCollectionsGrid');
+    const empty = document.getElementById('profCollectionsEmpty');
+    const btnCreate = document.getElementById('btnCreateCollection');
+    if (!grid) return;
+
+    const isOwner = (userId === window.CURRENT_USER_ID);
+    if (btnCreate) btnCreate.style.display = isOwner ? 'inline-flex' : 'none';
+
+    grid.innerHTML = '<div class="chat-empty-hint">Загрузка подборок...</div>';
+
+    try {
+        const res = await fetch(`/api/users/${userId}/collections`);
+        if (!res.ok) throw new Error('Ошибка загрузки подборок');
+        const list = await res.json();
+
+        const badge = document.getElementById('badgeProfCollections');
+        if (badge) badge.textContent = list ? list.length : 0;
+
+        if (!list || list.length === 0) {
+            grid.innerHTML = '';
+            if (empty) empty.style.display = 'block';
+            return;
+        }
+
+        if (empty) empty.style.display = 'none';
+
+        grid.innerHTML = list.map(c => `
+            <div class="collection-board-card" onclick="openCollectionView(${c.id})">
+                <div class="board-cover-wrap">
+                    ${c.cover_image_url ? `<img src="${escapeHtml(c.cover_image_url)}" alt="cover" class="board-cover-img">` : '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; opacity: 0.5;">📌</div>'}
+                    ${c.is_private ? '<span class="board-privacy-tag">🔒 Личная</span>' : ''}
+                </div>
+                <div class="board-body">
+                    <h4 class="board-title">${escapeHtml(c.title)}</h4>
+                    <span class="board-pins-count">${c.posts_count || 0} постов</span>
+                    ${c.description ? `<p class="board-desc-snippet">${escapeHtml(c.description)}</p>` : ''}
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        grid.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+// Modal Save to Collection
+async function openSaveToCollectionModal(postId) {
+    const modal = document.getElementById('modalSaveToCollection');
+    const targetInput = document.getElementById('saveColTargetPostId');
+    const listContainer = document.getElementById('savePostCollectionsList');
+    if (!modal || !listContainer) return;
+
+    if (targetInput) targetInput.value = postId;
+
+    // Превью поста
+    const postEl = document.getElementById(`post-${postId}`);
+    const authorNameEl = document.getElementById('savePostPreviewAuthor');
+    const snippetEl = document.getElementById('savePostPreviewSnippet');
+    const thumbBox = document.getElementById('savePostThumbBox');
+    const thumbImg = document.getElementById('savePostThumbImg');
+
+    if (postEl) {
+        const author = postEl.querySelector('.author-name');
+        const text = postEl.querySelector('.post-content');
+        const img = postEl.querySelector('.post-media img');
+
+        if (authorNameEl && author) authorNameEl.textContent = author.textContent;
+        if (snippetEl && text) snippetEl.textContent = text.textContent.substring(0, 70);
+        if (thumbBox && thumbImg) {
+            if (img && img.src) {
+                thumbImg.src = img.src;
+                thumbBox.style.display = 'block';
+            } else {
+                thumbBox.style.display = 'none';
+            }
+        }
+    }
+
+    modal.style.display = 'flex';
+    listContainer.innerHTML = '<div class="chat-empty-hint">Загрузка досок...</div>';
+
+    try {
+        const [colsRes, statusRes] = await Promise.all([
+            fetch('/api/collections'),
+            fetch(`/api/posts/${postId}/collections`)
+        ]);
+
+        const cols = colsRes.ok ? await colsRes.json() : [];
+        const inStatus = statusRes.ok ? await statusRes.json() : {};
+
+        if (!cols || cols.length === 0) {
+            listContainer.innerHTML = '<div class="chat-empty-hint">У вас еще нет подборок. Создайте первую доску ниже!</div>';
+            return;
+        }
+
+        listContainer.innerHTML = cols.map(c => {
+            const isIn = inStatus[c.id] === true;
+            return `
+                <div class="col-check-item ${isIn ? 'in-collection' : ''}" onclick="togglePostInCollection(${c.id}, ${postId}, ${isIn})">
+                    <div>
+                        <div class="col-check-title">${escapeHtml(c.title)}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-dim);">${c.posts_count || 0} постов ${c.is_private ? '• 🔒' : ''}</div>
+                    </div>
+                    <span class="col-check-badge">${isIn ? '✓ Сохранено' : '＋ Добавить'}</span>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        listContainer.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function closeSaveToCollectionModal() {
+    const modal = document.getElementById('modalSaveToCollection');
+    if (modal) modal.style.display = 'none';
+}
+
+async function togglePostInCollection(colId, postId, currentlyIn) {
+    try {
+        if (currentlyIn) {
+            const res = await fetch(`/api/collections/${colId}/posts/${postId}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Ошибка удаления из подборки');
+            showToast('Удалено из подборки', 'info');
+        } else {
+            const res = await fetch(`/api/collections/${colId}/posts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ post_id: postId })
+            });
+            if (!res.ok) throw new Error('Ошибка сохранения в подборку');
+            showToast('📌 Сохранено в подборку (Pinterest)!', 'success');
+        }
+        openSaveToCollectionModal(postId); // обновляем чекбокс
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function toggleQuickCreateCollectionForm() {
+    const box = document.getElementById('quickCreateCollectionBox');
+    if (box) box.style.display = (box.style.display === 'none') ? 'block' : 'none';
+}
+
+async function submitQuickCreateCollection() {
+    const titleInput = document.getElementById('quickColTitle');
+    const privInput = document.getElementById('quickColIsPrivate');
+    const postIdInput = document.getElementById('saveColTargetPostId');
+
+    if (!titleInput || !titleInput.value.trim()) {
+        showToast('Введите название доски', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/collections', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: titleInput.value.trim(),
+                is_private: privInput ? privInput.checked : false
+            })
+        });
+        if (!res.ok) throw new Error('Ошибка создания подборки');
+        const newCol = await res.json();
+
+        // Сохраняем пост в созданную подборку
+        if (postIdInput && postIdInput.value) {
+            await fetch(`/api/collections/${newCol.id}/posts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ post_id: parseInt(postIdInput.value, 10) })
+            });
+            showToast(`📌 Подборка создана и пост сохранен!`, 'success');
+            openSaveToCollectionModal(parseInt(postIdInput.value, 10));
+        }
+        titleInput.value = '';
+        toggleQuickCreateCollectionForm();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+// Full Create / Edit Collection Modal
+function openCreateCollectionModal(editId = null) {
+    const modal = document.getElementById('modalCreateCollection');
+    const titleEl = document.getElementById('createCollectionModalTitle');
+    const idInput = document.getElementById('editCollectionId');
+    const formTitle = document.getElementById('colFormTitle');
+    const formDesc = document.getElementById('colFormDesc');
+    const formCover = document.getElementById('colFormCoverUrl');
+    const formPriv = document.getElementById('colFormIsPrivate');
+
+    if (!modal) return;
+
+    if (idInput) idInput.value = editId || '';
+    if (formTitle) formTitle.value = '';
+    if (formDesc) formDesc.value = '';
+    if (formCover) formCover.value = '';
+    if (formPriv) formPriv.checked = false;
+
+    if (titleEl) titleEl.textContent = editId ? 'Редактировать подборку' : 'Создать подборку';
+    modal.style.display = 'flex';
+}
+
+function closeCreateCollectionModal() {
+    const modal = document.getElementById('modalCreateCollection');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleCollectionCoverUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (!res.ok) throw new Error('Ошибка загрузки обложки');
+        const data = await res.json();
+        const input = document.getElementById('colFormCoverUrl');
+        if (input) input.value = data.url;
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function handleCreateCollectionSubmit(e) {
+    if (e) e.preventDefault();
+    const idInput = document.getElementById('editCollectionId');
+    const formTitle = document.getElementById('colFormTitle');
+    const formDesc = document.getElementById('colFormDesc');
+    const formCover = document.getElementById('colFormCoverUrl');
+    const formPriv = document.getElementById('colFormIsPrivate');
+    const btn = document.getElementById('btnSubmitCollection');
+
+    if (!formTitle || !formTitle.value.trim()) {
+        showToast('Введите название подборки', 'error');
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+
+    try {
+        const editId = idInput ? idInput.value : '';
+        const payload = {
+            title: formTitle.value.trim(),
+            description: formDesc ? formDesc.value.trim() : '',
+            cover_image_url: formCover ? formCover.value.trim() : '',
+            is_private: formPriv ? formPriv.checked : false
+        };
+
+        let res;
+        if (editId) {
+            res = await fetch(`/api/collections/${editId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            res = await fetch('/api/collections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Ошибка сохранения подборки');
+        }
+
+        showToast(editId ? 'Подборка обновлена ✨' : 'Подборка создана 📌', 'success');
+        closeCreateCollectionModal();
+
+        if (editId && currentOpenCollectionId === parseInt(editId, 10)) {
+            openCollectionView(parseInt(editId, 10));
+        } else {
+            loadUserCollections(window.CURRENT_USER_ID);
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// Dedicated Pinterest-like Collection View
+async function openCollectionView(collectionId) {
+    currentOpenCollectionId = collectionId;
+    navigateTo('collection');
+
+    const heroTitle = document.getElementById('colTitle');
+    const heroDesc = document.getElementById('colDesc');
+    const heroPrivacy = document.getElementById('colPrivacyBadge');
+    const heroCount = document.getElementById('colPinsCount');
+    const heroAuthorAvatar = document.getElementById('colAuthorAvatar');
+    const heroAuthorName = document.getElementById('colAuthorName');
+    const heroBanner = document.getElementById('colHeroBanner');
+    const btnEdit = document.getElementById('btnEditCollection');
+    const btnDel = document.getElementById('btnDeleteCollection');
+    const grid = document.getElementById('collectionPinsGrid');
+    const empty = document.getElementById('collectionPinsEmpty');
+
+    if (grid) grid.innerHTML = '<div class="chat-empty-hint">Загрузка пинов подборки...</div>';
+
+    try {
+        const res = await fetch(`/api/collections/${collectionId}`);
+        if (!res.ok) throw new Error('Подборка не найдена или приватна');
+        const col = await res.json();
+
+        if (heroTitle) heroTitle.textContent = col.title;
+        if (heroDesc) heroDesc.textContent = col.description || 'Тематическая подборка избранных постов';
+        if (heroCount) heroCount.textContent = `${col.posts ? col.posts.length : 0} постов`;
+        if (heroPrivacy) {
+            heroPrivacy.textContent = col.is_private ? '🔒 Личная подборка' : '🌐 Публичная подборка';
+        }
+
+        if (col.user) {
+            if (heroAuthorAvatar) heroAuthorAvatar.src = col.user.avatar_url || '/static/avatars/default.svg';
+            if (heroAuthorName) heroAuthorName.textContent = col.user.display_name || col.user.username;
+        }
+
+        if (heroBanner) {
+            if (col.cover_image_url) {
+                heroBanner.style.background = `url('${col.cover_image_url}') center/cover no-repeat`;
+                heroBanner.style.height = '140px';
+                heroBanner.style.display = 'block';
+            } else {
+                heroBanner.style.display = 'none';
+            }
+        }
+
+        const isOwner = (col.user_id === window.CURRENT_USER_ID);
+        if (btnEdit) btnEdit.style.display = isOwner ? 'inline-flex' : 'none';
+        if (btnDel) btnDel.style.display = isOwner ? 'inline-flex' : 'none';
+
+        const posts = col.posts || [];
+        if (posts.length === 0) {
+            if (grid) grid.innerHTML = '';
+            if (empty) empty.style.display = 'block';
+            return;
+        }
+
+        if (empty) empty.style.display = 'none';
+
+        if (grid) {
+            grid.innerHTML = posts.map(p => `
+                <div class="collection-pin-card" id="pin-post-${p.id}">
+                    ${p.image_url ? `
+                        <div class="pin-media-box">
+                            <img src="${escapeHtml(p.image_url)}" alt="pin image" loading="lazy">
+                        </div>
+                    ` : ''}
+                    <div class="pin-content-box">
+                        <div class="pin-author-row">
+                            <div class="pin-author-info cursor-pointer" onclick="openUserProfile(${p.user ? p.user.id : p.user_id})">
+                                <img src="${escapeHtml(p.user ? p.user.avatar_url : '/static/avatars/default.svg')}" class="mini-avatar" alt="avatar" style="width: 22px; height: 22px;">
+                                <span class="pin-author-name">${escapeHtml(p.user ? p.user.display_name : 'Автор')}</span>
+                            </div>
+                            ${isOwner ? `
+                                <button type="button" class="btn btn-secondary btn-xs pin-remove-btn text-danger" onclick="removePinFromCollection(${col.id}, ${p.id}, event)" title="Удалить из этой доски">✕</button>
+                            ` : ''}
+                        </div>
+                        ${p.content ? `<div class="pin-text">${escapeHtml(p.content)}</div>` : ''}
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: var(--text-dim);">
+                            <span>❤️ ${p.likes_count || 0}</span>
+                            <span>💬 ${p.comments_count || 0}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch (err) {
+        if (grid) grid.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function returnToCollections() {
+    navigateTo('profile');
+    switchProfileTab('collections');
+}
+
+function shareCurrentCollection() {
+    if (!currentOpenCollectionId) return;
+    const url = `${window.location.origin}/?collection=${currentOpenCollectionId}`;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(() => {
+            showToast('Ссылка на подборку скопирована! 🔗', 'success');
+        }).catch(() => {
+            prompt('Ссылка на подборку:', url);
+        });
+    } else {
+        prompt('Ссылка на подборку:', url);
+    }
+}
+
+async function removePinFromCollection(colId, postId, e) {
+    if (e) e.stopPropagation();
+    try {
+        const res = await fetch(`/api/collections/${colId}/posts/${postId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Ошибка удаления пина');
+        showToast('Пин удален из подборки', 'info');
+        const pinEl = document.getElementById(`pin-post-${postId}`);
+        if (pinEl) pinEl.remove();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+function openEditCurrentCollectionModal() {
+    if (!currentOpenCollectionId) return;
+    openCreateCollectionModal(currentOpenCollectionId);
+}
+
+async function deleteCurrentCollection() {
+    if (!currentOpenCollectionId) return;
+    if (!confirm('Вы уверены, что хотите удалить эту подборку?')) return;
+
+    try {
+        const res = await fetch(`/api/collections/${currentOpenCollectionId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Ошибка удаления подборки');
+        showToast('Подборка удалена', 'success');
+        returnToCollections();
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+

@@ -1020,3 +1020,291 @@ func TestDecentralizedFederationAPI(t *testing.T) {
 	t.Logf("✓ [УСПЕХ] Федеративный Outbox успешно отдал публикации для синхронизации узлов сети")
 }
 
+func TestStoriesFeature(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, tokenUser2 := setupTestApp(t)
+
+	// 1. Создание истории пользователем 1
+	createStoryBody, _ := json.Marshal(map[string]string{
+		"media_url":   "/uploads/test_story.png",
+		"caption":     "Тестовая история в Найт-Сити ⚡",
+		"bg_gradient": "linear-gradient(135deg, #091e3a, #00f0ff)",
+	})
+	reqCreate := httptest.NewRequest("POST", "/api/stories", bytes.NewReader(createStoryBody))
+	reqCreate.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wCreate := httptest.NewRecorder()
+	mux.ServeHTTP(wCreate, reqCreate)
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("Expected 201 Created for story, got %d: %s", wCreate.Code, wCreate.Body.String())
+	}
+
+	var createdStory models.Story
+	_ = json.Unmarshal(wCreate.Body.Bytes(), &createdStory)
+	if createdStory.ID == 0 || createdStory.Caption != "Тестовая история в Найт-Сити ⚡" {
+		t.Fatalf("Unexpected created story: %+v", createdStory)
+	}
+	t.Logf("✓ [УСПЕХ] Создана временная история ID=%d", createdStory.ID)
+
+	// 2. Получение активных историй
+	reqList := httptest.NewRequest("GET", "/api/stories", nil)
+	reqList.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
+	wList := httptest.NewRecorder()
+	mux.ServeHTTP(wList, reqList)
+	if wList.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for /api/stories, got %d", wList.Code)
+	}
+
+	var groups []models.StoryGroup
+	_ = json.Unmarshal(wList.Body.Bytes(), &groups)
+	if len(groups) == 0 {
+		t.Fatalf("Expected at least 1 story group, got 0")
+	}
+	t.Logf("✓ [УСПЕХ] Получено активных групп историй: %d", len(groups))
+
+	// 3. Отметка о просмотре пользователем 2
+	reqView := httptest.NewRequest("POST", fmt.Sprintf("/api/stories/%d/view", createdStory.ID), nil)
+	reqView.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
+	wView := httptest.NewRecorder()
+	mux.ServeHTTP(wView, reqView)
+	if wView.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for story view, got %d: %s", wView.Code, wView.Body.String())
+	}
+
+	// 4. Проверка просмотров автором (пользователем 1)
+	reqDetail := httptest.NewRequest("GET", fmt.Sprintf("/api/stories/%d", createdStory.ID), nil)
+	reqDetail.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wDetail := httptest.NewRecorder()
+	mux.ServeHTTP(wDetail, reqDetail)
+	if wDetail.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for story detail, got %d", wDetail.Code)
+	}
+
+	var detail models.Story
+	_ = json.Unmarshal(wDetail.Body.Bytes(), &detail)
+	if detail.ViewsCount < 1 {
+		t.Fatalf("Expected views count >= 1, got %d", detail.ViewsCount)
+	}
+	t.Logf("✓ [УСПЕХ] Просмотр истории зафиксирован: %d просмотров", detail.ViewsCount)
+
+	// 5. Удаление истории
+	reqDel := httptest.NewRequest("DELETE", fmt.Sprintf("/api/stories/%d", createdStory.ID), nil)
+	reqDel.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wDel := httptest.NewRecorder()
+	mux.ServeHTTP(wDel, reqDel)
+	if wDel.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for story delete, got %d", wDel.Code)
+	}
+	t.Logf("✓ [УСПЕХ] История успешно удалена автором")
+}
+
+func TestBlacklistFeature(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, tokenUser2 := setupTestApp(t)
+
+	// 1. Блокировка пользователя 2 пользователем 1
+	blockBody, _ := json.Marshal(map[string]int{"user_id": 2})
+	reqBlock := httptest.NewRequest("POST", "/api/blacklist", bytes.NewReader(blockBody))
+	reqBlock.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wBlock := httptest.NewRecorder()
+	mux.ServeHTTP(wBlock, reqBlock)
+	if wBlock.Code != http.StatusCreated && wBlock.Code != http.StatusOK {
+		t.Fatalf("Expected 200/201 for block, got %d: %s", wBlock.Code, wBlock.Body.String())
+	}
+	t.Logf("✓ [УСПЕХ] Пользователь 2 добавлен в черный список пользователя 1")
+
+	// 2. Проверка статуса блокировки
+	reqStatus := httptest.NewRequest("GET", "/api/users/2/block-status", nil)
+	reqStatus.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wStatus := httptest.NewRecorder()
+	mux.ServeHTTP(wStatus, reqStatus)
+	if wStatus.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for block-status, got %d", wStatus.Code)
+	}
+
+	var statusResp map[string]interface{}
+	_ = json.Unmarshal(wStatus.Body.Bytes(), &statusResp)
+	if statusResp["is_blocked_by_me"] != true || statusResp["is_blocked"] != true {
+		t.Fatalf("Expected is_blocked_by_me=true, got %v", statusResp)
+	}
+	t.Logf("✓ [УСПЕХ] Статус блокировки подтвержден: %v", statusResp)
+
+	// 3. Попытка пользователя 2 отправить личное сообщение пользователю 1 (должно быть 403 Forbidden)
+	msgBody, _ := json.Marshal(map[string]interface{}{
+		"receiver_id": 1,
+		"content":     "Привет, это запрещенное сообщение",
+	})
+	reqMsg := httptest.NewRequest("POST", "/api/messages", bytes.NewReader(msgBody))
+	reqMsg.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser2})
+	wMsg := httptest.NewRecorder()
+	mux.ServeHTTP(wMsg, reqMsg)
+	if wMsg.Code != http.StatusBadRequest && wMsg.Code != http.StatusForbidden {
+		t.Fatalf("Expected blocked error for message to user who blocked, got %d: %s", wMsg.Code, wMsg.Body.String())
+	}
+	t.Logf("✓ [УСПЕХ] Отправка сообщения заблокирована (код %d)", wMsg.Code)
+
+	// 4. Разблокировка пользователя 2
+	reqUnblock := httptest.NewRequest("DELETE", "/api/blacklist/2", nil)
+	reqUnblock.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wUnblock := httptest.NewRecorder()
+	mux.ServeHTTP(wUnblock, reqUnblock)
+	if wUnblock.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for unblock, got %d: %s", wUnblock.Code, wUnblock.Body.String())
+	}
+	t.Logf("✓ [УСПЕХ] Пользователь 2 успешно разблокирован")
+}
+
+func TestScheduledHiddenEphemeralMessages(t *testing.T) {
+	mux, _, _, _, _, tokenUser1, _ := setupTestApp(t)
+
+	// 1. Отложенное сообщение (Scheduled in future)
+	futureTime := "2030-01-01T12:00:00Z"
+	schedBody, _ := json.Marshal(map[string]interface{}{
+		"receiver_id":  2,
+		"content":      "Отложенное квантовое сообщение в 2030 год",
+		"scheduled_at": futureTime,
+	})
+	reqSched := httptest.NewRequest("POST", "/api/messages", bytes.NewReader(schedBody))
+	reqSched.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wSched := httptest.NewRecorder()
+	mux.ServeHTTP(wSched, reqSched)
+	if wSched.Code != http.StatusCreated {
+		t.Fatalf("Expected 201 Created for scheduled message, got %d: %s", wSched.Code, wSched.Body.String())
+	}
+
+	// Проверяем очередь отложенных сообщений
+	reqQueue := httptest.NewRequest("GET", "/api/messages/scheduled?with_user_id=2", nil)
+	reqQueue.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wQueue := httptest.NewRecorder()
+	mux.ServeHTTP(wQueue, reqQueue)
+	if wQueue.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for scheduled queue, got %d", wQueue.Code)
+	}
+
+	var scheduledList []models.Message
+	_ = json.Unmarshal(wQueue.Body.Bytes(), &scheduledList)
+	if len(scheduledList) == 0 {
+		t.Fatalf("Expected at least 1 scheduled message in queue, got 0")
+	}
+	t.Logf("✓ [УСПЕХ] Отложенное сообщение находится в очереди доставки: %s", scheduledList[0].Content)
+
+	// 2. Скрытое сообщение (Spoiler)
+	spoilerBody, _ := json.Marshal(map[string]interface{}{
+		"receiver_id": 2,
+		"content":     "Секретный код кибер-доступа: 9841-CYBER",
+		"is_hidden":   true,
+		"hidden_hint": "Секретный пароль",
+	})
+	reqSpoiler := httptest.NewRequest("POST", "/api/messages", bytes.NewReader(spoilerBody))
+	reqSpoiler.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wSpoiler := httptest.NewRecorder()
+	mux.ServeHTTP(wSpoiler, reqSpoiler)
+	if wSpoiler.Code != http.StatusCreated {
+		t.Fatalf("Expected 201 Created for spoiler message, got %d: %s", wSpoiler.Code, wSpoiler.Body.String())
+	}
+
+	var createdSpoiler models.Message
+	_ = json.Unmarshal(wSpoiler.Body.Bytes(), &createdSpoiler)
+	if !createdSpoiler.IsHidden || createdSpoiler.HiddenHint != "Секретный пароль" {
+		t.Fatalf("Expected hidden message with hint, got: %+v", createdSpoiler)
+	}
+	t.Logf("✓ [УСПЕХ] Скрытое сообщение (спойлер) доставлено с подсказкой: '%s'", createdSpoiler.HiddenHint)
+
+	// 3. Самоуничтожающееся сообщение (Ephemeral)
+	ephemeralBody, _ := json.Marshal(map[string]interface{}{
+		"receiver_id":           2,
+		"content":               "Это сообщение исчезнет через 10 секунд после прочтения",
+		"self_destruct_seconds": 10,
+	})
+	reqEph := httptest.NewRequest("POST", "/api/messages", bytes.NewReader(ephemeralBody))
+	reqEph.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wEph := httptest.NewRecorder()
+	mux.ServeHTTP(wEph, reqEph)
+	if wEph.Code != http.StatusCreated {
+		t.Fatalf("Expected 201 Created for ephemeral message, got %d: %s", wEph.Code, wEph.Body.String())
+	}
+
+	var createdEph models.Message
+	_ = json.Unmarshal(wEph.Body.Bytes(), &createdEph)
+	if createdEph.SelfDestructSeconds != 10 {
+		t.Fatalf("Expected SelfDestructSeconds=10, got %d", createdEph.SelfDestructSeconds)
+	}
+	t.Logf("✓ [УСПЕХ] Временное самоуничтожающееся сообщение доставлено (таймер: %d с)", createdEph.SelfDestructSeconds)
+}
+
+func TestCollectionsPinterestFeature(t *testing.T) {
+	mux, _, postRepo, _, _, tokenUser1, _ := setupTestApp(t)
+
+	// Создаем тестовый пост для сохранения в подборку
+	testPost, err := postRepo.CreatePost(1, "Потрясающий неоновый арт для подборки Pinterest", "/uploads/art_cyber.jpg", "", "", "", nil, nil, "", "")
+	if err != nil {
+		t.Fatalf("Failed to create test post: %v", err)
+	}
+
+	// 1. Создание подборки (Board)
+	colBody, _ := json.Marshal(map[string]interface{}{
+		"title":           "Киберпанк Арт (Pinterest Board)",
+		"description":     "Лучшие арты и концепты Найт-Сити",
+		"cover_image_url": "/uploads/art_cyber.jpg",
+		"is_private":      false,
+	})
+	reqCreate := httptest.NewRequest("POST", "/api/collections", bytes.NewReader(colBody))
+	reqCreate.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wCreate := httptest.NewRecorder()
+	mux.ServeHTTP(wCreate, reqCreate)
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("Expected 201 Created for collection, got %d: %s", wCreate.Code, wCreate.Body.String())
+	}
+
+	var col models.PostCollection
+	_ = json.Unmarshal(wCreate.Body.Bytes(), &col)
+	if col.ID == 0 || col.Title != "Киберпанк Арт (Pinterest Board)" {
+		t.Fatalf("Unexpected collection: %+v", col)
+	}
+	t.Logf("✓ [УСПЕХ] Создана тематическая подборка ID=%d: '%s'", col.ID, col.Title)
+
+	// 2. Добавление поста в подборку
+	addPostReq, _ := json.Marshal(map[string]int{"post_id": testPost.ID})
+	reqAdd := httptest.NewRequest("POST", fmt.Sprintf("/api/collections/%d/posts", col.ID), bytes.NewReader(addPostReq))
+	reqAdd.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wAdd := httptest.NewRecorder()
+	mux.ServeHTTP(wAdd, reqAdd)
+	if wAdd.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for add post to collection, got %d: %s", wAdd.Code, wAdd.Body.String())
+	}
+	t.Logf("✓ [УСПЕХ] Пост ID=%d добавлен в подборку (пин закреплен)", testPost.ID)
+
+	// 3. Получение деталей подборки со всеми постами
+	reqDetail := httptest.NewRequest("GET", fmt.Sprintf("/api/collections/%d", col.ID), nil)
+	reqDetail.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wDetail := httptest.NewRecorder()
+	mux.ServeHTTP(wDetail, reqDetail)
+	if wDetail.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for collection detail, got %d", wDetail.Code)
+	}
+
+	var detail models.CollectionDetail
+	_ = json.Unmarshal(wDetail.Body.Bytes(), &detail)
+	if len(detail.Posts) != 1 || detail.Posts[0].ID != testPost.ID {
+		t.Fatalf("Expected 1 post in collection detail, got: %d", len(detail.Posts))
+	}
+	t.Logf("✓ [УСПЕХ] Детализация доски: %d сохраненный пост", len(detail.Posts))
+
+	// 4. Удаление поста из подборки
+	reqRemove := httptest.NewRequest("DELETE", fmt.Sprintf("/api/collections/%d/posts/%d", col.ID, testPost.ID), nil)
+	reqRemove.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wRemove := httptest.NewRecorder()
+	mux.ServeHTTP(wRemove, reqRemove)
+	if wRemove.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for remove post from collection, got %d", wRemove.Code)
+	}
+	t.Logf("✓ [УСПЕХ] Пост удален из подборки")
+
+	// 5. Удаление подборки
+	reqDelCol := httptest.NewRequest("DELETE", fmt.Sprintf("/api/collections/%d", col.ID), nil)
+	reqDelCol.AddCookie(&http.Cookie{Name: "session_token", Value: tokenUser1})
+	wDelCol := httptest.NewRecorder()
+	mux.ServeHTTP(wDelCol, reqDelCol)
+	if wDelCol.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for delete collection, got %d", wDelCol.Code)
+	}
+	t.Logf("✓ [УСПЕХ] Подборка успешно удалена")
+}
+

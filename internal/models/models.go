@@ -126,6 +126,14 @@ type Message struct {
 	SenderPubKey   string `json:"sender_pubkey,omitempty"`
 	ReceiverPubKey string `json:"receiver_pubkey,omitempty"`
 	KeyFingerprint string `json:"key_fingerprint,omitempty"`
+
+	// Временные, скрытые и отложенные сообщения
+	ScheduledAt         *time.Time `json:"scheduled_at,omitempty"`
+	IsHidden            bool       `json:"is_hidden"`
+	HiddenHint          string     `json:"hidden_hint,omitempty"`
+	SelfDestructSeconds int        `json:"self_destruct_seconds,omitempty"`
+	ReadAt              *time.Time `json:"read_at,omitempty"`
+	IsDestroyed         bool       `json:"is_destroyed"`
 }
 
 type UpdateMessageRequest struct {
@@ -170,6 +178,12 @@ type SendMessageRequest struct {
 	SenderPubKey   string `json:"sender_pubkey,omitempty"`
 	ReceiverPubKey string `json:"receiver_pubkey,omitempty"`
 	KeyFingerprint string `json:"key_fingerprint,omitempty"`
+
+	// Временные, скрытые и отложенные сообщения
+	ScheduledAt         *time.Time `json:"scheduled_at,omitempty"`
+	IsHidden            bool       `json:"is_hidden,omitempty"`
+	HiddenHint          string     `json:"hidden_hint,omitempty"`
+	SelfDestructSeconds int        `json:"self_destruct_seconds,omitempty"`
 }
 
 type UpdateProfileRequest struct {
@@ -685,3 +699,97 @@ type DegreesOfSeparationResponse struct {
 	PathDescription string   `json:"path_description"`
 }
 
+
+// =========================================================
+// ВРЕМЕННЫЕ ИСТОРИИ (STORIES, 24H)
+// =========================================================
+type Story struct {
+	ID         int       `json:"id"`
+	UserID     int       `json:"user_id"`
+	MediaURL   string    `json:"media_url"`
+	Caption    string    `json:"caption"`
+	BgGradient string    `json:"bg_gradient"`
+	FontFamily string    `json:"font_family"`
+	TextAlign  string    `json:"text_align"`
+	TextColor  string    `json:"text_color"`
+	Sticker    string    `json:"sticker"`
+	ViewsCount int       `json:"views_count"`
+	CreatedAt  time.Time `json:"created_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	User       *User     `json:"user,omitempty"`
+	IsViewed   bool      `json:"is_viewed"`
+}
+
+type StoryGroup struct {
+	UserID      int       `json:"user_id"`
+	User        User      `json:"user"`
+	Stories     []Story   `json:"stories"`
+	HasUnviewed bool      `json:"has_unviewed"`
+	LatestAt    time.Time `json:"latest_at"`
+}
+
+type CreateStoryRequest struct {
+	MediaURL      string `json:"media_url"`
+	Caption       string `json:"caption"`
+	BgGradient    string `json:"bg_gradient"`
+	FontFamily    string `json:"font_family,omitempty"`
+	TextAlign     string `json:"text_align,omitempty"`
+	TextColor     string `json:"text_color,omitempty"`
+	Sticker       string `json:"sticker,omitempty"`
+	DurationHours int    `json:"duration_hours,omitempty"`
+}
+
+// =========================================================
+// ЧЕРНЫЙ СПИСОК (USER BLACKLIST / BLOCKS)
+// =========================================================
+type UserBlock struct {
+	BlockerID   int       `json:"blocker_id"`
+	BlockedID   int       `json:"blocked_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	BlockedUser *User     `json:"blocked_user,omitempty"`
+}
+
+type BlockUserRequest struct {
+	BlockedID int `json:"blocked_id"`
+}
+
+// =========================================================
+// КОЛЛЕКЦИИ / ПОДБОРКИ (PINTEREST-LIKE BOARDS)
+// =========================================================
+type PostCollection struct {
+	ID          int       `json:"id"`
+	UserID      int       `json:"user_id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	CoverURL    string    `json:"cover_url"`
+	IsPublic    bool      `json:"is_public"`
+	PostsCount  int       `json:"posts_count"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	User        *User     `json:"user,omitempty"`
+	RecentPosts []Post    `json:"recent_posts,omitempty"`
+	IsSaved     bool      `json:"is_saved,omitempty"`
+}
+
+type CollectionDetail struct {
+	Collection PostCollection `json:"collection"`
+	Posts      []Post         `json:"posts"`
+}
+
+type CreateCollectionRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	CoverURL    string `json:"cover_url"`
+	IsPublic    *bool  `json:"is_public,omitempty"`
+}
+
+type UpdateCollectionRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	CoverURL    string `json:"cover_url"`
+	IsPublic    *bool  `json:"is_public,omitempty"`
+}
+
+type AddPostToCollectionRequest struct {
+	PostID int `json:"post_id"`
+}

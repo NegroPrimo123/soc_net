@@ -20,6 +20,10 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
+func (r *UserRepository) DB() *sql.DB {
+	return r.db
+}
+
 func (r *UserRepository) GetAll(currentUserID int) ([]models.User, error) {
 	query := `
 	SELECT 
