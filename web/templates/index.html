@@ -2313,7 +2313,7 @@
                                         <input type="file" id="chatFileInput" style="display:none;" accept="image/*,audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac,.webm,.pdf,.doc,.docx,.txt,.zip" onchange="handleChatFileUpload(event)">
                                     </div>
 
-                                    <textarea id="chatMessageInput" class="chat-text-input" placeholder="Напишите сообщение... (Shift+Enter — новая строка, ПКМ на ✈ — опции)" rows="1" onkeydown="handleChatInputKeydown(event)" oninput="autoResizeChatInput(this)" autocomplete="off"></textarea>
+                                    <textarea id="chatMessageInput" class="chat-text-input" placeholder="Напишите сообщение... (Enter — отправить, ПКМ на ✈ — опции)" rows="1" onkeydown="handleChatInputKeydown(event)" oninput="autoResizeChatInput(this)" autocomplete="off"></textarea>
 
                                     <div class="chat-send-wrapper" id="chatSendWrapper">
                                         <button type="submit" class="btn-chat-send-circle" id="chatSendBtn" oncontextmenu="handleSendBtnContextMenu(event)" title="Отправить (Enter) • ПКМ: опции отправки">

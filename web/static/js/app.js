@@ -5969,7 +5969,7 @@ async function webCryptoDecryptMessage(ciphertextBase64, nonceBase64, senderKey,
 
 function buildChatMessageBubbleHtml(m, isOut) {
     if (m.is_destroyed) {
-        return `<div class="chat-destroyed-msg">💥 [ДАННЫЕ САМОУНИЧТОЖЕНЫ // VAPORIZED]</div>`;
+        return `<div class="chat-destroyed-msg"><span class="destroyed-icon">⏳</span> <span>Сообщение удалено</span></div>`;
     }
 
     if (m.is_encrypted) {
@@ -6047,14 +6047,11 @@ function buildChatMessageBubbleHtml(m, isOut) {
 
     if (m.is_hidden) {
         contentHtml = `
-            <div class="chat-hidden-msg" onclick="revealHiddenMessage(this, ${m.id})">
+            <div class="chat-hidden-msg" onclick="revealHiddenMessage(this, ${m.id})" title="Нажмите, чтобы прочитать">
                 <div class="chat-hidden-cover">
-                    <div class="chat-hidden-icon-wrap">🔒</div>
-                    <div class="chat-hidden-body">
-                        <div class="chat-hidden-badge">[ ЗАСЕКРЕЧЕНО // SPOILER ]</div>
-                        <div class="chat-hidden-hint">${escapeHtml(m.hidden_hint || 'Скрытое кибер-сообщение')}</div>
-                        <div class="chat-hidden-sub">Нажмите для дешифровки и просмотра ⚡</div>
-                    </div>
+                    <span class="chat-hidden-icon">🔒</span>
+                    <span class="chat-hidden-hint">${escapeHtml(m.hidden_hint || 'Скрытое сообщение')}</span>
+                    <span class="chat-hidden-action">⚡ Открыть</span>
                 </div>
                 <div class="chat-hidden-content" style="display: none;">${contentHtml}</div>
             </div>
@@ -11400,7 +11397,7 @@ function renderStoriesRail(groups) {
     listEl.innerHTML = '';
 
     const myId = window.CURRENT_USER_ID;
-    const myGroup = groups.find(g => g.user_id === myId);
+    const myGroup = groups.find(g => (g.user_id || (g.user && g.user.id)) === myId);
 
     if (myAddCard) {
         if (myGroup && myGroup.stories && myGroup.stories.length > 0) {
@@ -11418,6 +11415,14 @@ function renderStoriesRail(groups) {
                     ring.classList.add('all-viewed');
                 }
             }
+            const badge = myAddCard.querySelector('.story-add-badge');
+            if (badge) {
+                badge.onclick = (e) => {
+                    e.stopPropagation();
+                    openCreateStoryModal();
+                };
+                badge.title = 'Опубликовать еще одну историю';
+            }
         } else {
             myAddCard.classList.add('story-item-add');
             myAddCard.classList.remove('story-item-has-stories');
@@ -11429,19 +11434,28 @@ function renderStoriesRail(groups) {
                 ring.classList.add('ring-add');
                 ring.classList.remove('all-viewed');
             }
+            const badge = myAddCard.querySelector('.story-add-badge');
+            if (badge) {
+                badge.onclick = null;
+                badge.title = 'Опубликовать историю';
+            }
         }
     }
 
     groups.forEach(g => {
-        if (g.user_id === myId) return; // своя уже в первой карточке
+        const uid = g.user_id || (g.user && g.user.id);
+        if (uid === myId) return; // своя история уже отображается в myAddCard
         const item = document.createElement('div');
         item.className = 'story-item';
-        item.onclick = () => openStoryViewer(g.user_id);
+        item.onclick = () => openStoryViewer(uid);
 
         const ringClass = g.has_unviewed ? '' : 'all-viewed';
+        const storiesCount = (g.stories && g.stories.length > 1) ? `<span class="story-multi-badge">${g.stories.length}</span>` : '';
+
         item.innerHTML = `
             <div class="story-avatar-ring ${ringClass}">
                 <img src="${escapeHtml(g.user.avatar_url || '/static/avatars/default.svg')}" alt="${escapeHtml(g.user.display_name)}" class="story-avatar-img">
+                ${storiesCount}
             </div>
             <span class="story-user-label">${escapeHtml(g.user.display_name || g.user.username)}</span>
         `;
@@ -11612,13 +11626,19 @@ async function submitCreateStory(e) {
 
 // Fullscreen Story Viewer
 function openStoryViewer(userId, startIndex = 0) {
-    activeStoryGroup = cachedStoriesGroups.find(g => g.user_id === userId);
+    activeStoryGroup = cachedStoriesGroups.find(g => (g.user_id || (g.user && g.user.id)) === userId);
     if (!activeStoryGroup || !activeStoryGroup.stories || activeStoryGroup.stories.length === 0) {
         showToast('Истории пользователя недоступны', 'error');
         return;
     }
 
-    activeStoryIndex = startIndex;
+    if (startIndex === 0 && activeStoryGroup.stories.length > 1) {
+        const firstUnviewed = activeStoryGroup.stories.findIndex(s => !s.is_viewed);
+        activeStoryIndex = (firstUnviewed !== -1) ? firstUnviewed : 0;
+    } else {
+        activeStoryIndex = startIndex;
+    }
+
     const modal = document.getElementById('modalStoryViewer');
     if (!modal) return;
     modal.style.display = 'flex';
@@ -11646,12 +11666,25 @@ function renderCurrentStoryViewer() {
         return;
     }
 
-    if (activeStoryIndex < 0) activeStoryIndex = 0;
+    const myActiveUid = activeStoryGroup.user_id || (activeStoryGroup.user && activeStoryGroup.user.id);
+    const currentGroupIdx = cachedStoriesGroups.findIndex(g => (g.user_id || (g.user && g.user.id)) === myActiveUid);
+
+    if (activeStoryIndex < 0) {
+        if (currentGroupIdx > 0) {
+            const prevGrp = cachedStoriesGroups[currentGroupIdx - 1];
+            const prevUid = prevGrp.user_id || (prevGrp.user && prevGrp.user.id);
+            openStoryViewer(prevUid, Math.max(0, prevGrp.stories.length - 1));
+            return;
+        } else {
+            activeStoryIndex = 0;
+        }
+    }
     if (activeStoryIndex >= activeStoryGroup.stories.length) {
         // переходим к следующему пользователю в карусели
-        const currentGroupIdx = cachedStoriesGroups.findIndex(g => g.user_id === activeStoryGroup.user_id);
         if (currentGroupIdx !== -1 && currentGroupIdx + 1 < cachedStoriesGroups.length) {
-            openStoryViewer(cachedStoriesGroups[currentGroupIdx + 1].user_id, 0);
+            const nextGrp = cachedStoriesGroups[currentGroupIdx + 1];
+            const nextUid = nextGrp.user_id || (nextGrp.user && nextGrp.user.id);
+            openStoryViewer(nextUid, 0);
             return;
         } else {
             closeStoryViewer();
@@ -11739,7 +11772,7 @@ function renderCurrentStoryViewer() {
     }
 
     // Отмечаем просмотр на сервере
-    if (!isOwner) {
+    if (!isOwner && !story.is_viewed) {
         fetch(`/api/stories/${story.id}/view`, { method: 'POST' }).catch(() => {});
         story.is_viewed = true;
     }
@@ -11755,6 +11788,9 @@ function startStoryProgressTimer(durationMs) {
 
     const currentSegFill = document.querySelector(`#storySeg-${activeStoryIndex} .story-progress-fill`);
     if (currentSegFill) {
+        currentSegFill.style.transition = 'none';
+        currentSegFill.style.width = '0%';
+        void currentSegFill.offsetWidth; // Force synchronous reflow!
         currentSegFill.style.transition = `width ${durationMs}ms linear`;
         currentSegFill.style.width = '100%';
     }
@@ -11998,7 +12034,7 @@ function autoResizeChatInput(el) {
     if (!el) return;
     el.style.height = 'auto';
     const newHeight = Math.min(el.scrollHeight, 140);
-    el.style.height = Math.max(38, newHeight) + 'px';
+    el.style.height = Math.max(24, newHeight) + 'px';
 }
 
 function toggleChatHeaderMoreMenu(e) {

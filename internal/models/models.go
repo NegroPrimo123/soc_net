@@ -721,6 +721,7 @@ type Story struct {
 }
 
 type StoryGroup struct {
+	UserID      int       `json:"user_id"`
 	User        User      `json:"user"`
 	Stories     []Story   `json:"stories"`
 	HasUnviewed bool      `json:"has_unviewed"`

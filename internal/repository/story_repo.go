@@ -140,6 +140,7 @@ func (r *StoryRepository) GetActiveStories(viewerUserID int) ([]models.StoryGrou
 		grp, exists := groupsMap[u.ID]
 		if !exists {
 			grp = &models.StoryGroup{
+				UserID:      u.ID,
 				User:        u,
 				Stories:     []models.Story{},
 				HasUnviewed: false,
