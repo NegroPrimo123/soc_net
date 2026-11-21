@@ -1058,12 +1058,15 @@ async function saveEditedPostModal() {
             if (imageUrl) {
                 if (mediaBox) {
                     const img = mediaBox.querySelector('img');
-                    if (img) img.src = imageUrl;
+                    if (img) {
+                        img.src = imageUrl;
+                        img.onclick = () => openImageLightbox(imageUrl, 'Изображение поста');
+                    }
                 } else {
                     mediaBox = document.createElement('div');
                     mediaBox.className = 'post-media';
                     mediaBox.id = `post-media-${postId}`;
-                    mediaBox.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="Медиа" loading="lazy">`;
+                    mediaBox.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="Медиа" loading="lazy" onclick="openImageLightbox('${escapeHtml(imageUrl)}', 'Изображение поста')">`;
                     const actionsBar = postCard.querySelector('.post-actions-bar');
                     if (actionsBar) {
                         postCard.insertBefore(mediaBox, actionsBar);
@@ -2145,9 +2148,10 @@ function createPostElement(post) {
 
     let mediaHtml = '';
     if (finalImageUrl) {
+        const postAuthor = post.user ? (post.user.display_name || post.user.username) : 'Медиа';
         mediaHtml = `
             <div class="post-media" id="post-media-${post.id}">
-                <img src="${escapeHtml(finalImageUrl)}" alt="Медиа" loading="lazy">
+                <img src="${escapeHtml(finalImageUrl)}" alt="Медиа" loading="lazy" onclick="openImageLightbox('${escapeHtml(finalImageUrl)}', '${escapeHtml(postAuthor)} • Фото')">
             </div>
         `;
     }
@@ -3280,15 +3284,29 @@ function renderProfileGifts(gifts) {
     if (!grid) return;
     grid.innerHTML = '';
 
+    const isOwn = (currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID);
+    const heroBtn = document.getElementById('btnHeroSendGift');
+    if (heroBtn) {
+        heroBtn.innerHTML = `<span>${isOwn ? '🎁 Каталог артефактов' : '🎁 Подарить подарок'}</span>`;
+        heroBtn.onclick = () => {
+            if (isOwn) {
+                navigateTo('showcase');
+            } else {
+                openCurrentProfileGiftModal();
+            }
+        };
+    }
+
     if (!gifts || gifts.length === 0) {
         grid.innerHTML = `
-            <div class="cyber-empty-card" style="grid-column: 1 / -1;">
-                <span class="empty-glyph">🎁</span>
-                <h3>Подарков пока нет</h3>
-                <p>Станьте первым, кто подарит подарок этому пользователю!</p>
-                <button class="btn btn-primary btn-sm" style="margin-top: 0.8rem;" onclick="if(currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID){ navigateTo('showcase'); }else{ openCurrentProfileGiftModal(); }">
-                    <span>${(currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID) ? '🎁 Выбрать подарок в каталоге' : '🎁 Отправить первый подарок'}</span>
-                </button>
+            <div class="gifts-empty-showcase">
+                <div class="gifts-empty-icon-wrap">🎁</div>
+                <div class="gifts-empty-title">Коллекция подарков пуста</div>
+                <div class="gifts-empty-subtitle">
+                    ${isOwn 
+                        ? 'У вас пока нет полученных подарков. Активно общайтесь и делитесь контентом, чтобы друзья радовали вас артефактами!' 
+                        : 'Пользователь еще не получил подарков. Станьте первым, кто подарит цифровой артефакт!'}
+                </div>
             </div>
         `;
         return;
@@ -11350,41 +11368,69 @@ function buildGraphPhysicsNodes(data) {
     graphNodes = Array.from(nodesMap.values());
 }
 
+let isGraphSleeping = false;
+
+function wakeGraphSimulation() {
+    if (isGraphSleeping) {
+        isGraphSleeping = false;
+        startGraphSimulation();
+    }
+}
+
 function startGraphSimulation() {
     if (graphAnimFrameId) cancelAnimationFrame(graphAnimFrameId);
+    isGraphSleeping = false;
     function loop() {
+        const graphView = document.getElementById('socialGraphView');
+        if (graphView && (graphView.style.display === 'none' || (typeof currentView !== 'undefined' && currentView !== 'graph'))) {
+            graphAnimFrameId = null;
+            isGraphSleeping = true;
+            return;
+        }
+
         if (isGraphPhysicsRunning) {
             updateGraphPhysics();
         }
         renderGraphCanvas();
+
+        if (graphAlpha < 0.002 && !graphDragNode && !isGraphPanning) {
+            graphAnimFrameId = null;
+            isGraphSleeping = true;
+            return;
+        }
+
         graphAnimFrameId = requestAnimationFrame(loop);
     }
     graphAnimFrameId = requestAnimationFrame(loop);
 }
 
 function updateGraphPhysics() {
-    if (graphAlpha < 0.003) {
-        graphNodes.forEach(n => { n.vx = 0; n.vy = 0; });
+    if (graphAlpha < 0.002) {
+        const len = graphNodes.length;
+        for (let i = 0; i < len; i++) {
+            graphNodes[i].vx = 0;
+            graphNodes[i].vy = 0;
+        }
         return;
     }
-    const kRepel = 2400;
-    const kSpring = 0.04;
+    const kRepel = 2200;
+    const kSpring = 0.038;
     const damp = 0.72;
     const wrapper = document.getElementById('graphCanvasWrapper');
     const cx = wrapper ? wrapper.clientWidth / 2 : 350;
     const cy = wrapper ? wrapper.clientHeight / 2 : 270;
 
-    // Repulsion between all nodes (Coulomb) with minimum distance clamping
-    for (let i = 0; i < graphNodes.length; i++) {
+    const nLen = graphNodes.length;
+    for (let i = 0; i < nLen; i++) {
         const n1 = graphNodes[i];
-        for (let j = i + 1; j < graphNodes.length; j++) {
+        for (let j = i + 1; j < nLen; j++) {
             const n2 = graphNodes[j];
-            let dx = n1.x - n2.x;
-            let dy = n1.y - n2.y;
-            let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            const effDist = Math.max(dist, 45); // Защита от бесконечного отталкивания и прыжков
-            if (dist < 380) {
-                const force = Math.min(12, (kRepel / (effDist * effDist)) * graphAlpha);
+            const dx = n1.x - n2.x;
+            const dy = n1.y - n2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const effDist = Math.max(dist, 45);
+            if (dist < 360) {
+                const force = Math.min(10, (kRepel / (effDist * effDist)) * graphAlpha);
                 const fx = (dx / dist) * force;
                 const fy = (dy / dist) * force;
                 n1.vx += fx;
@@ -11393,41 +11439,40 @@ function updateGraphPhysics() {
                 n2.vy -= fy;
             }
         }
-        // Center gravity with cooling alpha
         n1.vx += (cx - n1.x) * 0.0025 * graphAlpha;
         n1.vy += (cy - n1.y) * 0.0025 * graphAlpha;
     }
 
-    // Spring attraction along edges (Hooke's Law)
-    graphEdges.forEach(e => {
+    const eLen = graphEdges.length;
+    for (let i = 0; i < eLen; i++) {
+        const e = graphEdges[i];
         const dx = e.target.x - e.source.x;
         const dy = e.target.y - e.source.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const desiredDist = 110;
-        const force = Math.max(-10, Math.min(10, (dist - desiredDist) * kSpring * graphAlpha));
+        const force = Math.max(-8, Math.min(8, (dist - desiredDist) * kSpring * graphAlpha));
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
         e.source.vx += fx;
         e.source.vy += fy;
         e.target.vx -= fx;
         e.target.vy -= fy;
-    });
+    }
 
-    // Update positions with speed clamping
-    graphNodes.forEach(n => {
-        if (n === graphDragNode) return;
+    for (let i = 0; i < nLen; i++) {
+        const n = graphNodes[i];
+        if (n === graphDragNode) continue;
         const speed = Math.hypot(n.vx, n.vy);
-        if (speed > 6) {
-            n.vx = (n.vx / speed) * 6;
-            n.vy = (n.vy / speed) * 6;
+        if (speed > 5) {
+            n.vx = (n.vx / speed) * 5;
+            n.vy = (n.vy / speed) * 5;
         }
         n.x += n.vx;
         n.y += n.vy;
         n.vx *= damp;
         n.vy *= damp;
-    });
+    }
 
-    // Охлаждение симуляции (температурный затухающий коэффициент)
     graphAlpha *= 0.97;
 }
 
@@ -11444,30 +11489,61 @@ function renderGraphCanvas() {
     graphCtx.translate(graphTransform.x, graphTransform.y);
     graphCtx.scale(graphTransform.scale, graphTransform.scale);
 
-    // Render Edges
-    graphEdges.forEach(e => {
-        const isHighlight = (graphHoverNode && (e.source === graphHoverNode || e.target === graphHoverNode)) ||
-                            (graphSelectedNode && (e.source === graphSelectedNode || e.target === graphSelectedNode));
+    // BATCHED EDGE RENDERING: Only 1 or 2 stroke calls instead of 1146+
+    const activeNode = graphHoverNode || graphSelectedNode;
+    const normalEdges = [];
+    const highlightEdges = [];
 
-        graphCtx.beginPath();
-        graphCtx.moveTo(e.source.x, e.source.y);
-        graphCtx.lineTo(e.target.x, e.target.y);
-
-        if (isHighlight) {
-            graphCtx.strokeStyle = '#00f0ff';
-            graphCtx.lineWidth = 2.5;
-            graphCtx.shadowColor = '#00f0ff';
-            graphCtx.shadowBlur = 10;
-        } else {
-            graphCtx.strokeStyle = 'rgba(100, 116, 139, 0.35)';
-            graphCtx.lineWidth = 1.2;
-            graphCtx.shadowBlur = 0;
+    const eLen = graphEdges.length;
+    if (activeNode) {
+        for (let i = 0; i < eLen; i++) {
+            const e = graphEdges[i];
+            if (e.source === activeNode || e.target === activeNode) {
+                highlightEdges.push(e);
+            } else {
+                normalEdges.push(e);
+            }
         }
-        graphCtx.stroke();
-    });
+    } else {
+        for (let i = 0; i < eLen; i++) {
+            normalEdges.push(graphEdges[i]);
+        }
+    }
 
-    // Render Nodes
-    graphNodes.forEach(n => {
+    // 1. Draw all normal edges in ONE batched stroke
+    if (normalEdges.length > 0) {
+        graphCtx.beginPath();
+        for (let i = 0; i < normalEdges.length; i++) {
+            const e = normalEdges[i];
+            graphCtx.moveTo(e.source.x, e.source.y);
+            graphCtx.lineTo(e.target.x, e.target.y);
+        }
+        graphCtx.strokeStyle = 'rgba(100, 116, 139, 0.28)';
+        graphCtx.lineWidth = 1.0;
+        graphCtx.shadowBlur = 0;
+        graphCtx.stroke();
+    }
+
+    // 2. Draw highlighted edges in ONE batched stroke with neon glow
+    if (highlightEdges.length > 0) {
+        graphCtx.beginPath();
+        for (let i = 0; i < highlightEdges.length; i++) {
+            const e = highlightEdges[i];
+            graphCtx.moveTo(e.source.x, e.source.y);
+            graphCtx.lineTo(e.target.x, e.target.y);
+        }
+        graphCtx.strokeStyle = '#00f0ff';
+        graphCtx.lineWidth = 2.5;
+        graphCtx.shadowColor = '#00f0ff';
+        graphCtx.shadowBlur = 12;
+        graphCtx.stroke();
+        graphCtx.shadowBlur = 0;
+    }
+
+    // 3. Render Nodes: Fast path without CPU shadowBlur for unselected nodes
+    const nLen = graphNodes.length;
+    for (let i = 0; i < nLen; i++) {
+        const n = graphNodes[i];
         const isSelected = (n === graphSelectedNode);
         const isHover = (n === graphHoverNode);
 
@@ -11475,25 +11551,25 @@ function renderGraphCanvas() {
         graphCtx.arc(n.x, n.y, n.radius + (isHover ? 3 : 0), 0, 2 * Math.PI);
 
         let color = '#64748b';
-        let glowColor = '#64748b';
         if (n.isSelf) {
             color = '#f59e0b';
-            glowColor = '#f59e0b';
         } else if (n.isDirect) {
             color = '#00f0ff';
-            glowColor = '#00f0ff';
         } else {
             color = '#a855f7';
-            glowColor = '#a855f7';
         }
 
         graphCtx.fillStyle = color;
-        graphCtx.shadowColor = glowColor;
-        graphCtx.shadowBlur = (isHover || isSelected) ? 20 : 10;
+        if (isHover || isSelected) {
+            graphCtx.shadowColor = color;
+            graphCtx.shadowBlur = 18;
+        } else {
+            graphCtx.shadowBlur = 0;
+        }
         graphCtx.fill();
 
-        graphCtx.lineWidth = (isSelected ? 3 : 2);
-        graphCtx.strokeStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.4)';
+        graphCtx.lineWidth = (isSelected ? 3 : (n.isSelf ? 2.5 : 1.5));
+        graphCtx.strokeStyle = isSelected ? '#ffffff' : (n.isSelf ? '#fef08a' : 'rgba(255, 255, 255, 0.4)');
         graphCtx.stroke();
 
         // Node Label
@@ -11502,7 +11578,7 @@ function renderGraphCanvas() {
         graphCtx.font = `${n.isSelf ? 'bold 12px' : '11px'} Plus Jakarta Sans, sans-serif`;
         graphCtx.textAlign = 'center';
         graphCtx.fillText(n.display_name, n.x, n.y + n.radius + 14);
-    });
+    }
 
     graphCtx.restore();
 }
@@ -11518,9 +11594,11 @@ function setupGraphCanvasEvents() {
             graphDragNode = clickedNode;
             graphAlpha = Math.max(graphAlpha, 0.5);
             selectGraphNode(clickedNode);
+            wakeGraphSimulation();
         } else {
             isGraphPanning = true;
             graphPanStart = { x: e.clientX - graphTransform.x, y: e.clientY - graphTransform.y };
+            wakeGraphSimulation();
         }
     });
 
@@ -11532,19 +11610,28 @@ function setupGraphCanvasEvents() {
             graphDragNode.vx = 0;
             graphDragNode.vy = 0;
             graphAlpha = Math.max(graphAlpha, 0.3);
+            wakeGraphSimulation();
         } else if (isGraphPanning) {
             graphTransform.x = e.clientX - graphPanStart.x;
             graphTransform.y = e.clientY - graphPanStart.y;
-        } else {
+            wakeGraphSimulation();
+        } else if (typeof currentView !== 'undefined' && currentView === 'graph') {
             const mousePos = getCanvasMousePos(e);
+            const prevHover = graphHoverNode;
             graphHoverNode = findNodeAt(mousePos.x, mousePos.y);
             graphCanvas.style.cursor = graphHoverNode ? 'pointer' : 'grab';
+            if (prevHover !== graphHoverNode) {
+                renderGraphCanvas();
+            }
         }
     });
 
     window.addEventListener('mouseup', () => {
-        graphDragNode = null;
-        isGraphPanning = false;
+        if (graphDragNode || isGraphPanning) {
+            graphDragNode = null;
+            isGraphPanning = false;
+            wakeGraphSimulation();
+        }
     });
 
     graphCanvas.addEventListener('wheel', (e) => {
@@ -11637,21 +11724,26 @@ function openInspectedUserChat() {
 }
 
 function resetGraphView() {
-    const wrapper = document.getElementById('graphCanvasWrapper');
-    const w = wrapper ? wrapper.clientWidth : 700;
-    const h = wrapper ? wrapper.clientHeight : 540;
     graphTransform = { x: 0, y: 0, scale: 1.0 };
+    renderGraphCanvas();
+    wakeGraphSimulation();
 }
 
 function zoomGraph(factor) {
     const newScale = Math.max(0.4, Math.min(3.0, graphTransform.scale * factor));
     graphTransform.scale = newScale;
+    renderGraphCanvas();
+    wakeGraphSimulation();
 }
 
 function toggleGraphPhysics() {
     isGraphPhysicsRunning = !isGraphPhysicsRunning;
     const btn = document.getElementById('btnGraphPhysics');
     if (btn) btn.textContent = isGraphPhysicsRunning ? '⏸ Физика' : '▶️ Физика';
+    if (isGraphPhysicsRunning) {
+        graphAlpha = Math.max(graphAlpha, 0.4);
+        wakeGraphSimulation();
+    }
 }
 
 function setGraphFilter(filter) {

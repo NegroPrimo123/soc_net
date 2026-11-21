@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoSocial — Киберпанк Социальная Сеть</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=cyber_rich_previews_v11">
+    <link rel="stylesheet" href="/static/css/style.css?v=cyber_rich_previews_v12">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -1951,14 +1951,19 @@
 
                         <!-- Вкладка подарков профиля с поддержкой скрытия -->
                         <div id="profTabContentGifts" class="tab-pane" style="display: none;">
-                            <div class="pane-action-header">
-                                <div>
-                                    <h3>Подарки</h3>
-                                    <p>Подарки и знаки внимания, полученные пользователем</p>
+                            <div class="profile-gifts-hero">
+                                <div class="profile-gifts-hero-info">
+                                    <h3 class="profile-gifts-hero-title">
+                                        <span>🎁 Витрина подарков</span>
+                                        <span class="profile-gifts-hero-badge">ARTEFACTS</span>
+                                    </h3>
+                                    <p class="profile-gifts-hero-desc">Цифровые артефакты и знаки внимания, полученные пользователем</p>
                                 </div>
-                                <button class="btn btn-primary btn-sm" id="btnHeroSendGift" onclick="openCurrentProfileGiftModal()">
-                                    <span>🎁 Отправить подарок</span>
-                                </button>
+                                <div class="profile-gifts-hero-action">
+                                    <button class="btn btn-primary" id="btnHeroSendGift" onclick="openCurrentProfileGiftModal()">
+                                        <span>🎁 Подарить подарок</span>
+                                    </button>
+                                </div>
                             </div>
                             <div class="artifacts-grid" id="profGiftsGrid">
                                 <!-- Подарки -->
@@ -3042,7 +3047,7 @@
     window.CURRENT_SEARCH = "{{.SearchQuery}}";
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
-<script src="/static/js/app.js?v=cyber_rich_previews_v11"></script>
+<script src="/static/js/app.js?v=cyber_rich_previews_v12"></script>
 
 
 <!-- ==========================================
