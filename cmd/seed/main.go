@@ -499,6 +499,15 @@ func main() {
 
 	// 6. Добавим немного лайков и комментариев для живости
 	log.Println("[SEED] Добавление активности (лайки и комментарии к постам)...")
+	likeStmt, _ := db.Prepare(`
+		INSERT INTO likes (user_id, post_id)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id, post_id) DO NOTHING;
+	`)
+	if likeStmt != nil {
+		defer likeStmt.Close()
+	}
+
 	commentStmt, _ := db.Prepare(`
 		INSERT INTO comments (post_id, user_id, content, created_at)
 		VALUES ($1, $2, $3, NOW() - ($4 || ' minutes')::INTERVAL);
@@ -517,6 +526,16 @@ func main() {
 	}
 
 	for _, pid := range createdPostIDs {
+		// 8-30 реальных лайков от разных пользователей
+		numLikes := 8 + rand.Intn(25)
+		shuffledUsers := make([]int, len(createdUserIDs))
+		copy(shuffledUsers, createdUserIDs)
+		rand.Shuffle(len(shuffledUsers), func(i, j int) { shuffledUsers[i], shuffledUsers[j] = shuffledUsers[j], shuffledUsers[i] })
+		for lIdx := 0; lIdx < numLikes && lIdx < len(shuffledUsers); lIdx++ {
+			_, _ = likeStmt.Exec(shuffledUsers[lIdx], pid)
+		}
+		_, _ = db.Exec("UPDATE posts SET likes_count = (SELECT COUNT(*) FROM likes WHERE post_id = $1) WHERE id = $1", pid)
+
 		// 1-3 случайных комментария
 		numComms := rand.Intn(4)
 		for cIdx := 0; cIdx < numComms; cIdx++ {
@@ -524,6 +543,7 @@ func main() {
 			cText := commentSamples[rand.Intn(len(commentSamples))]
 			_, _ = commentStmt.Exec(pid, cAuthor, cText, rand.Intn(180)+5)
 		}
+		_, _ = db.Exec("UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = $1) WHERE id = $1", pid)
 	}
 
 	log.Println("[SEED] 🌟 Заполнение базы успешно завершено!")

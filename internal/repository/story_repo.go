@@ -125,6 +125,32 @@ func (r *StoryRepository) GetStoryByID(storyID, viewerUserID int) (*models.Story
 		return nil, err
 	}
 	st.User = &u
+
+	viewersQuery := `
+		SELECT sv.viewed_at, u.id, u.username, u.display_name, COALESCE(u.avatar_url, '')
+		FROM story_views sv
+		JOIN users u ON u.id = sv.user_id
+		WHERE sv.story_id = $1
+		ORDER BY sv.viewed_at DESC
+	`
+	vRows, vErr := r.db.Query(viewersQuery, storyID)
+	if vErr == nil {
+		defer vRows.Close()
+		var viewers []models.StoryViewer
+		for vRows.Next() {
+			var sv models.StoryViewer
+			var usr models.User
+			if scanErr := vRows.Scan(&sv.ViewedAt, &usr.ID, &usr.Username, &usr.DisplayName, &usr.AvatarURL); scanErr == nil {
+				sv.User = usr
+				viewers = append(viewers, sv)
+			}
+		}
+		st.Viewers = viewers
+		if len(viewers) > st.ViewsCount {
+			st.ViewsCount = len(viewers)
+		}
+	}
+
 	return &st, nil
 }
 
@@ -221,20 +247,16 @@ func (r *StoryRepository) GetActiveStories(viewerUserID int) ([]models.StoryGrou
 
 // MarkStoryViewed отмечает историю просмотренной пользователем и увеличивает счетчик просмотров.
 func (r *StoryRepository) MarkStoryViewed(storyID, viewerUserID int) error {
-	res, err := r.db.Exec(`
+	_, err := r.db.Exec(`
 		INSERT INTO story_views (story_id, user_id, viewed_at)
 		VALUES ($1, $2, NOW())
-		ON CONFLICT (story_id, user_id) DO NOTHING
+		ON CONFLICT (story_id, user_id) DO UPDATE SET viewed_at = NOW()
 	`, storyID, viewerUserID)
 	if err != nil {
 		return fmt.Errorf("mark story viewed: %w", err)
 	}
 
-	// Если просмотр был впервые вставлен, инкрементируем views_count
-	rowsAffected, _ := res.RowsAffected()
-	if rowsAffected > 0 {
-		_, _ = r.db.Exec(`UPDATE stories SET views_count = views_count + 1 WHERE id = $1`, storyID)
-	}
+	_, _ = r.db.Exec(`UPDATE stories SET views_count = (SELECT COUNT(*) FROM story_views WHERE story_id = $1) WHERE id = $1`, storyID)
 	return nil
 }
 

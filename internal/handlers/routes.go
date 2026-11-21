@@ -57,6 +57,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/messages/conversations", h.GetConversations)
 	mux.HandleFunc("GET /api/messages/unread", h.GetUnreadMessagesCount)
 	mux.HandleFunc("GET /api/messages/{userId}", h.GetMessages)
+	mux.HandleFunc("POST /api/messages/{userId}/read", h.MarkDirectMessagesAsRead)
 	mux.HandleFunc("GET /api/messages/{userId}/scheduled", h.GetScheduledMessages)
 	mux.HandleFunc("GET /api/messages/scheduled", h.GetScheduledMessages)
 	mux.HandleFunc("POST /api/messages", h.SendMessage)

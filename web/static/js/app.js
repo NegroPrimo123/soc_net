@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSSE();
     initFeedInfiniteScroll();
     loadStories();
+    initStoryDraggableElements();
 
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('auth') === 'login') openAuthModal('login');
@@ -360,6 +361,8 @@ function initComposer() {
     });
 }
 
+let composerHidePreview = false;
+
 function handleComposerInput() {
     const textarea = document.getElementById('postContent');
     const charCount = document.getElementById('charCount');
@@ -371,6 +374,46 @@ function handleComposerInput() {
     } else {
         charCount.style.color = '#94a3b8';
     }
+
+    // Автоматическое обнаружение внешних ссылок (YouTube, VK, Rutube, TikTok, Twitch и др.) в тексте композера
+    const text = textarea.value.trim();
+    const previewBox = document.getElementById('composerLinkPreviewBox');
+    const previewContent = document.getElementById('composerLinkPreviewContent');
+    if (previewBox && previewContent) {
+        const urlMatch = text.match(/https?:\/\/[^\s<]+/i);
+        if (urlMatch) {
+            const cardsHtml = (typeof renderChatRichLinkCards === 'function') ? renderChatRichLinkCards(text) : '';
+            if (cardsHtml) {
+                previewContent.innerHTML = cardsHtml;
+                previewContent.style.opacity = composerHidePreview ? '0.35' : '1.0';
+                previewBox.style.display = 'block';
+            } else {
+                previewBox.style.display = 'none';
+            }
+        } else {
+            previewBox.style.display = 'none';
+            composerHidePreview = false;
+            const chk = document.getElementById('composerHidePreviewCheck');
+            if (chk) chk.checked = false;
+        }
+    }
+}
+
+function toggleComposerPreviewSetting() {
+    const chk = document.getElementById('composerHidePreviewCheck');
+    composerHidePreview = chk ? chk.checked : false;
+    const previewContent = document.getElementById('composerLinkPreviewContent');
+    if (previewContent) {
+        previewContent.style.opacity = composerHidePreview ? '0.35' : '1.0';
+    }
+}
+
+function dismissComposerPreview() {
+    composerHidePreview = true;
+    const chk = document.getElementById('composerHidePreviewCheck');
+    if (chk) chk.checked = true;
+    const previewBox = document.getElementById('composerLinkPreviewBox');
+    if (previewBox) previewBox.style.display = 'none';
 }
 
 function expandComposer() {
@@ -558,7 +601,8 @@ async function createPost() {
                 music_url: musicUrl,
                 music_title: musicTitle,
                 music_artist: musicArtist,
-                poll_id: pollId
+                poll_id: pollId,
+                hide_preview: !!composerHidePreview
             })
         });
 
@@ -569,6 +613,11 @@ async function createPost() {
 
         const post = await response.json();
         textarea.value = '';
+        composerHidePreview = false;
+        const chk = document.getElementById('composerHidePreviewCheck');
+        if (chk) chk.checked = false;
+        const previewBox = document.getElementById('composerLinkPreviewBox');
+        if (previewBox) previewBox.style.display = 'none';
         handleComposerInput();
         clearComposerFile();
         clearComposerMusic();
@@ -1617,18 +1666,29 @@ async function addComment(postId, event) {
     if (!content) return;
 
     try {
+        const replyInfo = (typeof pendingCommentReplies !== 'undefined') ? pendingCommentReplies[postId] : null;
+        const bodyPayload = {
+            user_id: window.CURRENT_USER_ID,
+            content: content
+        };
+        if (replyInfo) {
+            if (replyInfo.parentId) bodyPayload.parent_id = replyInfo.parentId;
+            if (replyInfo.replyToUserId) bodyPayload.reply_to_user_id = replyInfo.replyToUserId;
+        }
+
         const response = await fetch(`/api/posts/${postId}/comments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: window.CURRENT_USER_ID,
-                content: content
-            })
+            body: JSON.stringify(bodyPayload)
         });
 
         if (!response.ok) throw new Error('Ошибка комментирования');
 
         const comment = await response.json();
+
+        if (typeof cancelCommentReply === 'function') {
+            cancelCommentReply(postId);
+        }
 
         // Очищаем инпуты во всех копиях этой карточки
         document.querySelectorAll(`[id="comment-input-${postId}"]`).forEach(inp => {
@@ -1840,33 +1900,80 @@ function copyPostText(postId, clickedBtn) {
 }
 
 // ==========================================
-// КОММЕНТАРИИ: РЕНДЕРИНГ, РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ
+// КОММЕНТАРИИ: РЕНДЕРИНГ, РЕДАКТИРОВАНИЕ, ОТВЕТ И УДАЛЕНИЕ
 // ==========================================
+const pendingCommentReplies = {};
+
+function startReplyToComment(commentId, postId, userId, displayName, username) {
+    if (!window.IS_AUTHENTICATED) {
+        showToast('Войдите в аккаунт, чтобы ответить на комментарий', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    pendingCommentReplies[postId] = {
+        parentId: commentId,
+        replyToUserId: userId,
+        displayName: displayName,
+        username: username
+    };
+
+    const banner = document.getElementById(`comment-reply-banner-${postId}`);
+    if (banner) {
+        banner.style.display = 'flex';
+        banner.innerHTML = `
+            <span>↩ Ответ пользователю <strong>${escapeHtml(displayName)} (@${escapeHtml(username)})</strong></span>
+            <button type="button" class="reply-cancel-btn" onclick="cancelCommentReply(${postId})" title="Отменить ответ">✕</button>
+        `;
+    }
+
+    const input = document.getElementById(`comment-input-${postId}`);
+    if (input) {
+        if (username && !input.value.trim().startsWith(`@${username}`)) {
+            input.value = `@${username}, ` + input.value.trim();
+        }
+        input.focus();
+    }
+}
+
+function cancelCommentReply(postId) {
+    delete pendingCommentReplies[postId];
+    const banner = document.getElementById(`comment-reply-banner-${postId}`);
+    if (banner) {
+        banner.style.display = 'none';
+        banner.innerHTML = '';
+    }
+}
+
 function renderCommentItemHtml(c, postOwnerId) {
     const isCommentAuthor = window.IS_AUTHENTICATED && (window.CURRENT_USER_ID === c.user.id);
     const canDeleteComment = window.IS_AUTHENTICATED && (isCommentAuthor || window.CURRENT_USER_ID === postOwnerId);
     const editedHtml = c.is_edited ? '<span class="edited-badge">• (ред.)</span>' : '';
+    const userAvatar = (c.user && c.user.avatar_url) ? c.user.avatar_url : '/static/avatars/default.svg';
+    const userName = (c.user && c.user.display_name) ? c.user.display_name : 'Пользователь';
+    const userHandle = (c.user && c.user.username) ? c.user.username : '';
+    const userId = (c.user && c.user.id) ? c.user.id : 0;
 
     return `
         <div class="comment-item" id="comment-item-${c.id}">
-            <img src="${escapeHtml(c.user.avatar_url)}" alt="avatar" class="comment-avatar">
+            <img src="${escapeHtml(userAvatar)}" alt="avatar" class="comment-avatar cursor-pointer" onclick="openUserProfile(${userId})" title="Открыть профиль ${escapeHtml(userName)}">
             <div class="comment-bubble">
                 <div class="comment-author-line">
                     <div class="comment-author-meta" id="comment-meta-${c.id}">
-                        <span class="comment-author">${escapeHtml(c.user.display_name)}</span>
+                        <span class="comment-author cursor-pointer" onclick="openUserProfile(${userId})" title="Открыть профиль ${escapeHtml(userName)}">${escapeHtml(userName)}</span>
                         <span class="comment-time">${formatTime(c.created_at)}</span>
                         ${editedHtml}
                     </div>
-                    ${(isCommentAuthor || canDeleteComment) ? `
-                        <div class="comment-item-actions">
-                            ${isCommentAuthor ? `
-                                <button type="button" class="comment-action-btn" onclick="startEditComment(${c.id}, ${c.post_id})" title="Редактировать">Ред.</button>
-                            ` : ''}
-                            ${canDeleteComment ? `
-                                <button type="button" class="comment-action-btn" onclick="deleteComment(${c.id}, ${c.post_id})" title="Удалить">✕</button>
-                            ` : ''}
-                        </div>
-                    ` : ''}
+                    <div class="comment-item-actions">
+                        ${window.IS_AUTHENTICATED ? `
+                            <button type="button" class="comment-action-btn comment-reply-btn" onclick="startReplyToComment(${c.id}, ${c.post_id}, ${userId}, '${escapeHtml(userName)}', '${escapeHtml(userHandle)}')" title="Ответить на комментарий">↩ Ответить</button>
+                        ` : ''}
+                        ${isCommentAuthor ? `
+                            <button type="button" class="comment-action-btn" onclick="startEditComment(${c.id}, ${c.post_id})" title="Редактировать">Ред.</button>
+                        ` : ''}
+                        ${canDeleteComment ? `
+                            <button type="button" class="comment-action-btn" onclick="deleteComment(${c.id}, ${c.post_id})" title="Удалить">✕</button>
+                        ` : ''}
+                    </div>
                 </div>
                 <div class="comment-text" id="comment-text-${c.id}">${escapeHtml(c.content)}</div>
                 <div class="comment-edit-box" id="comment-edit-box-${c.id}" style="display: none;">
@@ -2149,7 +2256,7 @@ function createPostElement(post) {
             ${postMenuHtml}
         </div>
 
-        <div class="post-content" id="post-content-${post.id}" ${rawContent ? '' : 'style="display:none;"'}>${formatHashtags(rawContent)}</div>
+        <div class="post-content" id="post-content-${post.id}" ${rawContent ? '' : 'style="display:none;"'}>${formatPostContent(rawContent, post)}</div>
 
         <div class="post-edit-box" id="post-edit-box-${post.id}" style="display: none;">
             <textarea id="edit-textarea-${post.id}" rows="3">${escapeHtml(post.content)}</textarea>
@@ -2200,6 +2307,7 @@ function createPostElement(post) {
                 ${commentsHtml}
             </div>
 
+            <div class="comment-reply-banner" id="comment-reply-banner-${post.id}" style="display: none;"></div>
             <div class="comment-input-row">
                 <input type="text" id="comment-input-${post.id}" placeholder="Напишите комментарий..." onkeydown="if(event.key==='Enter')addComment(${post.id}, event)">
                 <button class="btn btn-secondary btn-sm" onclick="addComment(${post.id}, event)">Отправить</button>
@@ -2208,6 +2316,32 @@ function createPostElement(post) {
     `;
 
     return article;
+}
+
+function formatPostContent(text, post) {
+    if (!text) return '';
+    let escaped = escapeHtml(text);
+    // Кликабельные хэштеги
+    escaped = escaped.replace(/(#[\w\u0400-\u04FF]+)/gi, (tag) => {
+        return `<span class="hashtag-inline cursor-pointer" style="color: #e26d5c; font-weight: 600;" onclick="event.stopPropagation(); filterByTag('${tag}')">${tag}</span>`;
+    });
+    // Кликабельные ссылки
+    const urlRegex = /(https?:\/\/[^\s<]+)/gi;
+    escaped = escaped.replace(urlRegex, (url) => {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="post-external-link" onclick="event.stopPropagation()">${url}</a>`;
+    });
+    escaped = escaped.replace(/\n/g, '<br>');
+
+    // Интерактивные карточки превью (YouTube, VK, Rutube, TikTok, Twitch и др.), если превью не скрыто
+    let previewsHtml = '';
+    const shouldHide = post && (post.hide_preview === true || post.hide_preview === 1);
+    if (!shouldHide && typeof renderChatRichLinkCards === 'function') {
+        const cards = renderChatRichLinkCards(text);
+        if (cards) {
+            previewsHtml = `<div class="post-rich-previews-container">${cards}</div>`;
+        }
+    }
+    return escaped + previewsHtml;
 }
 
 function formatAllPostContents() {
@@ -3150,8 +3284,8 @@ function renderProfileGifts(gifts) {
         grid.innerHTML = `
             <div class="cyber-empty-card" style="grid-column: 1 / -1;">
                 <span class="empty-glyph">🎁</span>
-                <h3>Коллекция подарков пуста</h3>
-                <p>Станьте первым, кто подарит этому пользователю подарок из коллекции «Цветные карандаши»!</p>
+                <h3>Подарков пока нет</h3>
+                <p>Станьте первым, кто подарит подарок этому пользователю!</p>
                 <button class="btn btn-primary btn-sm" style="margin-top: 0.8rem;" onclick="if(currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID){ navigateTo('showcase'); }else{ openCurrentProfileGiftModal(); }">
                     <span>${(currentProfileUserData && currentProfileUserData.id === window.CURRENT_USER_ID) ? '🎁 Выбрать подарок в каталоге' : '🎁 Отправить первый подарок'}</span>
                 </button>
@@ -4762,7 +4896,24 @@ function renderNotificationsList(notifs, filter = 'all') {
             avatarsHtml += `<img src="${escapeHtml(a.avatar_url)}" alt="${escapeHtml(a.display_name)}" class="notif-avatar" title="${escapeHtml(a.display_name)}">`;
         });
         if (!avatarsHtml) {
-            avatarsHtml = `<div class="notif-avatar" style="background:#e26d5c;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1rem;">🔔</div>`;
+            avatarsHtml = `<div class="notif-avatar" style="background:#00f0ff;display:flex;align-items:center;justify-content:center;color:#020617;font-size:1rem;font-weight:bold;">⚡</div>`;
+        }
+
+        let categoryIcon = '';
+        if (n.action_type === 'like') {
+            categoryIcon = '<span class="notif-category-icon notif-cat-like" title="Лайк">❤️</span>';
+        } else if (n.action_type === 'comment') {
+            categoryIcon = '<span class="notif-category-icon notif-cat-comment" title="Комментарий">💬</span>';
+        } else if (n.action_type === 'comment_reply') {
+            categoryIcon = '<span class="notif-category-icon notif-cat-reply" title="Ответ на комментарий">↩️</span>';
+        } else if (n.action_type === 'follow') {
+            categoryIcon = '<span class="notif-category-icon notif-cat-follow" title="Подписка">👤</span>';
+        } else if (n.action_type === 'message') {
+            categoryIcon = '<span class="notif-category-icon notif-cat-message" title="Сообщение">✉️</span>';
+        } else if (n.action_type === 'gift') {
+            categoryIcon = '<span class="notif-category-icon notif-cat-gift" title="Подарок">🎁</span>';
+        } else {
+            categoryIcon = '<span class="notif-category-icon notif-cat-comment">🔔</span>';
         }
 
         const unreadDot = !n.is_read ? '<span class="notif-unread-dot"></span>' : '';
@@ -4770,8 +4921,8 @@ function renderNotificationsList(notifs, filter = 'all') {
         card.innerHTML = `
             <div class="notif-avatar-stack">${avatarsHtml}</div>
             <div class="notif-body">
-                <div class="notif-title">${escapeHtml(n.title)}</div>
-                <div class="notif-snippet">${escapeHtml(n.snippet)}</div>
+                <div class="notif-title" style="display:flex; align-items:center; gap:4px;">${categoryIcon}<span>${escapeHtml(n.title)}</span></div>
+                ${n.snippet ? `<div class="notif-snippet">${escapeHtml(n.snippet)}</div>` : ''}
                 <div class="notif-time">${formatTime(n.latest_at)}</div>
             </div>
             ${unreadDot}
@@ -4791,12 +4942,12 @@ function renderNotificationsList(notifs, filter = 'all') {
 
             closeNotificationsPanel();
 
-            if (n.action_type === 'like' || n.action_type === 'comment') {
+            if (n.action_type === 'like' || n.action_type === 'comment' || n.action_type === 'comment_reply') {
                 navigateTo('feed');
                 const postEl = document.getElementById(`post-${n.target_id}`);
                 if (postEl) {
                     postEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    postEl.style.boxShadow = '0 0 0 3px #e26d5c';
+                    postEl.style.boxShadow = '0 0 0 3px #00f0ff';
                     setTimeout(() => postEl.style.boxShadow = '', 2000);
                 }
             } else if (n.action_type === 'follow') {
@@ -5511,6 +5662,16 @@ function onContextReaction(emoji) {
 }
 
 async function loadChatMessages(userId) {
+    // Мгновенно убираем бейдж непрочитанных в сайдбаре диалогов
+    document.querySelectorAll(`.conversation-item[data-user-id="${userId}"] .conv-unread-badge`).forEach(b => b.remove());
+    if (typeof cachedConversations !== 'undefined' && Array.isArray(cachedConversations)) {
+        const convCached = cachedConversations.find(c => (c.user && c.user.id == userId) || c.user_id == userId);
+        if (convCached) convCached.unread_count = 0;
+    }
+
+    // Отправляем запрос на сервер для отметки прочитанными
+    fetch(`/api/messages/${userId}/read`, { method: 'POST' }).catch(() => {});
+
     const container = document.getElementById('chatMessagesContainer');
     if (!container) return;
     container.innerHTML = '<div class="chat-empty-hint">Загрузка сообщений...</div>';
@@ -5528,6 +5689,7 @@ async function loadChatMessages(userId) {
                     История переписки пуста. Отправьте первое сообщение, чтобы начать диалог.
                 </div>
             `;
+            updateUnreadMessagesCountBadge();
             return;
         }
 
@@ -6688,7 +6850,10 @@ async function updateUnreadMessagesCountBadge() {
         const res = await fetch('/api/messages/unread');
         if (res.ok) {
             const data = await res.json();
-            const count = data.unread_count || 0;
+            // Показываем количество собеседников/диалогов с непрочитанными сообщениями
+            let count = (data.unread_dialogs_count !== undefined) ? data.unread_dialogs_count : (data.unread_count || 0);
+            if (count === 0 && data.unread_count > 0) count = data.unread_count;
+
             [badge, headerBadge].forEach(b => {
                 if (!b) return;
                 if (count > 0) {
@@ -7584,10 +7749,10 @@ let currentComposerAudioArtist = '';
 
 let pendingChatAudio = null;
 
-const HEADER_PLAY_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon" style="margin-left: 2px;"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
-const HEADER_PAUSE_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor"/></svg>';
-const CARD_PLAY_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-left:1px;"><path d="M8 5v14l11-7z"/></svg>';
-const CARD_PAUSE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="display:inline-block; vertical-align:middle;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+const HEADER_PLAY_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon" style="display:block; margin:0 auto;"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>';
+const HEADER_PAUSE_SVG = '<svg viewBox="0 0 24 24" class="header-ctrl-icon" style="display:block; margin:0 auto;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor"/></svg>';
+const CARD_PLAY_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="display:block; margin:0 auto;"><path d="M8 5v14l11-7z"/></svg>';
+const CARD_PAUSE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="display:block; margin:0 auto;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
 
 class GlobalMusicPlayer {
     constructor() {
@@ -10321,7 +10486,15 @@ async function openChannelConversationInMainChat(channelId, subId, subName, subU
         const itemSubId = parseInt(item.dataset.subId, 10);
         const matches = (itemChId === channelId) && (!isCreator || itemSubId === subId);
         item.classList.toggle('active', matches);
+        if (matches) {
+            const b = item.querySelector('.conv-unread-badge');
+            if (b) b.remove();
+        }
     });
+
+    // Отметка прочитанными для канала
+    fetch(`/api/channels/${channelId}/messages/read?subscriber_id=${subId}`, { method: 'POST' }).catch(() => {});
+    updateUnreadMessagesCountBadge();
 
     const noSel = document.getElementById('chatNoSelection');
     const activeWin = document.getElementById('chatActiveWindow');
@@ -11074,6 +11247,7 @@ let graphSelectedNode = null;
 let isGraphPanning = false;
 let graphPanStart = { x: 0, y: 0 };
 let isGraphPhysicsRunning = true;
+let graphAlpha = 1.0;
 let graphAnimFrameId = null;
 let currentGraphFilter = 'ego1';
 
@@ -11189,14 +11363,18 @@ function startGraphSimulation() {
 }
 
 function updateGraphPhysics() {
-    const kRepel = 2200;
-    const kSpring = 0.045;
-    const damp = 0.85;
+    if (graphAlpha < 0.003) {
+        graphNodes.forEach(n => { n.vx = 0; n.vy = 0; });
+        return;
+    }
+    const kRepel = 2400;
+    const kSpring = 0.04;
+    const damp = 0.72;
     const wrapper = document.getElementById('graphCanvasWrapper');
     const cx = wrapper ? wrapper.clientWidth / 2 : 350;
     const cy = wrapper ? wrapper.clientHeight / 2 : 270;
 
-    // Repulsion between all nodes (Coulomb)
+    // Repulsion between all nodes (Coulomb) with minimum distance clamping
     for (let i = 0; i < graphNodes.length; i++) {
         const n1 = graphNodes[i];
         for (let j = i + 1; j < graphNodes.length; j++) {
@@ -11204,8 +11382,9 @@ function updateGraphPhysics() {
             let dx = n1.x - n2.x;
             let dy = n1.y - n2.y;
             let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            if (dist < 400) {
-                const force = kRepel / (dist * dist);
+            const effDist = Math.max(dist, 45); // Защита от бесконечного отталкивания и прыжков
+            if (dist < 380) {
+                const force = Math.min(12, (kRepel / (effDist * effDist)) * graphAlpha);
                 const fx = (dx / dist) * force;
                 const fy = (dy / dist) * force;
                 n1.vx += fx;
@@ -11214,9 +11393,9 @@ function updateGraphPhysics() {
                 n2.vy -= fy;
             }
         }
-        // Center gravity
-        n1.vx += (cx - n1.x) * 0.003;
-        n1.vy += (cy - n1.y) * 0.003;
+        // Center gravity with cooling alpha
+        n1.vx += (cx - n1.x) * 0.0025 * graphAlpha;
+        n1.vy += (cy - n1.y) * 0.0025 * graphAlpha;
     }
 
     // Spring attraction along edges (Hooke's Law)
@@ -11225,7 +11404,7 @@ function updateGraphPhysics() {
         const dy = e.target.y - e.source.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const desiredDist = 110;
-        const force = (dist - desiredDist) * kSpring;
+        const force = Math.max(-10, Math.min(10, (dist - desiredDist) * kSpring * graphAlpha));
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
         e.source.vx += fx;
@@ -11234,14 +11413,22 @@ function updateGraphPhysics() {
         e.target.vy -= fy;
     });
 
-    // Update positions
+    // Update positions with speed clamping
     graphNodes.forEach(n => {
         if (n === graphDragNode) return;
+        const speed = Math.hypot(n.vx, n.vy);
+        if (speed > 6) {
+            n.vx = (n.vx / speed) * 6;
+            n.vy = (n.vy / speed) * 6;
+        }
         n.x += n.vx;
         n.y += n.vy;
         n.vx *= damp;
         n.vy *= damp;
     });
+
+    // Охлаждение симуляции (температурный затухающий коэффициент)
+    graphAlpha *= 0.97;
 }
 
 function renderGraphCanvas() {
@@ -11329,6 +11516,7 @@ function setupGraphCanvasEvents() {
 
         if (clickedNode) {
             graphDragNode = clickedNode;
+            graphAlpha = Math.max(graphAlpha, 0.5);
             selectGraphNode(clickedNode);
         } else {
             isGraphPanning = true;
@@ -11343,6 +11531,7 @@ function setupGraphCanvasEvents() {
             graphDragNode.y = mousePos.y;
             graphDragNode.vx = 0;
             graphDragNode.vy = 0;
+            graphAlpha = Math.max(graphAlpha, 0.3);
         } else if (isGraphPanning) {
             graphTransform.x = e.clientX - graphPanStart.x;
             graphTransform.y = e.clientY - graphPanStart.y;
@@ -11730,6 +11919,13 @@ let selectedStoryTextStyle = 'pill';
 let selectedStoryTextSize = 'md';
 let selectedStoryStickerPos = 'top-right';
 let selectedStoryStickerSize = 'md';
+let storyCustomTextPos = false;
+let storyTextXPercent = 50;
+let storyTextYPercent = 80;
+let storyCustomStickerPos = false;
+let storyStickerXPercent = 80;
+let storyStickerYPercent = 15;
+let storyDraggablesInitialized = false;
 
 function setStoryFont(fontKey) {
     selectedStoryFont = fontKey || 'cyber';
@@ -11767,6 +11963,7 @@ function setStorySticker(stickerEmoji) {
 
 function setStoryTextPos(posKey) {
     selectedStoryTextPos = posKey || 'bottom';
+    storyCustomTextPos = false;
     document.querySelectorAll('.story-pos-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.textPos === selectedStoryTextPos);
     });
@@ -11791,6 +11988,7 @@ function setStoryTextSize(sizeKey) {
 
 function setStoryStickerPos(posKey) {
     selectedStoryStickerPos = posKey || 'top-right';
+    storyCustomStickerPos = false;
     document.querySelectorAll('.story-sticker-pos-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.stickerPos === selectedStoryStickerPos);
     });
@@ -11905,11 +12103,18 @@ function openCreateStoryModal() {
     setStoryAlign('center');
     setStoryTextColor('#ffffff');
     setStorySticker('');
+    storyCustomTextPos = false;
+    storyCustomStickerPos = false;
+    storyTextXPercent = 50;
+    storyTextYPercent = 80;
+    storyStickerXPercent = 80;
+    storyStickerYPercent = 15;
     const mediaInput = document.getElementById('storyMediaUrl');
     const captionInput = document.getElementById('storyCaptionInput');
     if (mediaInput) mediaInput.value = '';
     if (captionInput) captionInput.value = '';
     updateStoryPreview();
+    initStoryDraggableElements();
 }
 
 function closeCreateStoryModal() {
@@ -11980,10 +12185,27 @@ function updateStoryPreview() {
 
     if (previewCaption) {
         previewCaption.textContent = caption || 'Ваша история';
-        const posClass = `story-text-pos-${selectedStoryTextPos}`;
         const styleClass = `story-text-style-${selectedStoryTextStyle}`;
         const sizeClass = `story-text-size-${selectedStoryTextSize}`;
-        previewCaption.className = `story-font-${selectedStoryFont} ${posClass} ${styleClass} ${sizeClass}`;
+
+        if (storyCustomTextPos) {
+            previewCaption.className = `story-font-${selectedStoryFont} ${styleClass} ${sizeClass}`;
+            previewCaption.style.position = 'absolute';
+            previewCaption.style.left = `${storyTextXPercent.toFixed(1)}%`;
+            previewCaption.style.top = `${storyTextYPercent.toFixed(1)}%`;
+            previewCaption.style.bottom = 'auto';
+            previewCaption.style.right = 'auto';
+            previewCaption.style.transform = 'translate(-50%, -50%)';
+        } else {
+            const posClass = `story-text-pos-${selectedStoryTextPos}`;
+            previewCaption.className = `story-font-${selectedStoryFont} ${posClass} ${styleClass} ${sizeClass}`;
+            previewCaption.style.position = '';
+            previewCaption.style.left = '';
+            previewCaption.style.top = '';
+            previewCaption.style.bottom = '';
+            previewCaption.style.right = '';
+            previewCaption.style.transform = '';
+        }
         previewCaption.style.textAlign = selectedStoryAlign;
         previewCaption.style.color = selectedStoryTextColor;
     }
@@ -11991,9 +12213,25 @@ function updateStoryPreview() {
     if (previewSticker) {
         if (selectedStorySticker) {
             previewSticker.textContent = selectedStorySticker;
-            const stickerPosClass = `story-sticker-pos-${selectedStoryStickerPos}`;
             const stickerSizeClass = `story-sticker-size-${selectedStoryStickerSize}`;
-            previewSticker.className = `story-floating-sticker ${stickerPosClass} ${stickerSizeClass}`;
+            if (storyCustomStickerPos) {
+                previewSticker.className = `story-floating-sticker ${stickerSizeClass}`;
+                previewSticker.style.position = 'absolute';
+                previewSticker.style.left = `${storyStickerXPercent.toFixed(1)}%`;
+                previewSticker.style.top = `${storyStickerYPercent.toFixed(1)}%`;
+                previewSticker.style.bottom = 'auto';
+                previewSticker.style.right = 'auto';
+                previewSticker.style.transform = 'translate(-50%, -50%)';
+            } else {
+                const stickerPosClass = `story-sticker-pos-${selectedStoryStickerPos}`;
+                previewSticker.className = `story-floating-sticker ${stickerPosClass} ${stickerSizeClass}`;
+                previewSticker.style.position = '';
+                previewSticker.style.left = '';
+                previewSticker.style.top = '';
+                previewSticker.style.bottom = '';
+                previewSticker.style.right = '';
+                previewSticker.style.transform = '';
+            }
             previewSticker.style.display = 'block';
         } else {
             previewSticker.style.display = 'none';
@@ -12010,6 +12248,101 @@ function updateStoryPreview() {
         if (previewImg) previewImg.style.display = 'none';
         mini.style.background = STORY_GRADIENTS[selectedStoryGradient] || STORY_GRADIENTS.cyber_cyan;
     }
+}
+
+function initStoryDraggableElements() {
+    const previewContainer = document.getElementById('storyMiniPreview');
+    const captionEl = document.getElementById('storyPreviewCaption');
+    const stickerEl = document.getElementById('storyPreviewSticker');
+    if (!previewContainer || !captionEl || !stickerEl) return;
+    if (storyDraggablesInitialized) return;
+    storyDraggablesInitialized = true;
+
+    let activeDragTarget = null;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let initialLeftPct = 50;
+    let initialTopPct = 50;
+
+    function startDrag(e, target, isSticker) {
+        e.preventDefault();
+        e.stopPropagation();
+        activeDragTarget = target;
+        const rect = previewContainer.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        dragStartX = clientX;
+        dragStartY = clientY;
+
+        const targetRect = target.getBoundingClientRect();
+        const currentCenterX = (targetRect.left + targetRect.width / 2) - rect.left;
+        const currentCenterY = (targetRect.top + targetRect.height / 2) - rect.top;
+        initialLeftPct = Math.max(8, Math.min(92, (currentCenterX / rect.width) * 100));
+        initialTopPct = Math.max(8, Math.min(92, (currentCenterY / rect.height) * 100));
+
+        target.style.cursor = 'grabbing';
+        target.classList.add('is-dragging');
+
+        if (isSticker) {
+            storyCustomStickerPos = true;
+            document.querySelectorAll('.story-sticker-pos-btn').forEach(b => b.classList.remove('active'));
+        } else {
+            storyCustomTextPos = true;
+            document.querySelectorAll('.story-pos-btn').forEach(b => b.classList.remove('active'));
+        }
+
+        window.addEventListener('mousemove', onDragMove);
+        window.addEventListener('touchmove', onDragMove, { passive: false });
+        window.addEventListener('mouseup', onDragEnd);
+        window.addEventListener('touchend', onDragEnd);
+    }
+
+    function onDragMove(e) {
+        if (!activeDragTarget) return;
+        if (e.cancelable) e.preventDefault();
+        const rect = previewContainer.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const deltaXPct = ((clientX - dragStartX) / rect.width) * 100;
+        const deltaYPct = ((clientY - dragStartY) / rect.height) * 100;
+
+        const newXPct = Math.max(8, Math.min(92, initialLeftPct + deltaXPct));
+        const newYPct = Math.max(8, Math.min(92, initialTopPct + deltaYPct));
+
+        activeDragTarget.style.position = 'absolute';
+        activeDragTarget.style.left = `${newXPct.toFixed(1)}%`;
+        activeDragTarget.style.top = `${newYPct.toFixed(1)}%`;
+        activeDragTarget.style.bottom = 'auto';
+        activeDragTarget.style.right = 'auto';
+        activeDragTarget.style.transform = 'translate(-50%, -50%)';
+
+        if (activeDragTarget === stickerEl) {
+            storyStickerXPercent = newXPct;
+            storyStickerYPercent = newYPct;
+        } else {
+            storyTextXPercent = newXPct;
+            storyTextYPercent = newYPct;
+        }
+    }
+
+    function onDragEnd() {
+        if (activeDragTarget) {
+            activeDragTarget.style.cursor = 'grab';
+            activeDragTarget.classList.remove('is-dragging');
+            activeDragTarget = null;
+        }
+        window.removeEventListener('mousemove', onDragMove);
+        window.removeEventListener('touchmove', onDragMove);
+        window.removeEventListener('mouseup', onDragEnd);
+        window.removeEventListener('touchend', onDragEnd);
+    }
+
+    captionEl.addEventListener('mousedown', (e) => startDrag(e, captionEl, false));
+    captionEl.addEventListener('touchstart', (e) => startDrag(e, captionEl, false), { passive: false });
+
+    stickerEl.addEventListener('mousedown', (e) => startDrag(e, stickerEl, true));
+    stickerEl.addEventListener('touchstart', (e) => startDrag(e, stickerEl, true), { passive: false });
 }
 
 async function submitCreateStory(e) {
@@ -12030,6 +12363,13 @@ async function submitCreateStory(e) {
     if (btn) btn.disabled = true;
 
     try {
+        const textPosValue = storyCustomTextPos 
+            ? `custom:${storyTextXPercent.toFixed(1)},${storyTextYPercent.toFixed(1)}` 
+            : selectedStoryTextPos;
+        const stickerPosValue = storyCustomStickerPos 
+            ? `custom:${storyStickerXPercent.toFixed(1)},${storyStickerYPercent.toFixed(1)}` 
+            : selectedStoryStickerPos;
+
         const payload = {
             media_url: selectedStoryType === 'media' ? mediaUrl : '',
             caption: caption,
@@ -12038,8 +12378,8 @@ async function submitCreateStory(e) {
             text_align: selectedStoryAlign,
             text_color: selectedStoryTextColor,
             sticker: selectedStorySticker,
-            text_position: selectedStoryTextPos,
-            sticker_position: selectedStoryStickerPos,
+            text_position: textPosValue,
+            sticker_position: stickerPosValue,
             text_style: selectedStoryTextStyle,
             text_size: selectedStoryTextSize,
             sticker_size: selectedStoryStickerSize,
@@ -12182,10 +12522,29 @@ function renderCurrentStoryViewer() {
     if (captionEl) {
         captionEl.textContent = story.caption || '';
         captionEl.style.display = story.caption ? 'block' : 'none';
-        const posClass = `story-text-pos-${story.text_position || 'bottom'}`;
         const styleClass = `story-text-style-${story.text_style || 'pill'}`;
         const sizeClass = `story-text-size-${story.text_size || 'md'}`;
-        captionEl.className = `story-caption-overlay story-font-${story.font_family || 'cyber'} ${posClass} ${styleClass} ${sizeClass}`;
+
+        if (story.text_position && story.text_position.startsWith('custom:')) {
+            const parts = story.text_position.substring(7).split(',');
+            const x = parseFloat(parts[0]) || 50;
+            const y = parseFloat(parts[1]) || 80;
+            captionEl.className = `story-caption-overlay story-font-${story.font_family || 'cyber'} ${styleClass} ${sizeClass}`;
+            captionEl.style.position = 'absolute';
+            captionEl.style.left = `${x}%`;
+            captionEl.style.top = `${y}%`;
+            captionEl.style.bottom = 'auto';
+            captionEl.style.right = 'auto';
+            captionEl.style.transform = 'translate(-50%, -50%)';
+        } else {
+            const posClass = `story-text-pos-${story.text_position || 'bottom'}`;
+            captionEl.className = `story-caption-overlay story-font-${story.font_family || 'cyber'} ${posClass} ${styleClass} ${sizeClass}`;
+            captionEl.style.left = '';
+            captionEl.style.top = '';
+            captionEl.style.bottom = '';
+            captionEl.style.right = '';
+            captionEl.style.transform = '';
+        }
         captionEl.style.textAlign = story.text_align || 'center';
         captionEl.style.color = story.text_color || '#ffffff';
     }
@@ -12200,9 +12559,27 @@ function renderCurrentStoryViewer() {
     }
     if (story.sticker) {
         stickerEl.textContent = story.sticker;
-        const stickerPosClass = `story-sticker-pos-${story.sticker_position || 'top-right'}`;
         const stickerSizeClass = `story-sticker-size-${story.sticker_size || 'md'}`;
-        stickerEl.className = `story-floating-sticker ${stickerPosClass} ${stickerSizeClass}`;
+        if (story.sticker_position && story.sticker_position.startsWith('custom:')) {
+            const parts = story.sticker_position.substring(7).split(',');
+            const sx = parseFloat(parts[0]) || 80;
+            const sy = parseFloat(parts[1]) || 15;
+            stickerEl.className = `story-floating-sticker ${stickerSizeClass}`;
+            stickerEl.style.position = 'absolute';
+            stickerEl.style.left = `${sx}%`;
+            stickerEl.style.top = `${sy}%`;
+            stickerEl.style.bottom = 'auto';
+            stickerEl.style.right = 'auto';
+            stickerEl.style.transform = 'translate(-50%, -50%)';
+        } else {
+            const stickerPosClass = `story-sticker-pos-${story.sticker_position || 'top-right'}`;
+            stickerEl.className = `story-floating-sticker ${stickerPosClass} ${stickerSizeClass}`;
+            stickerEl.style.left = '';
+            stickerEl.style.top = '';
+            stickerEl.style.bottom = '';
+            stickerEl.style.right = '';
+            stickerEl.style.transform = '';
+        }
         stickerEl.style.display = 'block';
     } else {
         stickerEl.style.display = 'none';
@@ -12951,18 +13328,25 @@ async function loadBlacklist() {
 
         if (emptyEl) emptyEl.style.display = 'none';
 
-        listEl.innerHTML = list.map(b => `
+        listEl.innerHTML = list.map(b => {
+            const u = b.blocked_user || b || {};
+            const uId = u.id || b.blocked_user_id || b.id || 0;
+            const avatar = u.avatar_url || '/static/avatars/default_avatar.svg';
+            const name = u.display_name || u.username || 'Пользователь';
+            const handle = u.username ? `@${u.username}` : '';
+            return `
             <div class="blacklist-user-item">
                 <div class="blacklist-user-meta">
-                    <img src="${escapeHtml(b.blocked_user.avatar_url || '/static/avatars/default.svg')}" alt="avatar" class="blacklist-avatar">
+                    <img src="${escapeHtml(avatar)}" alt="avatar" class="blacklist-avatar">
                     <div>
-                        <div class="blacklist-user-name">${escapeHtml(b.blocked_user.display_name)}</div>
-                        <div class="blacklist-user-handle">@${escapeHtml(b.blocked_user.username)}</div>
+                        <div class="blacklist-user-name">${escapeHtml(name)}</div>
+                        <div class="blacklist-user-handle">${escapeHtml(handle)}</div>
                     </div>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="unblockUser(${b.blocked_user_id})">Разблокировать</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="unblockUser(${uId})">Разблокировать</button>
             </div>
-        `).join('');
+            `;
+        }).join('');
     } catch (err) {
         listEl.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
     }

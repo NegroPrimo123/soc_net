@@ -386,7 +386,7 @@ func (h *Handler) CreateChannelPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cID := channelID
-	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, &cID, req.PollID, req.Signature, req.AuthorPubKey)
+	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, &cID, req.PollID, req.Signature, req.AuthorPubKey, req.HidePreview)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

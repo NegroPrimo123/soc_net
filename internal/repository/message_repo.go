@@ -251,7 +251,11 @@ func (r *MessageRepository) MarkAsRead(currentUserID, senderID int) error {
 	UPDATE messages
 	SET is_read = TRUE,
 	    read_at = COALESCE(read_at, NOW())
-	WHERE receiver_id = $1 AND sender_id = $2 AND is_read = FALSE
+	WHERE is_read = FALSE
+	  AND (
+	      (receiver_id = $1 AND sender_id = $2)
+	      OR (receiver_id = $1 AND (sender_id = $2 OR $2 = 0))
+	  )
 	`
 	_, err := r.db.Exec(query, currentUserID, senderID)
 	return err
@@ -260,11 +264,15 @@ func (r *MessageRepository) MarkAsRead(currentUserID, senderID int) error {
 func (r *MessageRepository) MarkChannelMessagesAsRead(channelID, subscriberID, currentUserID int) error {
 	query := `
 	UPDATE messages
-	SET is_read = TRUE
+	SET is_read = TRUE,
+	    read_at = COALESCE(read_at, NOW())
 	WHERE channel_id = $1
 	  AND is_read = FALSE
-	  AND receiver_id = $2
-	  AND (sender_id = $3 OR is_from_channel = TRUE)
+	  AND (
+	      (receiver_id = $2)
+	      OR ($3 > 0 AND sender_id = $3)
+	      OR ($2 IN (SELECT creator_id FROM channels WHERE id = $1) AND is_from_channel = FALSE AND ($3 <= 0 OR sender_id = $3))
+	  )
 	`
 	_, err := r.db.Exec(query, channelID, currentUserID, subscriberID)
 	return err
@@ -372,15 +380,33 @@ func (r *MessageRepository) GetConversationsList(currentUserID int) ([]models.Co
 }
 
 func (r *MessageRepository) GetUnreadCount(currentUserID int) (int, error) {
-
 	var count int
-
-	query := `SELECT COUNT(*) FROM messages WHERE receiver_id = $1 AND is_read = FALSE`
-
+	query := `
+	SELECT COUNT(*) 
+	FROM messages 
+	WHERE is_read = FALSE 
+	  AND (
+	      (receiver_id = $1 AND COALESCE(deleted_for_receiver, FALSE) = FALSE)
+	      OR (channel_id IN (SELECT id FROM channels WHERE creator_id = $1) AND COALESCE(is_from_channel, FALSE) = FALSE AND sender_id != $1)
+	  )
+	`
 	err := r.db.QueryRow(query, currentUserID).Scan(&count)
-
 	return count, err
+}
 
+func (r *MessageRepository) GetUnreadConversationsCount(currentUserID int) (int, error) {
+	var count int
+	query := `
+	SELECT COUNT(DISTINCT sender_id)
+	FROM messages
+	WHERE is_read = FALSE
+	  AND (
+	      (receiver_id = $1 AND COALESCE(deleted_for_receiver, FALSE) = FALSE)
+	      OR (channel_id IN (SELECT id FROM channels WHERE creator_id = $1) AND COALESCE(is_from_channel, FALSE) = FALSE AND sender_id != $1)
+	  )
+	`
+	err := r.db.QueryRow(query, currentUserID).Scan(&count)
+	return count, err
 }
 
 func (r *MessageRepository) UpdateMessage(msgID, senderID int, content string, audioURL, audioTitle, audioArtist *string) (*models.Message, error) {

@@ -5740,6 +5740,9 @@ input:checked + .toggle-slider:before {
 }
 .hero-music-play-btn {
     position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -5749,7 +5752,7 @@ input:checked + .toggle-slider:before {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.9rem;
+    padding: 0;
     cursor: pointer;
     transition: all 0.2s ease;
     backdrop-filter: blur(4px);
@@ -5757,7 +5760,45 @@ input:checked + .toggle-slider:before {
 .hero-music-play-btn:hover {
     background: #00f0ff;
     color: #020617;
-    transform: scale(1.1);
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.post-music-play-btn,
+.chat-audio-play-btn,
+.profile-item-play-btn,
+.hero-music-play-btn,
+.header-music-play-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    text-align: center !important;
+    line-height: 1 !important;
+}
+.post-music-play-btn span,
+.chat-audio-play-btn span,
+.profile-item-play-btn span,
+.hero-music-play-btn span,
+.header-music-play-btn span,
+.music-play-icon,
+.header-play-icon-wrap,
+.chat-audio-icon {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+}
+.post-music-play-btn svg,
+.chat-audio-play-btn svg,
+.profile-item-play-btn svg,
+.hero-music-play-btn svg,
+.header-music-play-btn svg {
+    display: block !important;
+    margin: 0 auto !important;
 }
 .hero-music-meta {
     flex: 1;
@@ -11022,4 +11063,231 @@ input:checked + .toggle-slider:before {
     font-size: 0.8rem;
     color: var(--accent-neon);
 }
+
+/* Stories Interactive Draggable Elements (Cursor Drag & Drop) */
+#storyPreviewCaption, #storyPreviewSticker {
+    cursor: grab !important;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    transition: filter 0.15s ease, outline 0.15s ease;
+}
+#storyPreviewCaption:hover, #storyPreviewSticker:hover {
+    filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.9));
+    outline: 1px dashed rgba(0, 240, 255, 0.6);
+    border-radius: 6px;
+}
+#storyPreviewCaption.is-dragging, #storyPreviewSticker.is-dragging {
+    cursor: grabbing !important;
+    opacity: 0.92;
+    filter: drop-shadow(0 0 16px rgba(0, 240, 255, 1)) !important;
+    outline: 2px solid #00f0ff !important;
+    z-index: 10 !important;
+}
+
+/* ========================================================
+   STORY VIEWERS MODAL & STACKING FIX
+   ======================================================== */
+#modalStoryViewers {
+    z-index: 10005 !important;
+}
+
+/* ========================================================
+   POSTS: CLICKABLE LINKS & RICH PREVIEWS
+   ======================================================== */
+.post-external-link {
+    color: #00f0ff !important;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    word-break: break-all;
+}
+.post-external-link:hover {
+    color: #38bdf8 !important;
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+
+.post-rich-previews-container {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Composer live link preview box */
+.composer-link-preview-box {
+    margin: 8px 0;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    border-radius: var(--radius-md);
+    padding: 10px;
+    backdrop-filter: blur(8px);
+}
+.composer-link-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+}
+.composer-hide-preview-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+}
+.composer-hide-preview-toggle input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: #00f0ff;
+}
+.composer-hide-preview-toggle:hover {
+    color: #00f0ff;
+}
+
+/* ========================================================
+   COMMENTS: CLICKABLE AUTHORS & REPLY BANNER
+   ======================================================== */
+.comment-avatar.cursor-pointer {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.comment-avatar.cursor-pointer:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+.comment-author.cursor-pointer {
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+.comment-author.cursor-pointer:hover {
+    color: #00f0ff !important;
+    text-decoration: underline;
+}
+
+.comment-reply-btn {
+    color: #38bdf8 !important;
+    font-size: 0.76rem !important;
+    padding: 2px 7px !important;
+    border-radius: 4px;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-left: 6px;
+}
+.comment-reply-btn:hover {
+    background: rgba(56, 189, 248, 0.25);
+    color: #fff !important;
+    border-color: #38bdf8;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.comment-reply-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    background: rgba(56, 189, 248, 0.14);
+    border-left: 3px solid #38bdf8;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    color: #e2e8f0;
+    margin-bottom: 6px;
+    animation: fadeIn 0.15s ease-out;
+}
+.comment-reply-banner strong {
+    color: #00f0ff;
+}
+.reply-cancel-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.reply-cancel-btn:hover {
+    color: #ff3366;
+}
+
+/* ========================================================
+   MODERN CYBERPUNK NOTIFICATIONS DESIGN
+   ======================================================== */
+.modal-notif-card {
+    max-width: 540px !important;
+    width: 95% !important;
+    max-height: 85vh !important;
+    background: rgba(10, 15, 29, 0.96) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(0, 240, 255, 0.35) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 240, 255, 0.15) !important;
+    border-radius: 16px !important;
+    overflow: hidden;
+}
+.notif-modal-header {
+    padding: 1.1rem 1.25rem 0.85rem !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+.notif-filter-tabs {
+    padding: 0.5rem 1.25rem !important;
+    background: rgba(0, 0, 0, 0.25) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    gap: 6px !important;
+    overflow-x: auto;
+}
+.notif-tab {
+    padding: 5px 12px !important;
+    border-radius: 20px !important;
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--text-dim) !important;
+    transition: all 0.2s ease !important;
+}
+.notif-tab.active {
+    background: rgba(0, 240, 255, 0.2) !important;
+    border-color: #00f0ff !important;
+    color: #00f0ff !important;
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.3) !important;
+}
+.notif-item-card {
+    padding: 0.9rem 1.1rem !important;
+    border-radius: 10px !important;
+    background: rgba(18, 26, 45, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    margin-bottom: 8px !important;
+    transition: all 0.2s ease !important;
+}
+.notif-item-card:hover {
+    background: rgba(26, 38, 66, 0.85) !important;
+    border-color: rgba(0, 240, 255, 0.4) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.notif-item-card.unread {
+    border-left: 3px solid #00f0ff !important;
+    background: rgba(0, 240, 255, 0.07) !important;
+}
+.notif-category-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    margin-right: 6px;
+}
+.notif-cat-like { background: rgba(255, 51, 102, 0.2); color: #ff3366; }
+.notif-cat-comment { background: rgba(0, 240, 255, 0.2); color: #00f0ff; }
+.notif-cat-reply { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+.notif-cat-follow { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+.notif-cat-message { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+.notif-cat-gift { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
 
