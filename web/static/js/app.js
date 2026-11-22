@@ -13774,12 +13774,16 @@ async function handleCreateCollectionSubmit(e) {
     if (btn) btn.disabled = true;
 
     try {
-        const editId = idInput ? idInput.value : '';
+        const isPrivate = formPriv ? formPriv.checked : false;
+        const cover = formCover ? formCover.value.trim() : '';
+        const isPublic = !isPrivate;
         const payload = {
             title: formTitle.value.trim(),
             description: formDesc ? formDesc.value.trim() : '',
-            cover_image_url: formCover ? formCover.value.trim() : '',
-            is_private: formPriv ? formPriv.checked : false
+            cover_url: cover,
+            cover_image_url: cover,
+            is_public: isPublic,
+            is_private: isPrivate
         };
 
         let res;
@@ -13817,6 +13821,8 @@ async function handleCreateCollectionSubmit(e) {
     }
 }
 
+let currentOpenCollectionData = null;
+
 // Dedicated Pinterest-like Collection View
 async function openCollectionView(collectionId) {
     currentOpenCollectionId = collectionId;
@@ -13839,23 +13845,27 @@ async function openCollectionView(collectionId) {
     try {
         const res = await fetch(`/api/collections/${collectionId}`);
         if (!res.ok) throw new Error('Подборка не найдена или приватна');
-        const col = await res.json();
+        const data = await res.json();
+        const col = data.collection || data;
+        const posts = data.posts || col.posts || [];
+        currentOpenCollectionData = col;
 
-        if (heroTitle) heroTitle.textContent = col.title;
-        if (heroDesc) heroDesc.textContent = col.description || 'Тематическая подборка избранных постов';
-        if (heroCount) heroCount.textContent = `${col.posts ? col.posts.length : 0} постов`;
+        if (heroTitle) heroTitle.textContent = col.title || 'Подборка';
+        if (heroDesc) heroDesc.textContent = col.description || 'Личная тематическая подборка избранных публикаций';
+        if (heroCount) heroCount.textContent = formatPostsCount(posts.length);
         if (heroPrivacy) {
-            heroPrivacy.textContent = col.is_private ? '🔒 Личная подборка' : '🌐 Публичная подборка';
+            const isPub = (col.is_public !== false && !col.is_private);
+            heroPrivacy.textContent = isPub ? '🌐 Публичная доска' : '🔒 Личная доска';
         }
 
-        if (col.user) {
-            if (heroAuthorAvatar) heroAuthorAvatar.src = col.user.avatar_url || '/static/avatars/default.svg';
-            if (heroAuthorName) heroAuthorName.textContent = col.user.display_name || col.user.username;
-        }
+        const author = col.user || {};
+        if (heroAuthorAvatar) heroAuthorAvatar.src = author.avatar_url || '/static/avatars/default.svg';
+        if (heroAuthorName) heroAuthorName.textContent = author.display_name || author.username || 'Пользователь';
 
+        const coverUrl = col.cover_url || col.cover_image_url;
         if (heroBanner) {
-            if (col.cover_image_url) {
-                heroBanner.style.background = `url('${col.cover_image_url}') center/cover no-repeat`;
+            if (coverUrl) {
+                heroBanner.style.background = `url('${coverUrl}') center/cover no-repeat`;
                 heroBanner.style.height = '140px';
                 heroBanner.style.display = 'block';
             } else {
@@ -13867,7 +13877,6 @@ async function openCollectionView(collectionId) {
         if (btnEdit) btnEdit.style.display = isOwner ? 'inline-flex' : 'none';
         if (btnDel) btnDel.style.display = isOwner ? 'inline-flex' : 'none';
 
-        const posts = col.posts || [];
         if (posts.length === 0) {
             if (grid) grid.innerHTML = '';
             if (empty) empty.style.display = 'block';
@@ -13877,31 +13886,53 @@ async function openCollectionView(collectionId) {
         if (empty) empty.style.display = 'none';
 
         if (grid) {
-            grid.innerHTML = posts.map(p => `
-                <div class="collection-pin-card" id="pin-post-${p.id}">
-                    ${p.image_url ? `
-                        <div class="pin-media-box">
-                            <img src="${escapeHtml(p.image_url)}" alt="pin image" loading="lazy">
-                        </div>
-                    ` : ''}
-                    <div class="pin-content-box">
-                        <div class="pin-author-row">
-                            <div class="pin-author-info cursor-pointer" onclick="openUserProfile(${p.user ? p.user.id : p.user_id})">
-                                <img src="${escapeHtml(p.user ? p.user.avatar_url : '/static/avatars/default.svg')}" class="mini-avatar" alt="avatar" style="width: 22px; height: 22px;">
-                                <span class="pin-author-name">${escapeHtml(p.user ? p.user.display_name : 'Автор')}</span>
+            grid.innerHTML = posts.map(p => {
+                const pAuthor = p.user || {};
+                const pName = pAuthor.display_name || pAuthor.username || 'Пользователь';
+                const pHandle = pAuthor.username ? `@${pAuthor.username}` : '';
+                const pAvatar = pAuthor.avatar_url || '/static/avatars/default.svg';
+                const pDate = p.created_at ? formatTime(p.created_at) : '';
+
+                return `
+                    <div class="collection-pin-card" id="pin-post-${p.id}" onclick="navigateToPost(${p.id}, event)" title="Нажмите, чтобы открыть публикацию">
+                        <div class="pin-card-header">
+                            <div class="pin-author-info cursor-pointer" onclick="event.stopPropagation(); openUserProfile(${pAuthor.id || p.user_id})">
+                                <img src="${escapeHtml(pAvatar)}" class="mini-avatar pin-author-avatar" alt="avatar">
+                                <div class="pin-author-text">
+                                    <span class="pin-author-name">${escapeHtml(pName)}</span>
+                                    <span class="pin-author-handle">${escapeHtml(pHandle)}</span>
+                                </div>
                             </div>
-                            ${isOwner ? `
-                                <button type="button" class="btn btn-secondary btn-xs pin-remove-btn text-danger" onclick="removePinFromCollection(${col.id}, ${p.id}, event)" title="Удалить из этой доски">✕</button>
-                            ` : ''}
+                            <div class="pin-header-actions" onclick="event.stopPropagation()">
+                                <span class="pin-date">${pDate}</span>
+                                ${isOwner ? `
+                                    <button type="button" class="pin-remove-btn" onclick="removePinFromCollection(${col.id}, ${p.id}, event)" title="Удалить из этой подборки">✕</button>
+                                ` : ''}
+                            </div>
                         </div>
-                        ${p.content ? `<div class="pin-text">${escapeHtml(p.content)}</div>` : ''}
-                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: var(--text-dim);">
-                            <span>❤️ ${p.likes_count || 0}</span>
-                            <span>💬 ${p.comments_count || 0}</span>
+
+                        ${p.image_url ? `
+                            <div class="pin-media-box" onclick="event.stopPropagation(); openImageLightbox('${escapeHtml(p.image_url)}', '${escapeHtml(pName)} • Фото')">
+                                <img src="${escapeHtml(p.image_url)}" alt="pin image" loading="lazy">
+                            </div>
+                        ` : ''}
+
+                        <div class="pin-content-box">
+                            ${p.content ? `<div class="pin-text">${escapeHtml(p.content)}</div>` : ''}
+                        </div>
+
+                        <div class="pin-footer-bar">
+                            <div class="pin-stats">
+                                <span class="pin-stat-item">❤️ ${p.likes_count || 0}</span>
+                                <span class="pin-stat-item">💬 ${p.comments_count || 0}</span>
+                            </div>
+                            <button type="button" class="btn btn-outline btn-xs pin-goto-btn" onclick="navigateToPost(${p.id}, event)" title="Открыть пост в ленте">
+                                <span>🚀 Открыть пост →</span>
+                            </button>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
     } catch (err) {
         if (grid) grid.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
@@ -13942,7 +13973,7 @@ async function removePinFromCollection(colId, postId, e) {
 
 function openEditCurrentCollectionModal() {
     if (!currentOpenCollectionId) return;
-    openCreateCollectionModal(currentOpenCollectionId);
+    openCreateCollectionModal(currentOpenCollectionId, currentOpenCollectionData);
 }
 
 async function deleteCurrentCollection() {
