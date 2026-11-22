@@ -212,7 +212,34 @@ func (h *Handler) GetUnreadMessagesCount(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondJSON(w, http.StatusOK, map[string]int{"unread_count": count})
+	convCount, _ := h.messageRepo.GetUnreadConversationsCount(currentUser.ID)
+
+	respondJSON(w, http.StatusOK, map[string]int{
+		"unread_count":         count,
+		"unread_dialogs_count": convCount,
+	})
+}
+
+func (h *Handler) MarkDirectMessagesAsRead(w http.ResponseWriter, r *http.Request) {
+	currentUser := h.getUserFromRequest(r)
+	if currentUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "не авторизован"})
+		return
+	}
+
+	targetIDStr := r.PathValue("userId")
+	if targetIDStr == "" {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 3 {
+			targetIDStr = parts[2]
+		}
+	}
+	otherUserID, _ := strconv.Atoi(targetIDStr)
+	if otherUserID > 0 {
+		_ = h.messageRepo.MarkAsRead(currentUser.ID, otherUserID)
+	}
+
+	respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 func (h *Handler) UpdateMessage(w http.ResponseWriter, r *http.Request) {

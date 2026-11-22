@@ -226,6 +226,9 @@ type Comment struct {
 
 	Content string `json:"content"`
 
+	ParentID      *int `json:"parent_id,omitempty"`
+	ReplyToUserID *int `json:"reply_to_user_id,omitempty"`
+
 	IsEdited bool `json:"is_edited"`
 
 	CreatedAt time.Time `json:"created_at"`
@@ -255,6 +258,7 @@ type Post struct {
 	Channel     *Channel  `json:"channel,omitempty"`
 	PollID      *int      `json:"poll_id,omitempty"`
 	Poll        *Poll     `json:"poll,omitempty"`
+	HidePreview bool      `json:"hide_preview"`
 
 	IsEdited bool `json:"is_edited"`
 
@@ -293,6 +297,7 @@ type CreatePostRequest struct {
 	MusicArtist string `json:"music_artist,omitempty"`
 	ChannelID   *int   `json:"channel_id,omitempty"`
 	PollID      *int   `json:"poll_id,omitempty"`
+	HidePreview bool   `json:"hide_preview"`
 
 	// Криптографическая подпись Ed25519
 	Signature    string `json:"signature,omitempty"`
@@ -307,12 +312,15 @@ type UpdatePostRequest struct {
 	MusicTitle  *string `json:"music_title,omitempty"`
 	MusicArtist *string `json:"music_artist,omitempty"`
 	PollID      *int    `json:"poll_id,omitempty"`
+	HidePreview *bool   `json:"hide_preview,omitempty"`
 }
 
 type CreateCommentRequest struct {
 	UserID int `json:"user_id"`
 
-	Content string `json:"content"`
+	Content       string `json:"content"`
+	ParentID      *int   `json:"parent_id,omitempty"`
+	ReplyToUserID *int   `json:"reply_to_user_id,omitempty"`
 }
 
 type ToggleLikeRequest struct {
@@ -703,21 +711,32 @@ type DegreesOfSeparationResponse struct {
 // =========================================================
 // ВРЕМЕННЫЕ ИСТОРИИ (STORIES, 24H)
 // =========================================================
+type StoryViewer struct {
+	User     User      `json:"user"`
+	ViewedAt time.Time `json:"viewed_at"`
+}
+
 type Story struct {
-	ID         int       `json:"id"`
-	UserID     int       `json:"user_id"`
-	MediaURL   string    `json:"media_url"`
-	Caption    string    `json:"caption"`
-	BgGradient string    `json:"bg_gradient"`
-	FontFamily string    `json:"font_family"`
-	TextAlign  string    `json:"text_align"`
-	TextColor  string    `json:"text_color"`
-	Sticker    string    `json:"sticker"`
-	ViewsCount int       `json:"views_count"`
-	CreatedAt  time.Time `json:"created_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	User       *User     `json:"user,omitempty"`
-	IsViewed   bool      `json:"is_viewed"`
+	ID              int           `json:"id"`
+	UserID          int           `json:"user_id"`
+	MediaURL        string        `json:"media_url"`
+	Caption         string        `json:"caption"`
+	BgGradient      string        `json:"bg_gradient"`
+	FontFamily      string        `json:"font_family"`
+	TextAlign       string        `json:"text_align"`
+	TextColor       string        `json:"text_color"`
+	Sticker         string        `json:"sticker"`
+	TextPosition    string        `json:"text_position"`
+	StickerPosition string        `json:"sticker_position"`
+	TextStyle       string        `json:"text_style"`
+	TextSize        string        `json:"text_size"`
+	StickerSize     string        `json:"sticker_size"`
+	ViewsCount      int           `json:"views_count"`
+	CreatedAt       time.Time     `json:"created_at"`
+	ExpiresAt       time.Time     `json:"expires_at"`
+	User            *User         `json:"user,omitempty"`
+	IsViewed        bool          `json:"is_viewed"`
+	Viewers         []StoryViewer `json:"viewers,omitempty"`
 }
 
 type StoryGroup struct {
@@ -729,14 +748,19 @@ type StoryGroup struct {
 }
 
 type CreateStoryRequest struct {
-	MediaURL      string `json:"media_url"`
-	Caption       string `json:"caption"`
-	BgGradient    string `json:"bg_gradient"`
-	FontFamily    string `json:"font_family,omitempty"`
-	TextAlign     string `json:"text_align,omitempty"`
-	TextColor     string `json:"text_color,omitempty"`
-	Sticker       string `json:"sticker,omitempty"`
-	DurationHours int    `json:"duration_hours,omitempty"`
+	MediaURL        string `json:"media_url"`
+	Caption         string `json:"caption"`
+	BgGradient      string `json:"bg_gradient"`
+	FontFamily      string `json:"font_family,omitempty"`
+	TextAlign       string `json:"text_align,omitempty"`
+	TextColor       string `json:"text_color,omitempty"`
+	Sticker         string `json:"sticker,omitempty"`
+	TextPosition    string `json:"text_position,omitempty"`
+	StickerPosition string `json:"sticker_position,omitempty"`
+	TextStyle       string `json:"text_style,omitempty"`
+	TextSize        string `json:"text_size,omitempty"`
+	StickerSize     string `json:"sticker_size,omitempty"`
+	DurationHours   int    `json:"duration_hours,omitempty"`
 }
 
 // =========================================================

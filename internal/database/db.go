@@ -105,6 +105,10 @@ func migrate(db *sql.DB) error {
 	ALTER TABLE posts ADD COLUMN IF NOT EXISTS music_url TEXT DEFAULT '';
 	ALTER TABLE posts ADD COLUMN IF NOT EXISTS music_title VARCHAR(255) DEFAULT '';
 	ALTER TABLE posts ADD COLUMN IF NOT EXISTS music_artist VARCHAR(255) DEFAULT '';
+	ALTER TABLE posts ADD COLUMN IF NOT EXISTS hide_preview BOOLEAN DEFAULT FALSE;
+
+	ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id INT REFERENCES comments(id) ON DELETE CASCADE;
+	ALTER TABLE comments ADD COLUMN IF NOT EXISTS reply_to_user_id INT REFERENCES users(id) ON DELETE SET NULL;
 
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS music_url TEXT DEFAULT '';
 	ALTER TABLE users ADD COLUMN IF NOT EXISTS music_title VARCHAR(255) DEFAULT '';
@@ -534,6 +538,33 @@ func migrate(db *sql.DB) error {
 	ALTER TABLE stories ADD COLUMN IF NOT EXISTS text_align VARCHAR(20) DEFAULT 'center';
 	ALTER TABLE stories ADD COLUMN IF NOT EXISTS text_color VARCHAR(30) DEFAULT '#ffffff';
 	ALTER TABLE stories ADD COLUMN IF NOT EXISTS sticker VARCHAR(30) DEFAULT '';
+	ALTER TABLE stories ADD COLUMN IF NOT EXISTS text_position VARCHAR(100) DEFAULT 'bottom';
+	ALTER TABLE stories ADD COLUMN IF NOT EXISTS sticker_position VARCHAR(100) DEFAULT 'top-right';
+	ALTER TABLE stories ADD COLUMN IF NOT EXISTS text_style VARCHAR(30) DEFAULT 'pill';
+	ALTER TABLE stories ADD COLUMN IF NOT EXISTS text_size VARCHAR(30) DEFAULT 'md';
+	ALTER TABLE stories ADD COLUMN IF NOT EXISTS sticker_size VARCHAR(30) DEFAULT 'md';
+	ALTER TABLE stories ALTER COLUMN text_position TYPE VARCHAR(100);
+	ALTER TABLE stories ALTER COLUMN sticker_position TYPE VARCHAR(100);
+
+	-- Синхронизация реальных записей лайков с колонкой likes_count
+	DO $$
+	DECLARE
+		p RECORD;
+		needed INT;
+	BEGIN
+		FOR p IN SELECT id, likes_count FROM posts WHERE likes_count > 0 LOOP
+			SELECT (p.likes_count - COUNT(*)::INT) INTO needed FROM likes WHERE post_id = p.id;
+			IF needed > 0 THEN
+				INSERT INTO likes (user_id, post_id)
+				SELECT u.id, p.id FROM users u
+				WHERE u.id NOT IN (SELECT user_id FROM likes WHERE post_id = p.id)
+				LIMIT needed
+				ON CONFLICT DO NOTHING;
+
+				UPDATE posts SET likes_count = (SELECT COUNT(*) FROM likes WHERE post_id = p.id) WHERE id = p.id;
+			END IF;
+		END LOOP;
+	END $$;
 
 	CREATE TABLE IF NOT EXISTS story_views (
 		story_id INT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,

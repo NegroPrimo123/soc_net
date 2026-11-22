@@ -162,7 +162,7 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	req.ImageURL = strings.TrimSpace(req.ImageURL)
 
-	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, req.ChannelID, req.PollID, req.Signature, req.AuthorPubKey)
+	post, err := h.postRepo.CreatePost(authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, req.ChannelID, req.PollID, req.Signature, req.AuthorPubKey, req.HidePreview)
 
 	if err != nil {
 
@@ -236,7 +236,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	post, err := h.postRepo.UpdatePost(postID, authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, req.PollID)
+	post, err := h.postRepo.UpdatePost(postID, authUser.ID, req.Content, req.ImageURL, req.MusicURL, req.MusicTitle, req.MusicArtist, req.PollID, req.HidePreview)
 
 	if err != nil {
 
@@ -469,49 +469,44 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	comment, err := h.postRepo.CreateComment(postID, userID, req.Content)
-
+	comment, err := h.postRepo.CreateComment(postID, userID, req.Content, req.ParentID, req.ReplyToUserID)
 	if err != nil {
-
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-
 		return
-
 	}
 
-	// Отправка уведомления автору поста
-
+	// Отправка уведомления автору поста или автору комментария при ответе
 	if h.notifRepo != nil {
-
-		if post, _ := h.postRepo.GetPostByID(postID, userID); post != nil && post.UserID != userID {
-
-			actorName := "Пользователь"
-
-			if authUser != nil {
-
-				actorName = authUser.DisplayName
-
-			}
-
-			_, _ = h.notifRepo.CreateNotification(post.UserID, userID, "comment", postID, req.Content)
-
-			if h.hub != nil {
-
-				h.hub.Broadcast(events.EventNotification, map[string]interface{}{
-
-					"user_id": post.UserID,
-
-					"action_type": "comment",
-
-					"actor": authUser,
-
-					"title": fmt.Sprintf("%s прокомментировал(а) вашу запись", actorName),
-				})
-
-			}
-
+		actorName := "Пользователь"
+		if authUser != nil {
+			actorName = authUser.DisplayName
 		}
 
+		// Если это ответ на комментарий конкретного пользователя
+		if req.ReplyToUserID != nil && *req.ReplyToUserID > 0 && *req.ReplyToUserID != userID {
+			_, _ = h.notifRepo.CreateNotification(*req.ReplyToUserID, userID, "comment_reply", postID, req.Content)
+			if h.hub != nil {
+				h.hub.Broadcast(events.EventNotification, map[string]interface{}{
+					"user_id":     *req.ReplyToUserID,
+					"action_type": "comment_reply",
+					"actor":       authUser,
+					"title":       fmt.Sprintf("%s ответил(а) на ваш комментарий", actorName),
+				})
+			}
+		}
+
+		// Уведомление автору публикации (если он не сам автор комментария и не получатель ответа)
+		if post, _ := h.postRepo.GetPostByID(postID, userID); post != nil && post.UserID != userID && (req.ReplyToUserID == nil || *req.ReplyToUserID != post.UserID) {
+			_, _ = h.notifRepo.CreateNotification(post.UserID, userID, "comment", postID, req.Content)
+			if h.hub != nil {
+				h.hub.Broadcast(events.EventNotification, map[string]interface{}{
+					"user_id":     post.UserID,
+					"action_type": "comment",
+					"actor":       authUser,
+					"title":       fmt.Sprintf("%s прокомментировал(а) вашу запись", actorName),
+				})
+			}
+		}
 	}
 
 	if h.hub != nil {

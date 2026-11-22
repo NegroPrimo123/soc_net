@@ -54,6 +54,7 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 		COALESCE(p.likes_count, 0) as likes_count,
 		COALESCE(p.comments_count, 0) as comments_count,
 		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked,
+		COALESCE(p.hide_preview, FALSE) as hide_preview,
 		ch.id, COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, ''), COALESCE(ch.subscribers_count, 0)
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
@@ -170,7 +171,7 @@ func (r *PostRepository) GetFeed(currentUserID int, feedType, searchQuery, tagQu
 			&p.ChannelID, &p.PollID,
 			&p.Signature, &p.AuthorPubKey, &p.IsVerified,
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
-			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
+			&p.LikesCount, &p.CommentsCount, &p.IsLiked, &p.HidePreview,
 			&chID, &chName, &chHandle, &chAvatar, &chSubs,
 		); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
@@ -233,6 +234,7 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 		COALESCE(p.likes_count, 0) as likes_count,
 		COALESCE(p.comments_count, 0) as comments_count,
 		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked,
+		COALESCE(p.hide_preview, FALSE) as hide_preview,
 		ch.id, COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, ''), COALESCE(ch.subscribers_count, 0)
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
@@ -271,7 +273,7 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 			&p.ChannelID, &p.PollID,
 			&p.Signature, &p.AuthorPubKey, &p.IsVerified,
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
-			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
+			&p.LikesCount, &p.CommentsCount, &p.IsLiked, &p.HidePreview,
 			&chID, &chName, &chHandle, &chAvatar, &chSubs,
 		); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
@@ -322,22 +324,22 @@ func (r *PostRepository) GetPostsByUserID(authorID, currentUserID int) ([]models
 	return posts, nil
 }
 
-func (r *PostRepository) CreatePost(userID int, content, imageURL, musicURL, musicTitle, musicArtist string, channelID, pollID *int, signature, authorPubKey string) (*models.Post, error) {
+func (r *PostRepository) CreatePost(userID int, content, imageURL, musicURL, musicTitle, musicArtist string, channelID, pollID *int, signature, authorPubKey string, hidePreview bool) (*models.Post, error) {
 	var postID int
 	isVerified := false
 	if signature != "" && authorPubKey != "" {
 		hash := crypto.ComputePostContentHash(userID, content, imageURL, musicURL, channelID, pollID)
 		isVerified = crypto.VerifySignature(authorPubKey, hash, signature)
 	}
-	query := `INSERT INTO posts (user_id, content, image_url, music_url, music_title, music_artist, channel_id, poll_id, signature, author_pubkey, is_verified) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`
-	err := r.db.QueryRow(query, userID, content, imageURL, musicURL, musicTitle, musicArtist, channelID, pollID, signature, authorPubKey, isVerified).Scan(&postID)
+	query := `INSERT INTO posts (user_id, content, image_url, music_url, music_title, music_artist, channel_id, poll_id, signature, author_pubkey, is_verified, hide_preview) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`
+	err := r.db.QueryRow(query, userID, content, imageURL, musicURL, musicTitle, musicArtist, channelID, pollID, signature, authorPubKey, isVerified, hidePreview).Scan(&postID)
 	if err != nil {
 		return nil, fmt.Errorf("create post: %w", err)
 	}
 	return r.GetPostByID(postID, userID)
 }
 
-func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL, musicURL, musicTitle, musicArtist *string, pollID *int) (*models.Post, error) {
+func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL, musicURL, musicTitle, musicArtist *string, pollID *int, hidePreview *bool) (*models.Post, error) {
 	var err error
 	var updatedID int
 
@@ -352,12 +354,13 @@ func (r *PostRepository) UpdatePost(postID, userID int, content string, imageURL
 	        WHEN $8::int IS NOT NULL THEN (CASE WHEN $8::int <= 0 THEN NULL ELSE $8::int END)
 	        ELSE poll_id 
 	    END,
+	    hide_preview = CASE WHEN $9::boolean IS NOT NULL THEN $9::boolean ELSE hide_preview END,
 	    is_edited = TRUE, 
 	    updated_at = NOW() 
 	WHERE id = $6 AND user_id = $7 
 	RETURNING id
 	`
-	err = r.db.QueryRow(query, content, imageURL, musicURL, musicTitle, musicArtist, postID, userID, pollID).Scan(&updatedID)
+	err = r.db.QueryRow(query, content, imageURL, musicURL, musicTitle, musicArtist, postID, userID, pollID, hidePreview).Scan(&updatedID)
 
 	if err != nil {
 		return nil, fmt.Errorf("post not found or unauthorized: %w", err)
@@ -376,6 +379,7 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 		COALESCE(p.likes_count, 0) as likes_count,
 		COALESCE(p.comments_count, 0) as comments_count,
 		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked,
+		COALESCE(p.hide_preview, FALSE) as hide_preview,
 		ch.id, COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, ''), COALESCE(ch.subscribers_count, 0)
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
@@ -393,7 +397,7 @@ func (r *PostRepository) GetPostByID(postID, currentUserID int) (*models.Post, e
 		&p.ChannelID, &p.PollID,
 		&p.Signature, &p.AuthorPubKey, &p.IsVerified,
 		&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
-		&p.LikesCount, &p.CommentsCount, &p.IsLiked,
+		&p.LikesCount, &p.CommentsCount, &p.IsLiked, &p.HidePreview,
 		&chID, &chName, &chHandle, &chAvatar, &chSubs,
 	)
 	if err == nil && chID.Valid {
@@ -501,195 +505,137 @@ func (r *PostRepository) GetCommentsByPostIDs(postIDs []int) (map[int][]models.C
 	query := `
 
 	SELECT 
-
 		c.id, c.post_id, c.user_id, c.content, COALESCE(c.is_edited, FALSE), c.created_at,
-
+		c.parent_id, c.reply_to_user_id,
 		u.id, u.username, u.display_name, u.avatar_url, u.bio
-
 	FROM comments c
-
 	JOIN users u ON u.id = c.user_id
-
 	WHERE c.post_id = ANY($1)
-
 	ORDER BY c.created_at ASC
-
 	`
 
 	rows, err := r.db.Query(query, pq.Array(postIDs))
-
 	if err != nil {
-
 		return nil, fmt.Errorf("query batch comments: %w", err)
-
 	}
-
 	defer rows.Close()
 
 	for rows.Next() {
-
 		var c models.Comment
+		var parentIDNull, replyToNull sql.NullInt64
 
 		if err := rows.Scan(
-
 			&c.ID, &c.PostID, &c.UserID, &c.Content, &c.IsEdited, &c.CreatedAt,
-
+			&parentIDNull, &replyToNull,
 			&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.Bio,
 		); err != nil {
-
 			return nil, fmt.Errorf("scan batch comment: %w", err)
-
+		}
+		if parentIDNull.Valid {
+			pVal := int(parentIDNull.Int64)
+			c.ParentID = &pVal
+		}
+		if replyToNull.Valid {
+			rVal := int(replyToNull.Int64)
+			c.ReplyToUserID = &rVal
 		}
 
 		result[c.PostID] = append(result[c.PostID], c)
-
 	}
 
 	return result, nil
-
 }
 
 func (r *PostRepository) GetComments(postID int) ([]models.Comment, error) {
-
 	query := `
-
 	SELECT 
-
 		c.id, c.post_id, c.user_id, c.content, COALESCE(c.is_edited, FALSE), c.created_at,
-
+		c.parent_id, c.reply_to_user_id,
 		u.id, u.username, u.display_name, u.avatar_url, u.bio
-
 	FROM comments c
-
 	JOIN users u ON u.id = c.user_id
-
 	WHERE c.post_id = $1
-
 	ORDER BY c.created_at ASC
-
 	`
 
 	rows, err := r.db.Query(query, postID)
-
 	if err != nil {
-
 		return nil, err
-
 	}
-
 	defer rows.Close()
 
 	var comments []models.Comment
-
 	for rows.Next() {
-
 		var c models.Comment
+		var parentIDNull, replyToNull sql.NullInt64
 
 		if err := rows.Scan(
-
 			&c.ID, &c.PostID, &c.UserID, &c.Content, &c.IsEdited, &c.CreatedAt,
-
+			&parentIDNull, &replyToNull,
 			&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.Bio,
 		); err != nil {
-
 			return nil, err
-
+		}
+		if parentIDNull.Valid {
+			pVal := int(parentIDNull.Int64)
+			c.ParentID = &pVal
+		}
+		if replyToNull.Valid {
+			rVal := int(replyToNull.Int64)
+			c.ReplyToUserID = &rVal
 		}
 
 		comments = append(comments, c)
-
 	}
 
 	return comments, nil
-
 }
 
-func (r *PostRepository) CreateComment(postID, userID int, content string) (*models.Comment, error) {
-
+func (r *PostRepository) CreateComment(postID, userID int, content string, parentID, replyToUserID *int) (*models.Comment, error) {
 	var commentID int
-
-	query := `INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING id`
-
-	err := r.db.QueryRow(query, postID, userID, content).Scan(&commentID)
-
+	query := `INSERT INTO comments (post_id, user_id, content, parent_id, reply_to_user_id) VALUES ($1, $2, $3, $4, $5) RETURNING id`
+	err := r.db.QueryRow(query, postID, userID, content, parentID, replyToUserID).Scan(&commentID)
 	if err != nil {
-
 		return nil, fmt.Errorf("create comment: %w", err)
-
 	}
 
-	queryComment := `
-
-	SELECT 
-
-		c.id, c.post_id, c.user_id, c.content, COALESCE(c.is_edited, FALSE), c.created_at,
-
-		u.id, u.username, u.display_name, u.avatar_url, u.bio
-
-	FROM comments c
-
-	JOIN users u ON u.id = c.user_id
-
-	WHERE c.id = $1
-
-	`
-
-	var c models.Comment
-
-	err = r.db.QueryRow(queryComment, commentID).Scan(
-
-		&c.ID, &c.PostID, &c.UserID, &c.Content, &c.IsEdited, &c.CreatedAt,
-
-		&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.Bio,
-	)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	_, _ = r.db.Exec("UPDATE posts SET comments_count = comments_count + 1 WHERE id = $1", postID)
-
-	return &c, nil
-
+	return r.GetCommentByID(commentID)
 }
 
 func (r *PostRepository) GetCommentByID(commentID int) (*models.Comment, error) {
-
 	query := `
-
 	SELECT 
-
 		c.id, c.post_id, c.user_id, c.content, COALESCE(c.is_edited, FALSE), c.created_at,
-
+		c.parent_id, c.reply_to_user_id,
 		u.id, u.username, u.display_name, u.avatar_url, u.bio
-
 	FROM comments c
-
 	JOIN users u ON u.id = c.user_id
-
 	WHERE c.id = $1
-
 	`
 
 	var c models.Comment
+	var parentIDNull, replyToNull sql.NullInt64
 
 	err := r.db.QueryRow(query, commentID).Scan(
-
 		&c.ID, &c.PostID, &c.UserID, &c.Content, &c.IsEdited, &c.CreatedAt,
-
+		&parentIDNull, &replyToNull,
 		&c.User.ID, &c.User.Username, &c.User.DisplayName, &c.User.AvatarURL, &c.User.Bio,
 	)
-
 	if err != nil {
-
 		return nil, err
-
+	}
+	if parentIDNull.Valid {
+		pVal := int(parentIDNull.Int64)
+		c.ParentID = &pVal
+	}
+	if replyToNull.Valid {
+		rVal := int(replyToNull.Int64)
+		c.ReplyToUserID = &rVal
 	}
 
-	return &c, nil
+	_, _ = r.db.Exec("UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = $1) WHERE id = $1", c.PostID)
 
+	return &c, nil
 }
 
 func (r *PostRepository) UpdateComment(commentID, userID int, content string) (*models.Comment, error) {
@@ -911,6 +857,7 @@ func (r *PostRepository) GetChannelPosts(channelID, currentUserID int, limit, of
 		COALESCE(p.likes_count, 0) as likes_count,
 		COALESCE(p.comments_count, 0) as comments_count,
 		EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND post_id = p.id) as is_liked,
+		COALESCE(p.hide_preview, FALSE) as hide_preview,
 		ch.id, COALESCE(ch.name, ''), COALESCE(ch.handle, ''), COALESCE(ch.avatar_url, ''), COALESCE(ch.subscribers_count, 0)
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
@@ -940,7 +887,7 @@ func (r *PostRepository) GetChannelPosts(channelID, currentUserID int, limit, of
 			&p.ChannelID, &p.PollID,
 			&p.Signature, &p.AuthorPubKey, &p.IsVerified,
 			&p.User.ID, &p.User.Username, &p.User.DisplayName, &p.User.AvatarURL, &p.User.Bio,
-			&p.LikesCount, &p.CommentsCount, &p.IsLiked,
+			&p.LikesCount, &p.CommentsCount, &p.IsLiked, &p.HidePreview,
 			&chID, &chName, &chHandle, &chAvatar, &chSubs,
 		); err != nil {
 			return nil, fmt.Errorf("scan channel post: %w", err)
