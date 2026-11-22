@@ -171,7 +171,7 @@ func (r *NotificationRepository) GetGroupedNotifications(userID int, limit int) 
 			} else {
 				g.Title = fmt.Sprintf("%s и ещё %d пользователей оценили вашу публикацию", firstActorName, g.TotalCount-1)
 			}
-			g.Snippet = "❤️ Отметка «Нравится» к вашей записи"
+			g.Snippet = "" // Не дублируем текст «Отметка Нравится», заголовок уже полностью исчерпывающий
 
 		case "comment":
 			if g.TotalCount == 1 {

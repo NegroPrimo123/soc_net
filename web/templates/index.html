@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoSocial — Киберпанк Социальная Сеть</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=cyber_rich_previews_v12">
+    <link rel="stylesheet" href="/static/css/style.css?v=cyber_suite_final_v5">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -3047,7 +3047,7 @@
     window.CURRENT_SEARCH = "{{.SearchQuery}}";
     window.CURRENT_TAG = "{{.TagQuery}}";
 </script>
-<script src="/static/js/app.js?v=cyber_rich_previews_v12"></script>
+<script src="/static/js/app.js?v=cyber_suite_final_v5"></script>
 
 
 <!-- ==========================================
@@ -3403,184 +3403,178 @@
 <!-- ==========================================
      МОДАЛЬНЫЕ ОКНА: ИСТОРИИ (STORIES)
 ========================================== -->
-<!-- Создание истории -->
+<!-- Создание истории (Студия историй) -->
 <div id="modalCreateStory" class="modal-overlay" style="display: none;" onclick="if(event.target===this)closeCreateStoryModal()">
-    <div class="modal-card modal-create-story-card" style="max-width: 520px; width: 95%;">
+    <div class="modal-card story-studio-modal-card">
         <button type="button" class="modal-close-btn" onclick="closeCreateStoryModal()" title="Закрыть">✕</button>
-        <div class="modal-header">
+        <div class="modal-header" style="margin-bottom: 0.5rem;">
             <div class="modal-header-badge">⚡ ВРЕМЕННЫЕ ИСТОРИИ (24 ЧАСА)</div>
-            <h3>Опубликовать историю</h3>
-            <p class="modal-subtext">История исчезнет ровно через 24 часа. Выберите фото или создайте текстовую историю с градиентом.</p>
+            <h3>Студия создания историй</h3>
+            <p class="modal-subtext">Создайте яркую историю с интерактивным оформлением. История исчезнет через 24 часа.</p>
         </div>
-        <form onsubmit="submitCreateStory(event)" style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
-            <!-- Тип истории: Фото / Текст -->
-            <div class="segmented-control" style="margin-bottom: 0.5rem;">
-                <button type="button" class="seg-btn active" id="storyTypeMediaBtn" onclick="switchStoryType('media')">
-                    <span>🖼️ Фото / Картинка</span>
-                </button>
-                <button type="button" class="seg-btn" id="storyTypeTextBtn" onclick="switchStoryType('text')">
-                    <span>✍️ Текст с неоном</span>
-                </button>
-            </div>
-
-            <!-- Блок загрузки медиа -->
-            <div id="storyMediaBox">
-                <label style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 6px;">Изображение для истории:</label>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" id="storyMediaUrl" placeholder="https://... или загрузите файл" oninput="updateStoryPreview()" style="flex: 1;">
-                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('storyFileInput').click()">📁 Загрузить</button>
-                    <input type="file" id="storyFileInput" accept="image/*" style="display: none;" onchange="handleStoryFileUpload(event)">
-                </div>
-            </div>
-
-            <!-- Блок выбора градиента для текстовой истории -->
-            <div id="storyGradientBox" style="display: none;">
-                <label style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 6px;">Выберите неоновый фон:</label>
-                <div class="story-gradient-selector" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <div class="gradient-thumb active" data-grad="cyber_cyan" onclick="selectStoryGradient('cyber_cyan')" title="Кибер Циан" style="background: linear-gradient(135deg, #091e3a, #00f0ff); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid #fff;"></div>
-                    <div class="gradient-thumb" data-grad="synthwave" onclick="selectStoryGradient('synthwave')" title="Синтвейв" style="background: linear-gradient(135deg, #2b0840, #ff007f); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                    <div class="gradient-thumb" data-grad="tokyo" onclick="selectStoryGradient('tokyo')" title="Токио Ночь" style="background: linear-gradient(135deg, #0f172a, #3b82f6); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                    <div class="gradient-thumb" data-grad="matrix" onclick="selectStoryGradient('matrix')" title="Матрица" style="background: linear-gradient(135deg, #022c22, #10b981); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                    <div class="gradient-thumb" data-grad="solar" onclick="selectStoryGradient('solar')" title="Солнечный импульс" style="background: linear-gradient(135deg, #451a03, #f59e0b); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                    <div class="gradient-thumb" data-grad="crimson_glitch" onclick="selectStoryGradient('crimson_glitch')" title="Багровый глитч" style="background: linear-gradient(135deg, #3b0712, #ef4444); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                    <div class="gradient-thumb" data-grad="obsidian_gold" onclick="selectStoryGradient('obsidian_gold')" title="Обсидиан и золото" style="background: linear-gradient(135deg, #18181b, #eab308); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                    <div class="gradient-thumb" data-grad="vapor_sunset" onclick="selectStoryGradient('vapor_sunset')" title="Вейпор Закат" style="background: linear-gradient(135deg, #311042, #f43f5e); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                    <div class="gradient-thumb" data-grad="emerald_matrix" onclick="selectStoryGradient('emerald_matrix')" title="Изумруд" style="background: linear-gradient(135deg, #064e3b, #34d399); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                    <div class="gradient-thumb" data-grad="aurora_borealis" onclick="selectStoryGradient('aurora_borealis')" title="Северное сияние" style="background: linear-gradient(135deg, #042f2e, #8b5cf6); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                    <div class="gradient-thumb" data-grad="mono_carbon" onclick="selectStoryGradient('mono_carbon')" title="Моно Карбон" style="background: linear-gradient(135deg, #111827, #64748b); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
-                </div>
-            </div>
-
-            <!-- Текст / Подпись -->
-            <div class="form-group">
-                <label style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">Текст / Подпись к истории:</label>
-                <textarea id="storyCaptionInput" rows="2" placeholder="Что происходит прямо сейчас в Найт-Сити?.." maxlength="400" oninput="updateStoryPreview()" style="width: 100%;"></textarea>
-            </div>
-
-            <!-- Расширенные опции оформления истории -->
-            <div class="story-styling-controls" style="display: flex; flex-direction: column; gap: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 12px;">
-                <!-- Шрифты -->
-                <div>
-                    <label style="font-size: 0.76rem; color: var(--text-dim); font-weight: 600; display: block; margin-bottom: 4px;">Стиль шрифта:</label>
-                    <div class="story-font-chips" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button type="button" class="story-opt-chip active" data-font="cyber" onclick="setStoryFont('cyber')">Cyber Sans</button>
-                        <button type="button" class="story-opt-chip" data-font="glitch" onclick="setStoryFont('glitch')">Glitch Terminal</button>
-                        <button type="button" class="story-opt-chip" data-font="synthwave" onclick="setStoryFont('synthwave')">Synthwave</button>
-                        <button type="button" class="story-opt-chip" data-font="impact" onclick="setStoryFont('impact')">Impact Bold</button>
-                        <button type="button" class="story-opt-chip" data-font="luxury" onclick="setStoryFont('luxury')">Luxury Serif</button>
+        
+        <form onsubmit="submitCreateStory(event)" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+            <div class="story-studio-layout">
+                <!-- Левая колонка: Интерактивный смартфон-холст -->
+                <div class="story-studio-phone-wrap">
+                    <div class="story-studio-phone" id="storyMiniPreview">
+                        <div class="story-studio-phone-notch"></div>
+                        <img id="storyPreviewImg" src="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; pointer-events: none;">
+                        <div id="storyPreviewGradientOverlay" style="position: absolute; inset: 0; background: rgba(0,0,0,0.25); pointer-events: none;"></div>
+                        <div id="storyPreviewSticker" class="story-floating-sticker" style="display: none; position: absolute; top: 20px; right: 20px; font-size: 2rem; z-index: 6; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)); cursor: grab; user-select: none;"></div>
+                        <div id="storyPreviewCaption" class="story-font-cyber story-text-style-pill story-text-size-md story-text-pos-bottom" style="position: relative; z-index: 5; color: #fff; font-weight: 700; font-size: 1rem; text-align: center; text-shadow: 0 2px 6px rgba(0,0,0,0.8); word-break: break-word; cursor: grab; user-select: none;">Ваша история</div>
                     </div>
+                    <div style="font-size: 0.74rem; color: #38bdf8; text-align: center; margin-top: 8px; font-weight: 600;">🖐️ Перетаскивайте текст и стикеры курсором мыши прямо на холсте!</div>
                 </div>
 
-                <!-- Выравнивание и Цвет текста -->
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <div>
-                        <label style="font-size: 0.76rem; color: var(--text-dim); font-weight: 600; display: block; margin-bottom: 4px;">Выравнивание:</label>
-                        <div class="story-align-group" style="display: inline-flex; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 2px;">
-                            <button type="button" class="story-align-btn" data-align="left" onclick="setStoryAlign('left')" title="По левому краю">⇤ Слева</button>
-                            <button type="button" class="story-align-btn active" data-align="center" onclick="setStoryAlign('center')" title="По центру">≡ Центр</button>
-                            <button type="button" class="story-align-btn" data-align="right" onclick="setStoryAlign('right')" title="По правому краю">Справа ⇥</button>
-                        </div>
+                <!-- Правая колонка: Удобная панель инструментов -->
+                <div class="story-studio-controls">
+                    <!-- Тип истории: Фото / Текст -->
+                    <div class="segmented-control">
+                        <button type="button" class="seg-btn active" id="storyTypeMediaBtn" onclick="switchStoryType('media')">
+                            <span>🖼️ Фото / Картинка</span>
+                        </button>
+                        <button type="button" class="seg-btn" id="storyTypeTextBtn" onclick="switchStoryType('text')">
+                            <span>🎨 Неоновый градиент</span>
+                        </button>
                     </div>
-                    <div>
-                        <label style="font-size: 0.76rem; color: var(--text-dim); font-weight: 600; display: block; margin-bottom: 4px;">Цвет текста:</label>
-                        <div class="story-color-palette" style="display: flex; gap: 6px;">
-                            <div class="story-color-dot active" data-color="#ffffff" onclick="setStoryTextColor('#ffffff')" style="background: #ffffff;" title="Белый"></div>
-                            <div class="story-color-dot" data-color="#00f0ff" onclick="setStoryTextColor('#00f0ff')" style="background: #00f0ff;" title="Циан"></div>
-                            <div class="story-color-dot" data-color="#ff007f" onclick="setStoryTextColor('#ff007f')" style="background: #ff007f;" title="Неон роза"></div>
-                            <div class="story-color-dot" data-color="#facc15" onclick="setStoryTextColor('#facc15')" style="background: #facc15;" title="Кибер золото"></div>
-                            <div class="story-color-dot" data-color="#10b981" onclick="setStoryTextColor('#10b981')" style="background: #10b981;" title="Изумруд"></div>
-                            <div class="story-color-dot" data-color="#a855f7" onclick="setStoryTextColor('#a855f7')" style="background: #a855f7;" title="Фиолетовый"></div>
-                            <div class="story-color-dot" data-color="#ef4444" onclick="setStoryTextColor('#ef4444')" style="background: #ef4444;" title="Плазма"></div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Положение и стиль текста -->
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <div>
-                        <label style="font-size: 0.76rem; color: var(--text-dim); font-weight: 600; display: block; margin-bottom: 4px;">Положение текста:</label>
-                        <div class="story-pos-group" style="display: inline-flex; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 2px;">
-                            <button type="button" class="story-pos-btn" data-text-pos="top" onclick="setStoryTextPos('top')" title="Вверху">⬆ Вверху</button>
-                            <button type="button" class="story-pos-btn" data-text-pos="middle" onclick="setStoryTextPos('middle')" title="По центру">⏺ Центр</button>
-                            <button type="button" class="story-pos-btn active" data-text-pos="bottom" onclick="setStoryTextPos('bottom')" title="Внизу">⬇ Внизу</button>
+                    <!-- 1. Секция: Фон истории -->
+                    <div class="story-studio-section">
+                        <div class="story-studio-section-title">
+                            <span>🌌 Фон и изображение</span>
                         </div>
-                    </div>
-                    <div>
-                        <label style="font-size: 0.76rem; color: var(--text-dim); font-weight: 600; display: block; margin-bottom: 4px;">Стиль подложки:</label>
-                        <div class="story-style-chips" style="display: flex; gap: 4px;">
-                            <button type="button" class="story-style-chip active" data-style="pill" onclick="setStoryTextStyle('pill')">Капсула</button>
-                            <button type="button" class="story-style-chip" data-style="clean" onclick="setStoryTextStyle('clean')">Чистый</button>
-                            <button type="button" class="story-style-chip" data-style="neon" onclick="setStoryTextStyle('neon')">Неон</button>
+                        <!-- Блок загрузки медиа -->
+                        <div id="storyMediaBox">
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="storyMediaUrl" class="form-control" placeholder="URL изображения (https://...)" oninput="updateStoryPreview()" style="flex: 1; font-size: 0.85rem; padding: 7px 10px;">
+                                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('storyFileInput').click()">📁 Загрузить</button>
+                                <input type="file" id="storyFileInput" accept="image/*" style="display: none;" onchange="handleStoryFileUpload(event)">
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <label style="font-size: 0.76rem; color: var(--text-dim); font-weight: 600; display: block; margin-bottom: 4px;">Размер:</label>
-                        <div class="story-size-chips" style="display: flex; gap: 4px;">
-                            <button type="button" class="story-size-chip active" data-size="md" onclick="setStoryTextSize('md')">A</button>
-                            <button type="button" class="story-size-chip" data-size="lg" onclick="setStoryTextSize('lg')">A+</button>
-                            <button type="button" class="story-size-chip" data-size="xl" onclick="setStoryTextSize('xl')">A++</button>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Стикер / Эмодзи-реакция -->
-                <div>
-                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
-                        <label style="font-size: 0.76rem; color: var(--text-dim); font-weight: 600;">Стикер истории:</label>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.7rem; color: var(--text-dim);">Размер:</span>
-                            <div class="story-sticker-size-chips" style="display: inline-flex; gap: 3px;">
-                                <button type="button" class="story-sticker-size-btn active" data-sticker-size="md" onclick="setStoryStickerSize('md')">M</button>
-                                <button type="button" class="story-sticker-size-btn" data-sticker-size="lg" onclick="setStoryStickerSize('lg')">L</button>
-                                <button type="button" class="story-sticker-size-btn" data-sticker-size="xl" onclick="setStoryStickerSize('xl')">XL</button>
+                        <!-- Блок выбора градиента для текстовой истории -->
+                        <div id="storyGradientBox" style="display: none;">
+                            <label style="font-size: 0.74rem; color: var(--text-dim); font-weight: 600; display: block; margin-bottom: 4px;">Выберите неоновый градиент:</label>
+                            <div class="story-gradient-selector" style="display: flex; gap: 7px; flex-wrap: wrap;">
+                                <div class="gradient-thumb active" data-grad="cyber_cyan" onclick="selectStoryGradient('cyber_cyan')" title="Кибер Циан" style="background: linear-gradient(135deg, #091e3a, #00f0ff); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid #fff;"></div>
+                                <div class="gradient-thumb" data-grad="synthwave" onclick="selectStoryGradient('synthwave')" title="Синтвейв" style="background: linear-gradient(135deg, #2b0840, #ff007f); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
+                                <div class="gradient-thumb" data-grad="tokyo" onclick="selectStoryGradient('tokyo')" title="Токио Ночь" style="background: linear-gradient(135deg, #0f172a, #3b82f6); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
+                                <div class="gradient-thumb" data-grad="matrix" onclick="selectStoryGradient('matrix')" title="Матрица" style="background: linear-gradient(135deg, #022c22, #10b981); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
+                                <div class="gradient-thumb" data-grad="solar" onclick="selectStoryGradient('solar')" title="Солнечный импульс" style="background: linear-gradient(135deg, #451a03, #f59e0b); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
+                                <div class="gradient-thumb" data-grad="crimson_glitch" onclick="selectStoryGradient('crimson_glitch')" title="Багровый глитч" style="background: linear-gradient(135deg, #3b0712, #ef4444); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
+                                <div class="gradient-thumb" data-grad="obsidian_gold" onclick="selectStoryGradient('obsidian_gold')" title="Обсидиан и золото" style="background: linear-gradient(135deg, #18181b, #eab308); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
+                                <div class="gradient-thumb" data-grad="vapor_sunset" onclick="selectStoryGradient('vapor_sunset')" title="Вейпор Закат" style="background: linear-gradient(135deg, #311042, #f43f5e); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
+                                <div class="gradient-thumb" data-grad="emerald_matrix" onclick="selectStoryGradient('emerald_matrix')" title="Изумруд" style="background: linear-gradient(135deg, #064e3b, #34d399); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
+                                <div class="gradient-thumb" data-grad="aurora_borealis" onclick="selectStoryGradient('aurora_borealis')" title="Северное сияние" style="background: linear-gradient(135deg, #042f2e, #8b5cf6); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
+                                <div class="gradient-thumb" data-grad="mono_carbon" onclick="selectStoryGradient('mono_carbon')" title="Моно Карбон" style="background: linear-gradient(135deg, #111827, #64748b); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid transparent;"></div>
                             </div>
                         </div>
                     </div>
-                    <div class="story-sticker-chips" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px;">
-                        <button type="button" class="story-sticker-chip active" data-sticker="" onclick="setStorySticker('')">Без стикера</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="🔥" onclick="setStorySticker('🔥')">🔥</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="⚡" onclick="setStorySticker('⚡')">⚡</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="💖" onclick="setStorySticker('💖')">💖</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="🚀" onclick="setStorySticker('🚀')">🚀</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="🎧" onclick="setStorySticker('🎧')">🎧</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="🎮" onclick="setStorySticker('🎮')">🎮</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="🛡️" onclick="setStorySticker('🛡️')">🛡️</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="👑" onclick="setStorySticker('👑')">👑</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="👾" onclick="setStorySticker('👾')">👾</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="💎" onclick="setStorySticker('💎')">💎</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="✨" onclick="setStorySticker('✨')">✨</button>
-                        <button type="button" class="story-sticker-chip" data-sticker="🤖" onclick="setStorySticker('🤖')">🤖</button>
+
+                    <!-- 2. Секция: Текст и типографика -->
+                    <div class="story-studio-section">
+                        <div class="story-studio-section-title">
+                            <span>✍️ Текст истории</span>
+                        </div>
+                        <textarea id="storyCaptionInput" rows="2" class="form-control" placeholder="Что происходит прямо сейчас в Найт-Сити?.." maxlength="400" oninput="updateStoryPreview()" style="width: 100%; font-size: 0.88rem; padding: 8px;"></textarea>
+                        
+                        <!-- Шрифты -->
+                        <div>
+                            <label style="font-size: 0.72rem; color: var(--text-dim); font-weight: 600; display: block; margin-bottom: 4px;">Стиль шрифта:</label>
+                            <div class="story-font-chips" style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                <button type="button" class="story-opt-chip active" data-font="cyber" onclick="setStoryFont('cyber')">Cyber Sans</button>
+                                <button type="button" class="story-opt-chip" data-font="glitch" onclick="setStoryFont('glitch')">Glitch Terminal</button>
+                                <button type="button" class="story-opt-chip" data-font="synthwave" onclick="setStoryFont('synthwave')">Synthwave</button>
+                                <button type="button" class="story-opt-chip" data-font="impact" onclick="setStoryFont('impact')">Impact Bold</button>
+                                <button type="button" class="story-opt-chip" data-font="luxury" onclick="setStoryFont('luxury')">Luxury Serif</button>
+                            </div>
+                        </div>
+
+                        <!-- Выравнивание и Цвет -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.72rem; color: var(--text-dim); font-weight: 600;">Цвет:</label>
+                                <div class="story-color-palette" style="display: flex; gap: 5px;">
+                                    <div class="story-color-dot active" data-color="#ffffff" onclick="setStoryTextColor('#ffffff')" style="background: #ffffff;" title="Белый"></div>
+                                    <div class="story-color-dot" data-color="#00f0ff" onclick="setStoryTextColor('#00f0ff')" style="background: #00f0ff;" title="Циан"></div>
+                                    <div class="story-color-dot" data-color="#ff007f" onclick="setStoryTextColor('#ff007f')" style="background: #ff007f;" title="Неон роза"></div>
+                                    <div class="story-color-dot" data-color="#facc15" onclick="setStoryTextColor('#facc15')" style="background: #facc15;" title="Кибер золото"></div>
+                                    <div class="story-color-dot" data-color="#10b981" onclick="setStoryTextColor('#10b981')" style="background: #10b981;" title="Изумруд"></div>
+                                    <div class="story-color-dot" data-color="#a855f7" onclick="setStoryTextColor('#a855f7')" style="background: #a855f7;" title="Фиолетовый"></div>
+                                    <div class="story-color-dot" data-color="#ef4444" onclick="setStoryTextColor('#ef4444')" style="background: #ef4444;" title="Плазма"></div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <div class="story-align-group" style="display: inline-flex; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 2px;">
+                                    <button type="button" class="story-align-btn" data-align="left" onclick="setStoryAlign('left')" title="По левому краю">⇤</button>
+                                    <button type="button" class="story-align-btn active" data-align="center" onclick="setStoryAlign('center')" title="По центру">≡</button>
+                                    <button type="button" class="story-align-btn" data-align="right" onclick="setStoryAlign('right')" title="По правому краю">⇥</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Подложка и Размер текста -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.72rem; color: var(--text-dim); font-weight: 600;">Подложка:</label>
+                                <div class="story-style-chips" style="display: flex; gap: 4px;">
+                                    <button type="button" class="story-style-chip active" data-style="pill" onclick="setStoryTextStyle('pill')">Капсула</button>
+                                    <button type="button" class="story-style-chip" data-style="clean" onclick="setStoryTextStyle('clean')">Чистый</button>
+                                    <button type="button" class="story-style-chip" data-style="neon" onclick="setStoryTextStyle('neon')">Неон</button>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label style="font-size: 0.72rem; color: var(--text-dim); font-weight: 600;">Размер:</label>
+                                <div class="story-size-chips" style="display: flex; gap: 4px;">
+                                    <button type="button" class="story-size-chip active" data-size="md" onclick="setStoryTextSize('md')">A</button>
+                                    <button type="button" class="story-size-chip" data-size="lg" onclick="setStoryTextSize('lg')">A+</button>
+                                    <button type="button" class="story-size-chip" data-size="xl" onclick="setStoryTextSize('xl')">A++</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Положение стикера -->
-                    <div id="storyStickerPosRow" style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 0.72rem; color: var(--text-dim); font-weight: 600;">Позиция:</span>
-                        <div class="story-sticker-pos-group" style="display: inline-flex; gap: 4px; flex-wrap: wrap;">
-                            <button type="button" class="story-sticker-pos-btn" data-sticker-pos="top-left" onclick="setStoryStickerPos('top-left')">↖ Верх-лево</button>
-                            <button type="button" class="story-sticker-pos-btn" data-sticker-pos="top-center" onclick="setStoryStickerPos('top-center')">⬆ Верх-центр</button>
-                            <button type="button" class="story-sticker-pos-btn active" data-sticker-pos="top-right" onclick="setStoryStickerPos('top-right')">↗ Верх-право</button>
-                            <button type="button" class="story-sticker-pos-btn" data-sticker-pos="center" onclick="setStoryStickerPos('center')">⏺ Центр</button>
-                            <button type="button" class="story-sticker-pos-btn" data-sticker-pos="bottom-left" onclick="setStoryStickerPos('bottom-left')">↙ Низ-лево</button>
-                            <button type="button" class="story-sticker-pos-btn" data-sticker-pos="bottom-right" onclick="setStoryStickerPos('bottom-right')">↘ Низ-право</button>
+                    <!-- 3. Секция: Стикеры и эмодзи -->
+                    <div class="story-studio-section">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div class="story-studio-section-title">
+                                <span>✨ Стикеры и эмодзи</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 0.7rem; color: var(--text-dim);">Размер:</span>
+                                <div class="story-sticker-size-chips" style="display: inline-flex; gap: 3px;">
+                                    <button type="button" class="story-sticker-size-btn active" data-sticker-size="md" onclick="setStoryStickerSize('md')">M</button>
+                                    <button type="button" class="story-sticker-size-btn" data-sticker-size="lg" onclick="setStoryStickerSize('lg')">L</button>
+                                    <button type="button" class="story-sticker-size-btn" data-sticker-size="xl" onclick="setStoryStickerSize('xl')">XL</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="story-sticker-chips" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <button type="button" class="story-sticker-chip active" data-sticker="" onclick="setStorySticker('')">✕ Без стикера</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="🔥" onclick="setStorySticker('🔥')">🔥</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="⚡" onclick="setStorySticker('⚡')">⚡</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="💖" onclick="setStorySticker('💖')">💖</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="🚀" onclick="setStorySticker('🚀')">🚀</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="🎧" onclick="setStorySticker('🎧')">🎧</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="🎮" onclick="setStorySticker('🎮')">🎮</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="🛡️" onclick="setStorySticker('🛡️')">🛡️</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="👑" onclick="setStorySticker('👑')">👑</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="👾" onclick="setStorySticker('👾')">👾</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="💎" onclick="setStorySticker('💎')">💎</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="✨" onclick="setStorySticker('✨')">✨</button>
+                            <button type="button" class="story-sticker-chip" data-sticker="🤖" onclick="setStorySticker('🤖')">🤖</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Интерактивное превью истории -->
-            <div class="story-create-preview-wrap" style="display: flex; flex-direction: column; align-items: center; margin: 0.5rem 0;">
-                <div class="story-mini-preview" id="storyMiniPreview" style="width: 200px; height: 280px; border-radius: 14px; position: relative; overflow: hidden; background: linear-gradient(135deg, #091e3a, #00f0ff); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2); touch-action: none;">
-                    <img id="storyPreviewImg" src="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; pointer-events: none;">
-                    <div id="storyPreviewGradientOverlay" style="position: absolute; inset: 0; background: rgba(0,0,0,0.25); pointer-events: none;"></div>
-                    <div id="storyPreviewSticker" class="story-floating-sticker" style="display: none; position: absolute; top: 14px; right: 14px; font-size: 1.8rem; z-index: 6; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)); cursor: grab; user-select: none;"></div>
-                    <div id="storyPreviewCaption" class="story-font-cyber" style="position: relative; z-index: 5; color: #fff; font-weight: 700; font-size: 0.95rem; text-align: center; text-shadow: 0 2px 6px rgba(0,0,0,0.8); word-break: break-word; cursor: grab; user-select: none;">Ваша история</div>
-                </div>
-                <div style="font-size: 0.76rem; color: #38bdf8; text-align: center; margin-top: 6px; font-weight: 600;">🖐️ Перетаскивайте текст и смайлики курсором мыши прямо на превью!</div>
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.5rem;">
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.85rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.08);">
                 <button type="button" class="btn btn-secondary" onclick="closeCreateStoryModal()">Отмена</button>
-                <button type="submit" class="btn btn-primary" id="btnPublishStory">Опубликовать историю</button>
+                <button type="submit" class="btn btn-primary" id="btnPublishStory" style="box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);">
+                    <span>✨ Опубликовать историю</span>
+                </button>
             </div>
         </form>
     </div>

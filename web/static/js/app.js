@@ -4935,13 +4935,16 @@ function renderNotificationsList(notifs, filter = 'all') {
         }
 
         const unreadDot = !n.is_read ? '<span class="notif-unread-dot"></span>' : '';
+        const showSnippet = n.snippet && !(n.action_type === 'like' && n.snippet.includes('Отметка'));
 
         card.innerHTML = `
             <div class="notif-avatar-stack">${avatarsHtml}</div>
             <div class="notif-body">
-                <div class="notif-title" style="display:flex; align-items:center; gap:4px;">${categoryIcon}<span>${escapeHtml(n.title)}</span></div>
-                ${n.snippet ? `<div class="notif-snippet">${escapeHtml(n.snippet)}</div>` : ''}
-                <div class="notif-time">${formatTime(n.latest_at)}</div>
+                <div class="notif-title">
+                    <span style="display:inline-flex; align-items:center; gap:6px;">${categoryIcon}<span>${escapeHtml(n.title)}</span></span>
+                    <span class="notif-time" style="margin-left:auto; padding-left:8px; white-space:nowrap;">${formatTime(n.latest_at)}</span>
+                </div>
+                ${showSnippet ? `<div class="notif-snippet">${escapeHtml(n.snippet)}</div>` : ''}
             </div>
             ${unreadDot}
         `;
@@ -10440,7 +10443,7 @@ async function loadUserChannelConversations() {
         listEl.innerHTML = convs.map(c => {
             const ch = c.channel || {};
             const sub = c.subscriber || c.user || {};
-            const isCreator = !!c.is_creator;
+            const isCreator = !!c.is_creator || (ch.creator_id && ch.creator_id === window.CURRENT_USER_ID);
             const subId = sub.id || c.user_id || 0;
             const subName = sub.display_name || sub.username || 'Подписчик';
             const subUsername = sub.username || '';
@@ -10448,10 +10451,10 @@ async function loadUserChannelConversations() {
             const channelAvatar = ch.avatar_url || '/static/avatars/default_channel.svg';
             const subAvatar = sub.avatar_url || '/static/avatars/default_avatar.svg';
 
-            // ИСПРАВЛЕНИЕ: если текущий пользователь является создателем/админом канала,
-            // то в списке собеседников крупно показываем имя подписчика, а не повторяем имя своего канала!
             const title = isCreator ? subName : channelName;
-            const subtitle = isCreator ? `📢 ${channelName} • @${subUsername}` : `📢 Канал @${ch.handle || ''}`;
+            const subtitle = isCreator 
+                ? `<span style="color:#00f0ff; font-weight:600;">📢 ${escapeHtml(channelName)}</span> <span style="color:#64748b;">•</span> <span style="color:#94a3b8;">@${escapeHtml(subUsername)}</span>`
+                : `<span style="color:#38bdf8; font-weight:600;">📢 Канал @${escapeHtml(ch.handle || '')}</span>`;
             const avatar = isCreator ? subAvatar : channelAvatar;
             const lastText = c.last_text || (c.last_message ? (c.last_message.content || 'Вложение') : 'Вложение');
             const timeText = c.last_message ? formatTime(c.last_message.created_at) : '';
@@ -10475,7 +10478,7 @@ async function loadUserChannelConversations() {
                             <span class="conv-preview">${escapeHtml(lastText)}</span>
                             ${c.unread_count > 0 ? `<span class="conv-unread-badge">${c.unread_count}</span>` : ''}
                         </div>
-                        <div style="font-size: 0.72rem; color: #38bdf8; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(subtitle)}</div>
+                        <div style="font-size: 0.72rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${subtitle}</div>
                     </div>
                 </div>
             `;
@@ -13461,6 +13464,26 @@ async function fetchUserCollectionsCount(userId) {
     } catch (_) {}
 }
 
+let cachedUserCollections = [];
+
+function formatPostsCount(count) {
+    const c = Math.abs(count || 0);
+    const mod100 = c % 100;
+    const mod10 = c % 10;
+    if (mod100 >= 11 && mod100 <= 19) return `${c} постов`;
+    if (mod10 === 1) return `${c} пост`;
+    if (mod10 >= 2 && mod10 <= 4) return `${c} поста`;
+    return `${c} постов`;
+}
+
+const defaultCollectionGradients = [
+    { bg: 'linear-gradient(135deg, #091e3a 0%, #00f0ff 100%)', icon: '📌' },
+    { bg: 'linear-gradient(135deg, #2b0840 0%, #ff007f 100%)', icon: '💎' },
+    { bg: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', icon: '⚡' },
+    { bg: 'linear-gradient(135deg, #2e1065 0%, #a855f7 100%)', icon: '🌌' },
+    { bg: 'linear-gradient(135deg, #18181b 0%, #facc15 100%)', icon: '💾' }
+];
+
 async function loadUserCollections(userId) {
     const grid = document.getElementById('profCollectionsGrid');
     const empty = document.getElementById('profCollectionsEmpty');
@@ -13476,6 +13499,7 @@ async function loadUserCollections(userId) {
         const res = await fetch(`/api/users/${userId}/collections`);
         if (!res.ok) throw new Error('Ошибка загрузки подборок');
         const list = await res.json();
+        cachedUserCollections = list || [];
 
         const badge = document.getElementById('badgeProfCollections');
         if (badge) badge.textContent = list ? list.length : 0;
@@ -13488,21 +13512,63 @@ async function loadUserCollections(userId) {
 
         if (empty) empty.style.display = 'none';
 
-        grid.innerHTML = list.map(c => `
-            <div class="collection-board-card" onclick="openCollectionView(${c.id})">
-                <div class="board-cover-wrap">
-                    ${c.cover_image_url ? `<img src="${escapeHtml(c.cover_image_url)}" alt="cover" class="board-cover-img">` : '<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; opacity: 0.5;">📌</div>'}
-                    ${c.is_private ? '<span class="board-privacy-tag">🔒 Личная</span>' : ''}
+        grid.innerHTML = list.map(c => {
+            const gradTheme = defaultCollectionGradients[c.id % defaultCollectionGradients.length];
+            const coverHtml = c.cover_image_url 
+                ? `<img src="${escapeHtml(c.cover_image_url)}" alt="cover" class="board-cover-img">`
+                : `<div class="board-default-cover" style="background: ${gradTheme.bg};">
+                       <span class="board-default-cover-icon">${gradTheme.icon}</span>
+                   </div>`;
+
+            const actionsHtml = isOwner ? `
+                <div class="board-action-overlay" onclick="event.stopPropagation()">
+                    <button type="button" class="board-action-btn" onclick="openEditCollectionModal(${c.id}, event)" title="Редактировать">✏️ Изменить</button>
+                    <button type="button" class="board-action-btn btn-del" onclick="deleteCollectionPrompt(${c.id}, '${escapeHtml(c.title)}', event)" title="Удалить">🗑️</button>
                 </div>
-                <div class="board-body">
-                    <h4 class="board-title">${escapeHtml(c.title)}</h4>
-                    <span class="board-pins-count">${c.posts_count || 0} постов</span>
-                    ${c.description ? `<p class="board-desc-snippet">${escapeHtml(c.description)}</p>` : ''}
+            ` : '';
+
+            return `
+                <div class="collection-board-card" onclick="openCollectionView(${c.id})">
+                    <div class="board-cover-wrap">
+                        ${coverHtml}
+                        ${c.is_private ? '<span class="board-privacy-tag">🔒 Личная</span>' : ''}
+                        ${actionsHtml}
+                    </div>
+                    <div class="board-body">
+                        <h4 class="board-title">${escapeHtml(c.title)}</h4>
+                        <span class="board-pins-count">${formatPostsCount(c.posts_count)}</span>
+                        ${c.description ? `<p class="board-desc-snippet">${escapeHtml(c.description)}</p>` : ''}
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     } catch (err) {
         grid.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+async function openEditCollectionModal(colId, event) {
+    if (event) event.stopPropagation();
+    let col = cachedUserCollections.find(c => c.id === colId);
+    if (!col) {
+        try {
+            const res = await fetch(`/api/collections/${colId}`);
+            if (res.ok) col = await res.json();
+        } catch (_) {}
+    }
+    openCreateCollectionModal(colId, col);
+}
+
+async function deleteCollectionPrompt(colId, title, event) {
+    if (event) event.stopPropagation();
+    if (!confirm(`Удалить подборку «${title}»? Посты из неё не будут удалены.`)) return;
+    try {
+        const res = await fetch(`/api/collections/${colId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Ошибка удаления подборки');
+        showToast('Подборка удалена', 'info');
+        loadUserCollections(window.CURRENT_USER_ID);
+    } catch (err) {
+        showToast(err.message, 'error');
     }
 }
 
@@ -13644,7 +13710,7 @@ async function submitQuickCreateCollection() {
 }
 
 // Full Create / Edit Collection Modal
-function openCreateCollectionModal(editId = null) {
+function openCreateCollectionModal(editId = null, existingData = null) {
     const modal = document.getElementById('modalCreateCollection');
     const titleEl = document.getElementById('createCollectionModalTitle');
     const idInput = document.getElementById('editCollectionId');
@@ -13652,16 +13718,20 @@ function openCreateCollectionModal(editId = null) {
     const formDesc = document.getElementById('colFormDesc');
     const formCover = document.getElementById('colFormCoverUrl');
     const formPriv = document.getElementById('colFormIsPrivate');
+    const btnSubmit = document.getElementById('btnSubmitCollection');
 
     if (!modal) return;
 
     if (idInput) idInput.value = editId || '';
-    if (formTitle) formTitle.value = '';
-    if (formDesc) formDesc.value = '';
-    if (formCover) formCover.value = '';
-    if (formPriv) formPriv.checked = false;
+    if (formTitle) formTitle.value = existingData ? (existingData.title || '') : '';
+    if (formDesc) formDesc.value = existingData ? (existingData.description || '') : '';
+    if (formCover) formCover.value = existingData ? (existingData.cover_image_url || '') : '';
+    if (formPriv) formPriv.checked = existingData ? !!existingData.is_private : false;
 
     if (titleEl) titleEl.textContent = editId ? 'Редактировать подборку' : 'Создать подборку';
+    if (btnSubmit) {
+        btnSubmit.textContent = editId ? 'Сохранить изменения' : 'Сохранить подборку';
+    }
     modal.style.display = 'flex';
 }
 
@@ -13704,12 +13774,16 @@ async function handleCreateCollectionSubmit(e) {
     if (btn) btn.disabled = true;
 
     try {
-        const editId = idInput ? idInput.value : '';
+        const isPrivate = formPriv ? formPriv.checked : false;
+        const cover = formCover ? formCover.value.trim() : '';
+        const isPublic = !isPrivate;
         const payload = {
             title: formTitle.value.trim(),
             description: formDesc ? formDesc.value.trim() : '',
-            cover_image_url: formCover ? formCover.value.trim() : '',
-            is_private: formPriv ? formPriv.checked : false
+            cover_url: cover,
+            cover_image_url: cover,
+            is_public: isPublic,
+            is_private: isPrivate
         };
 
         let res;
@@ -13747,6 +13821,8 @@ async function handleCreateCollectionSubmit(e) {
     }
 }
 
+let currentOpenCollectionData = null;
+
 // Dedicated Pinterest-like Collection View
 async function openCollectionView(collectionId) {
     currentOpenCollectionId = collectionId;
@@ -13769,23 +13845,27 @@ async function openCollectionView(collectionId) {
     try {
         const res = await fetch(`/api/collections/${collectionId}`);
         if (!res.ok) throw new Error('Подборка не найдена или приватна');
-        const col = await res.json();
+        const data = await res.json();
+        const col = data.collection || data;
+        const posts = data.posts || col.posts || [];
+        currentOpenCollectionData = col;
 
-        if (heroTitle) heroTitle.textContent = col.title;
-        if (heroDesc) heroDesc.textContent = col.description || 'Тематическая подборка избранных постов';
-        if (heroCount) heroCount.textContent = `${col.posts ? col.posts.length : 0} постов`;
+        if (heroTitle) heroTitle.textContent = col.title || 'Подборка';
+        if (heroDesc) heroDesc.textContent = col.description || 'Личная тематическая подборка избранных публикаций';
+        if (heroCount) heroCount.textContent = formatPostsCount(posts.length);
         if (heroPrivacy) {
-            heroPrivacy.textContent = col.is_private ? '🔒 Личная подборка' : '🌐 Публичная подборка';
+            const isPub = (col.is_public !== false && !col.is_private);
+            heroPrivacy.textContent = isPub ? '🌐 Публичная доска' : '🔒 Личная доска';
         }
 
-        if (col.user) {
-            if (heroAuthorAvatar) heroAuthorAvatar.src = col.user.avatar_url || '/static/avatars/default.svg';
-            if (heroAuthorName) heroAuthorName.textContent = col.user.display_name || col.user.username;
-        }
+        const author = col.user || {};
+        if (heroAuthorAvatar) heroAuthorAvatar.src = author.avatar_url || '/static/avatars/default.svg';
+        if (heroAuthorName) heroAuthorName.textContent = author.display_name || author.username || 'Пользователь';
 
+        const coverUrl = col.cover_url || col.cover_image_url;
         if (heroBanner) {
-            if (col.cover_image_url) {
-                heroBanner.style.background = `url('${col.cover_image_url}') center/cover no-repeat`;
+            if (coverUrl) {
+                heroBanner.style.background = `url('${coverUrl}') center/cover no-repeat`;
                 heroBanner.style.height = '140px';
                 heroBanner.style.display = 'block';
             } else {
@@ -13797,7 +13877,6 @@ async function openCollectionView(collectionId) {
         if (btnEdit) btnEdit.style.display = isOwner ? 'inline-flex' : 'none';
         if (btnDel) btnDel.style.display = isOwner ? 'inline-flex' : 'none';
 
-        const posts = col.posts || [];
         if (posts.length === 0) {
             if (grid) grid.innerHTML = '';
             if (empty) empty.style.display = 'block';
@@ -13807,31 +13886,53 @@ async function openCollectionView(collectionId) {
         if (empty) empty.style.display = 'none';
 
         if (grid) {
-            grid.innerHTML = posts.map(p => `
-                <div class="collection-pin-card" id="pin-post-${p.id}">
-                    ${p.image_url ? `
-                        <div class="pin-media-box">
-                            <img src="${escapeHtml(p.image_url)}" alt="pin image" loading="lazy">
-                        </div>
-                    ` : ''}
-                    <div class="pin-content-box">
-                        <div class="pin-author-row">
-                            <div class="pin-author-info cursor-pointer" onclick="openUserProfile(${p.user ? p.user.id : p.user_id})">
-                                <img src="${escapeHtml(p.user ? p.user.avatar_url : '/static/avatars/default.svg')}" class="mini-avatar" alt="avatar" style="width: 22px; height: 22px;">
-                                <span class="pin-author-name">${escapeHtml(p.user ? p.user.display_name : 'Автор')}</span>
+            grid.innerHTML = posts.map(p => {
+                const pAuthor = p.user || {};
+                const pName = pAuthor.display_name || pAuthor.username || 'Пользователь';
+                const pHandle = pAuthor.username ? `@${pAuthor.username}` : '';
+                const pAvatar = pAuthor.avatar_url || '/static/avatars/default.svg';
+                const pDate = p.created_at ? formatTime(p.created_at) : '';
+
+                return `
+                    <div class="collection-pin-card" id="pin-post-${p.id}" onclick="navigateToPost(${p.id}, event)" title="Нажмите, чтобы открыть публикацию">
+                        <div class="pin-card-header">
+                            <div class="pin-author-info cursor-pointer" onclick="event.stopPropagation(); openUserProfile(${pAuthor.id || p.user_id})">
+                                <img src="${escapeHtml(pAvatar)}" class="mini-avatar pin-author-avatar" alt="avatar">
+                                <div class="pin-author-text">
+                                    <span class="pin-author-name">${escapeHtml(pName)}</span>
+                                    <span class="pin-author-handle">${escapeHtml(pHandle)}</span>
+                                </div>
                             </div>
-                            ${isOwner ? `
-                                <button type="button" class="btn btn-secondary btn-xs pin-remove-btn text-danger" onclick="removePinFromCollection(${col.id}, ${p.id}, event)" title="Удалить из этой доски">✕</button>
-                            ` : ''}
+                            <div class="pin-header-actions" onclick="event.stopPropagation()">
+                                <span class="pin-date">${pDate}</span>
+                                ${isOwner ? `
+                                    <button type="button" class="pin-remove-btn" onclick="removePinFromCollection(${col.id}, ${p.id}, event)" title="Удалить из этой подборки">✕</button>
+                                ` : ''}
+                            </div>
                         </div>
-                        ${p.content ? `<div class="pin-text">${escapeHtml(p.content)}</div>` : ''}
-                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: var(--text-dim);">
-                            <span>❤️ ${p.likes_count || 0}</span>
-                            <span>💬 ${p.comments_count || 0}</span>
+
+                        ${p.image_url ? `
+                            <div class="pin-media-box" onclick="event.stopPropagation(); openImageLightbox('${escapeHtml(p.image_url)}', '${escapeHtml(pName)} • Фото')">
+                                <img src="${escapeHtml(p.image_url)}" alt="pin image" loading="lazy">
+                            </div>
+                        ` : ''}
+
+                        <div class="pin-content-box">
+                            ${p.content ? `<div class="pin-text">${escapeHtml(p.content)}</div>` : ''}
+                        </div>
+
+                        <div class="pin-footer-bar">
+                            <div class="pin-stats">
+                                <span class="pin-stat-item">❤️ ${p.likes_count || 0}</span>
+                                <span class="pin-stat-item">💬 ${p.comments_count || 0}</span>
+                            </div>
+                            <button type="button" class="btn btn-outline btn-xs pin-goto-btn" onclick="navigateToPost(${p.id}, event)" title="Открыть пост в ленте">
+                                <span>🚀 Открыть пост →</span>
+                            </button>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
     } catch (err) {
         if (grid) grid.innerHTML = `<div class="chat-empty-hint text-danger">${escapeHtml(err.message)}</div>`;
@@ -13872,7 +13973,7 @@ async function removePinFromCollection(colId, postId, e) {
 
 function openEditCurrentCollectionModal() {
     if (!currentOpenCollectionId) return;
-    openCreateCollectionModal(currentOpenCollectionId);
+    openCreateCollectionModal(currentOpenCollectionId, currentOpenCollectionData);
 }
 
 async function deleteCurrentCollection() {
