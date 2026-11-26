@@ -17,13 +17,17 @@ func TestEd25519SignAndVerify(t *testing.T) {
 		t.Fatalf("sign failed: %v", err)
 	}
 
-	if !VerifySignature(pub, data, sig) {
+	origValid := VerifySignature(pub, data, sig)
+	if !origValid {
 		t.Fatalf("signature verification failed")
 	}
+	t.Logf("[Ed25519 Original]: payload=\"%s\", verified=%v", string(data), origValid)
 
-	// Tampered data must fail
-	tampered := []byte("Tampered content")
-	if VerifySignature(pub, tampered, sig) {
+	// Tampered data must fail (1 character changed)
+	tampered := []byte("Cyberpunk decentralized post content 2078")
+	tamperedValid := VerifySignature(pub, tampered, sig)
+	t.Logf("[Ed25519 Tamper Test]: tampered_payload=\"%s\", verified=%v (tamper rejected)", string(tampered), tamperedValid)
+	if tamperedValid {
 		t.Fatalf("signature verification should have failed on tampered data")
 	}
 }

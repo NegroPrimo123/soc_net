@@ -48,6 +48,9 @@ func TestGraphAlgorithms(t *testing.T) {
 	if ppr == nil {
 		t.Fatalf("PPR returned nil")
 	}
+	t.Logf("[PageRank Results (alpha=0.85, iter=30)]: Node 1 (Alice)=%.4f, Node 2 (Bob)=%.4f, Node 3 (Charlie)=%.4f, Node 4 (David)=%.4f, Node 5 (Eve)=%.4f",
+		ppr[1], ppr[2], ppr[3], ppr[4], ppr[5])
+	t.Logf("[BFS Shortest Path (1 -> 4)]: degrees=%d, route=%v", degD, pathD)
 	if ppr[2] <= 0 || ppr[3] <= 0 {
 		t.Fatalf("PPR scores for reachable nodes should be positive: %v", ppr)
 	}
